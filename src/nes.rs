@@ -1,4 +1,4 @@
-use crate::{opcodes, StatusRegister};
+use crate::{opcodes::*, StatusRegister};
 
 /// The NES.
 pub struct Nes {
@@ -48,10 +48,14 @@ impl Nes {
     /// ```
     pub fn decode_and_execute(&mut self, opcode: &[u8]) -> Result<u16, String> {
         match opcode[0] {
-            // LDA immediate
-            opcodes::LDA_I => self.lda(opcode[1]),
-            // LDA zero page
-            opcodes::LDA_ZP => self.lda(self.mem[opcode[1] as usize]),
+            LDA_I => self.lda(opcode[1]),
+            LDA_ZP => self.lda(self.mem[opcode[1] as usize]),
+            LDA_ZP_X => self.lda(self.mem[opcode[1].wrapping_add(self.x) as usize]),
+            LDA_ABS => self.lda(self.read_absolute_addr(&opcode[1..])),
+            LDA_ABS_X => self.lda(self.read_absolute_addr_offset(&opcode[1..], self.x)),
+            LDA_ABS_Y => self.lda(self.read_absolute_addr_offset(&opcode[1..], self.y)),
+            LDA_IND_X => self.lda(self.read_indirect_addr_offset(&opcode[1..], self.x)),
+            LDA_IND_Y => self.lda(self.read_indirect_addr_offset(&opcode[1..], self.y)),
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -62,6 +66,7 @@ impl Nes {
         Ok(2)
     }
 
+    // Opcode functions
     fn lda(&mut self, value: u8) {
         self.a = value;
         if self.a == 0 {
@@ -71,15 +76,30 @@ impl Nes {
             self.s_r.negative = true;
         }
     }
+
+    // Read using absolute addressing
+    fn read_absolute_addr(&self, addr: &[u8]) -> u8 {
+        self.mem[addr[0] as usize + ((addr[1] as usize) << 8)]
+    }
+    // Read using absllute addressing with an offset
+    fn read_absolute_addr_offset(&self, addr: &[u8], offset: u8) -> u8 {
+        self.mem[(addr[0] as u16 + ((addr[1] as u16) << 8)).wrapping_add(offset as u16) as usize]
+    }
+    // Read using indirect addressing with an offset
+    fn read_indirect_addr_offset(&self, addr: &[u8], offset: u8) -> u8 {
+        let first_addr = addr[0].wrapping_add(offset) as usize;
+        let second_addr = &self.mem[first_addr..(first_addr + 2)];
+        return self.read_absolute_addr(&second_addr);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use rand::{random, seq::SliceRandom, thread_rng};
 
-    use assert_hex::assert_eq_hex;
-
     use super::Nes;
+    use crate::opcodes::*;
+    use assert_hex::assert_eq_hex;
 
     #[test]
     fn test_init() {
@@ -100,7 +120,87 @@ mod tests {
             nes.decode_and_execute(&[0xA5, addr]).unwrap();
         });
     }
+    #[test]
+    fn test_lda_zp_x() {
+        all_lda_tests(|nes, v| {
+            let addr = random::<u8>();
+            nes.x = random::<u8>();
+            nes.mem[(addr.wrapping_add(nes.x)) as usize] = v;
+            nes.decode_and_execute(&[LDA_ZP_X, addr]).unwrap();
+        })
+    }
+    #[test]
+    fn test_lda_abs() {
+        all_lda_tests(|nes, v| {
+            let addr = random::<u16>();
+            nes.mem[addr as usize] = v;
+            nes.decode_and_execute(&[LDA_ABS, (addr & 0xFF) as u8, (addr >> 8) as u8])
+                .unwrap();
+        })
+    }
+    #[test]
+    fn test_lda_abs_x() {
+        all_lda_tests(|nes, v| {
+            let addr = random::<u16>();
+            nes.x = random::<u8>();
+            nes.mem[addr.wrapping_add(nes.x as u16) as usize] = v;
+            nes.decode_and_execute(&[LDA_ABS_X, first_byte(addr), second_byte(addr)])
+                .unwrap();
+        })
+    }
+    #[test]
+    fn test_lda_abs_y() {
+        all_lda_tests(|nes, v| {
+            let addr = random::<u16>();
+            nes.y = random::<u8>();
+            nes.mem[addr.wrapping_add(nes.y as u16) as usize] = v;
+            nes.decode_and_execute(&[LDA_ABS_Y, first_byte(addr), second_byte(addr)])
+                .unwrap();
+        });
+    }
+    #[test]
+    fn test_lda_ind_x() {
+        all_lda_tests(|nes, v| {
+            let addr = random::<u16>();
+            nes.mem[addr as usize] = v;
+            let mut operand = random::<u8>();
+            nes.x = random::<u8>();
+            let mut second_addr = operand.wrapping_add(nes.x);
+            // Avoid collisions
+            if second_addr as u16 == addr || second_addr as u16 == addr.wrapping_sub(1) {
+                second_addr = second_addr.wrapping_add(2);
+                operand = operand.wrapping_add(2);
+            }
+            nes.mem[second_addr as usize] = first_byte(addr);
+            nes.mem[second_addr as usize + 1] = second_byte(addr);
+            nes.decode_and_execute(&[LDA_IND_X, operand]).unwrap();
+        });
+    }
+    #[test]
+    fn test_lda_ind_y() {
+        all_lda_tests(|nes, v| {
+            let addr = random::<u16>();
+            nes.mem[addr as usize] = v;
+            let mut operand = random::<u8>();
+            nes.y = random::<u8>();
+            let mut second_addr = operand.wrapping_add(nes.y);
+            // Avoid collisions
+            if second_addr as u16 == addr || second_addr as u16 == addr.wrapping_sub(1) {
+                second_addr = second_addr.wrapping_add(2);
+                operand = operand.wrapping_add(2);
+            }
+            nes.mem[second_addr as usize] = first_byte(addr);
+            nes.mem[second_addr as usize + 1] = second_byte(addr);
+            nes.decode_and_execute(&[LDA_IND_Y, operand]).unwrap();
+        });
+    }
 
+    fn first_byte(addr: u16) -> u8 {
+        (addr & 0xFF) as u8
+    }
+    fn second_byte(addr: u16) -> u8 {
+        (addr >> 8) as u8
+    }
     // Exhaustively test loading all possible 0-255 values into A and then check the flags
     // Used by different tests for immediate, zero page, etc
     fn all_lda_tests<F: FnMut(&mut Nes, u8)>(mut load_into_a: F) {
