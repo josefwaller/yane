@@ -1,2 +1,2 @@
-mod cpu;
-pub use cpu::Cpu;
+mod nes;
+pub use nes::Nes;

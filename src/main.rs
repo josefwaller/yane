@@ -1,6 +1,6 @@
-use yane::Cpu;
+use yane::Nes;
 
 fn main() {
-    let _cpu = Cpu::new();
+    let _nes = Nes::new();
     println!("Hello, world!");
 }

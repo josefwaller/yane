@@ -1,6 +1,5 @@
-/// The CPU of the NES.
-/// Holds the CPU registers and performs all logic to update the state.
-pub struct Cpu {
+/// The NES.
+pub struct Nes {
     /// Accumulator
     a: u8,
     /// X index registers
@@ -15,9 +14,9 @@ pub struct Cpu {
     p: u8,
 }
 
-impl Cpu {
-    pub fn new() -> Cpu {
-        Cpu {
+impl Nes {
+    pub fn new() -> Nes {
+        Nes {
             a: 0x0,
             x: 0x0,
             y: 0x0,
@@ -30,11 +29,11 @@ impl Cpu {
 
 #[cfg(test)]
 mod tests {
-    use super::Cpu;
+    use super::Nes;
 
     #[test]
     fn test_init() {
         // Should not throw
-        Cpu::new();
+        Nes::new();
     }
 }
