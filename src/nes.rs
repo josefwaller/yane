@@ -1,6 +1,4 @@
-use rand::thread_rng;
-
-use crate::StatusRegister;
+use crate::{opcodes, StatusRegister};
 
 /// The NES.
 pub struct Nes {
@@ -51,9 +49,9 @@ impl Nes {
     pub fn decode_and_execute(&mut self, opcode: &[u8]) -> Result<u16, String> {
         match opcode[0] {
             // LDA immediate
-            0xA9 => self.lda(opcode[1]),
+            opcodes::LDA_I => self.lda(opcode[1]),
             // LDA zero page
-            0xA5 => self.lda(self.mem[opcode[1] as usize]),
+            opcodes::LDA_ZP => self.lda(self.mem[opcode[1] as usize]),
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
