@@ -16,6 +16,8 @@ pub struct Nes {
     s_p: u8,
     /// Status register
     s_r: StatusRegister,
+    /// Memory of the NES
+    mem: [u8; 0x10000],
 }
 
 impl Nes {
@@ -27,6 +29,7 @@ impl Nes {
             p_c: 0x00,
             s_p: 0x0,
             s_r: StatusRegister::new(),
+            mem: [0x00; 0x10000],
         }
     }
 
@@ -47,7 +50,10 @@ impl Nes {
     /// ```
     pub fn decode_and_execute(&mut self, opcode: &[u8]) -> Result<u16, String> {
         match opcode[0] {
+            // LDA immediate
             0xA9 => self.lda(opcode[1]),
+            // LDA zero page
+            0xA5 => self.lda(self.mem[opcode[1] as usize]),
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -71,7 +77,7 @@ impl Nes {
 
 #[cfg(test)]
 mod tests {
-    use rand::{seq::SliceRandom, thread_rng};
+    use rand::{random, seq::SliceRandom, thread_rng};
 
     use assert_hex::assert_eq_hex;
 
@@ -84,27 +90,46 @@ mod tests {
     }
     #[test]
     fn test_lda_i() {
-        let mut values: Vec<u8> = (0..255).collect();
-        let mut nes = Nes::new();
-        let mut has_set_zero = false;
-        let mut has_set_negative = false;
-
-        values.shuffle(&mut thread_rng());
-        values.iter().for_each(|v| {
-            nes.decode_and_execute(&[0xA9, *v]).unwrap();
-            assert_eq_hex!(*v, nes.a);
-            if *v == 0 || has_set_zero {
-                assert_eq!(nes.s_r.zero, true);
-                has_set_zero = true;
-            } else if !has_set_zero {
-                assert_eq!(nes.s_r.zero, false);
-            }
-            if *v > 0x7F || has_set_negative {
-                assert_eq!(nes.s_r.negative, true);
-                has_set_negative = true;
-            } else if !has_set_negative {
-                assert_eq!(nes.s_r.negative, false);
-            }
+        all_lda_tests(|nes, v| {
+            nes.decode_and_execute(&[0xA9, v]).unwrap();
         });
+    }
+    #[test]
+    fn test_lda_zp() {
+        all_lda_tests(|nes, v| {
+            let addr = random::<u8>();
+            nes.mem[addr as usize] = v;
+            nes.decode_and_execute(&[0xA5, addr]).unwrap();
+        });
+    }
+
+    // Exhaustively test loading all possible 0-255 values into A and then check the flags
+    // Used by different tests for immediate, zero page, etc
+    fn all_lda_tests<F: FnMut(&mut Nes, u8)>(mut load_into_a: F) {
+        test_all_rand_8bit(|v| {
+            let mut nes = Nes::new();
+
+            test_all_rand_8bit(|v| {
+                let zero = nes.s_r.zero;
+                let negative = nes.s_r.negative;
+                load_into_a(&mut nes, v);
+                assert_eq_hex!(nes.a, v);
+                if v == 0 || zero {
+                    assert_eq!(nes.s_r.zero, true);
+                } else if !zero {
+                    assert_eq!(nes.s_r.zero, false);
+                }
+                if v > 0x7F || negative {
+                    assert_eq!(nes.s_r.negative, true);
+                } else if !negative {
+                    assert_eq!(nes.s_r.negative, false);
+                }
+            })
+        })
+    }
+    fn test_all_rand_8bit<F: FnMut(u8)>(mut f: F) {
+        let mut values: Vec<u8> = (0..255).collect();
+        values.shuffle(&mut thread_rng());
+        values.iter().for_each(|v| f(*v));
     }
 }
