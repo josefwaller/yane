@@ -38,12 +38,12 @@ impl Nes {
                 Ok(2)
             }
             LDA_ZP => {
-                self.cpu.lda(self.mem[opcode[1] as usize]);
+                self.cpu.lda(self.read_zero_page_addr(opcode[1]));
                 Ok(2)
             }
             LDA_ZP_X => {
                 self.cpu
-                    .lda(self.mem[opcode[1].wrapping_add(self.cpu.x) as usize]);
+                    .lda(self.read_zero_page_addr_offset(opcode[1], self.cpu.x));
                 Ok(2)
             }
             LDA_ABS => {
@@ -79,6 +79,14 @@ impl Nes {
         }
     }
 
+    // Read using zero paging addressing
+    fn read_zero_page_addr(&self, addr: u8) -> u8 {
+        self.mem[addr as usize]
+    }
+    // Read using zero page addressing with an offset
+    fn read_zero_page_addr_offset(&self, addr: u8, offset: u8) -> u8 {
+        self.mem[addr.wrapping_add(offset) as usize]
+    }
     // Read using absolute addressing
     fn read_absolute_addr(&self, addr: &[u8]) -> u8 {
         self.mem[addr[0] as usize + ((addr[1] as usize) << 8)]
