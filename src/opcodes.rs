@@ -16,3 +16,13 @@ pub const LDA_ABS_Y: u8 = 0xB9;
 pub const LDA_IND_X: u8 = 0xA1;
 /// Load A Indirect Y
 pub const LDA_IND_Y: u8 = 0xB1;
+/// Load X Immediate
+pub const LDX_I: u8 = 0xA2;
+/// Load X Zero Page
+pub const LDX_ZP: u8 = 0xA6;
+/// Load X Zero Page Y
+pub const LDX_ZP_Y: u8 = 0xB6;
+/// Load X Absolute
+pub const LDX_ABS: u8 = 0xAE;
+/// Load X Absolute Y
+pub const LDX_ABS_Y: u8 = 0xBE;

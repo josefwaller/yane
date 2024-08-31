@@ -41,6 +41,19 @@ impl Cpu {
         self.set_load_flags(self.a);
     }
 
+    /// Load some value into X.
+    /// Sets the status register accordingly.
+    ///
+    /// ```
+    /// let mut cpu = yane::Cpu::new();
+    /// cpu.ldx(0x18);
+    /// assert_eq!(cpu.x, 0x18);
+    /// ```
+    pub fn ldx(&mut self, value: u8) {
+        self.x = value;
+        self.set_load_flags(self.x);
+    }
+
     // Set the status register's flags when loading (LDA, LDX, or LDY)
     fn set_load_flags(&mut self, value: u8) {
         if value == 0 {
@@ -57,25 +70,30 @@ mod tests {
     use super::Cpu;
     use assert_hex::assert_eq_hex;
 
+    macro_rules! ld_test {
+        ($ld:ident) => {
+            let mut cpu = Cpu::new();
+            // Test loading a number doesn't change flags
+            cpu.$ld(0x18);
+            assert_eq_hex!(cpu.s_r.zero, false);
+            assert_eq_hex!(cpu.s_r.negative, false);
+            // Test loading zero sets zero flag
+            cpu.$ld(0x00);
+            assert_eq_hex!(cpu.s_r.zero, true);
+            assert_eq_hex!(cpu.s_r.negative, false);
+            // Test loading a negative number sets negative flag and doesn't unset zero flag
+            cpu.$ld(0x80);
+            assert_eq_hex!(cpu.s_r.zero, true);
+            assert_eq_hex!(cpu.s_r.negative, true);
+        };
+    }
+
     #[test]
-    fn test_lda_no_flags() {
-        let mut cpu = Cpu::new();
-        cpu.lda(0x18);
-        assert_eq_hex!(cpu.s_r.zero, false);
-        assert_eq_hex!(cpu.s_r.negative, false);
+    fn test_lda() {
+        ld_test!(lda);
     }
     #[test]
-    fn test_lda_zero_flag() {
-        let mut cpu = Cpu::new();
-        cpu.lda(0x00);
-        assert_eq_hex!(cpu.s_r.zero, true);
-        assert_eq_hex!(cpu.s_r.negative, false);
-    }
-    #[test]
-    fn test_lda_negative_flag() {
-        let mut cpu = Cpu::new();
-        cpu.lda(0x80);
-        assert_eq_hex!(cpu.s_r.zero, false);
-        assert_eq_hex!(cpu.s_r.negative, true);
+    fn test_ldx() {
+        ld_test!(ldx);
     }
 }
