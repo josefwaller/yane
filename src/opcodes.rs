@@ -26,3 +26,13 @@ pub const LDX_ZP_Y: u8 = 0xB6;
 pub const LDX_ABS: u8 = 0xAE;
 /// Load X Absolute Y
 pub const LDX_ABS_Y: u8 = 0xBE;
+/// Load Y Immediate
+pub const LDY_I: u8 = 0xA0;
+/// Load Y Zero Page
+pub const LDY_ZP: u8 = 0xA4;
+/// Load Y Zero Page X
+pub const LDY_ZP_X: u8 = 0xB4;
+/// Load Y Absolute
+pub const LDY_ABS: u8 = 0xAC;
+/// Load Y Absolute X
+pub const LDY_ABS_X: u8 = 0xBC;

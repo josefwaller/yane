@@ -27,7 +27,7 @@ impl Nes {
     /// // Load 0x18 into A
     /// nes.decode_and_execute(&[0xA9, 0x18]);
     /// // Load the memory at 0x1234 into A
-    /// nes.decode_and_execute(&[0xAE, 0x12, 0x34]);
+    /// nes.decode_and_execute(&[0xAE, 0x34, 0x12]);
     /// // Perform a noop
     /// nes.decode_and_execute(&[0xEA]);
     /// ```
@@ -92,6 +92,28 @@ impl Nes {
                     .ldx(self.read_absolute_addr_offset(&opcode[1..], self.cpu.y));
                 Ok(3)
             }
+            LDY_I => {
+                self.cpu.ldy(opcode[1]);
+                Ok(2)
+            }
+            LDY_ZP => {
+                self.cpu.ldy(self.read_zero_page_addr(opcode[1]));
+                Ok(2)
+            }
+            LDY_ZP_X => {
+                self.cpu
+                    .ldy(self.read_zero_page_addr_offset(opcode[1], self.cpu.x));
+                Ok(2)
+            }
+            LDY_ABS => {
+                self.cpu.ldy(self.read_absolute_addr(&opcode[1..]));
+                Ok(3)
+            }
+            LDY_ABS_X => {
+                self.cpu
+                    .ldy(self.read_absolute_addr_offset(&opcode[1..], self.cpu.x));
+                Ok(3)
+            }
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -154,6 +176,10 @@ mod tests {
     fn test_ldx_i() {
         ld_i_test!(x, LDX_I);
     }
+    #[test]
+    fn test_ldy_i() {
+        ld_i_test!(y, LDY_I);
+    }
     // Macro for generating a test from loading from zero page
     macro_rules! ld_zp_test {
         ($reg: ident, $opcode:expr) => {
@@ -171,6 +197,10 @@ mod tests {
     #[test]
     fn test_ldx_zp() {
         ld_zp_test!(x, LDX_ZP);
+    }
+    #[test]
+    fn test_ldy_zp() {
+        ld_zp_test!(y, LDY_ZP);
     }
     // Macro for generating a test for loading from zero page with an offset
     macro_rules! ld_zp_offset_test {
@@ -191,6 +221,10 @@ mod tests {
     fn test_ldx_zp_y() {
         ld_zp_offset_test!(x, LDX_ZP_Y, y);
     }
+    #[test]
+    fn test_ldy_zp_x() {
+        ld_zp_offset_test!(y, LDY_ZP_X, x);
+    }
     macro_rules! ld_abs_test {
         ($reg: ident, $opcode: expr) => {
             let mut nes = Nes::new();
@@ -208,6 +242,10 @@ mod tests {
     #[test]
     fn test_ldx_abs() {
         ld_abs_test!(x, LDX_ABS);
+    }
+    #[test]
+    fn test_ldy_abs() {
+        ld_abs_test!(y, LDY_ABS);
     }
     macro_rules! ld_abs_offset_test {
         ($reg:ident, $opcode:expr, $off_reg: ident) => {
@@ -231,6 +269,10 @@ mod tests {
     #[test]
     fn test_ldx_abs_y() {
         ld_abs_offset_test!(x, LDX_ABS_Y, y);
+    }
+    #[test]
+    fn test_ldy_abs_x() {
+        ld_abs_offset_test!(y, LDY_ABS_X, x);
     }
     macro_rules! ld_ind_offset_test {
         ($reg:ident, $opcode: expr, $off_reg: ident) => {

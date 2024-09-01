@@ -53,6 +53,18 @@ impl Cpu {
         self.x = value;
         self.set_load_flags(self.x);
     }
+    /// Load some valie into Y.
+    /// Sets the zero flag is Y = 0 and the negative flag if Y =
+    ///
+    /// ```
+    /// let mut cpu = yane::Cpu::new();
+    /// cpu.ldy(0x18);
+    /// assert_eq!(cpu.y, 0x18);
+    /// ```
+    pub fn ldy(&mut self, value: u8) {
+        self.y = value;
+        self.set_load_flags(self.y);
+    }
 
     // Set the status register's flags when loading (LDA, LDX, or LDY)
     fn set_load_flags(&mut self, value: u8) {
