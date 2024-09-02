@@ -1,32 +1,32 @@
 /// The status register of the NES.
 pub struct StatusRegister {
     /// The carry flag, also known as the unsigned overflow flag
-    pub carry: bool,
+    pub c: bool,
     /// The zero flag
-    pub zero: bool,
+    pub z: bool,
     /// The interrupt diable flag
-    pub interrupt_disable: bool,
+    pub i: bool,
     /// The decimal mode flag
-    pub decimal_mode: bool,
+    pub d: bool,
     /// The break command flag
-    pub break_command: bool,
+    pub b: bool,
     /// The (signed) overflow flag
-    pub overflow: bool,
+    pub v: bool,
     /// The negative flag
-    pub negative: bool,
+    pub n: bool,
 }
 
 impl StatusRegister {
     /// Create a new StatusRegister, initialising all flags to `false`.
     pub fn new() -> StatusRegister {
         StatusRegister {
-            carry: false,
-            zero: false,
-            interrupt_disable: false,
-            decimal_mode: false,
-            break_command: false,
-            overflow: false,
-            negative: false,
+            c: false,
+            z: false,
+            i: false,
+            d: false,
+            b: false,
+            v: false,
+            n: false,
         }
     }
 }

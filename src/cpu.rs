@@ -74,27 +74,27 @@ impl Cpu {
         self.a = self
             .a
             .wrapping_add(value)
-            .wrapping_add(if self.s_r.carry { 1 } else { 0 });
-        self.s_r.zero = if self.a == 0 { true } else { false };
+            .wrapping_add(if self.s_r.c { 1 } else { 0 });
+        self.s_r.z = if self.a == 0 { true } else { false };
         // Way of checking for (unsigned) overflow
-        self.s_r.carry = if self.a < value { true } else { false };
+        self.s_r.c = if self.a < value { true } else { false };
         // Way of checking for (signed) overflow
         // If I and value are the same sign (i.e. both positive/negative) but the result is a different sign, overflow has occured
-        self.s_r.overflow = if (i & 0x80) == (value & 0x80) && (i & 0x80) != (self.a & 0x80) {
+        self.s_r.v = if (i & 0x80) == (value & 0x80) && (i & 0x80) != (self.a & 0x80) {
             true
         } else {
             false
         };
-        self.s_r.negative = if self.a & 0x80 != 0 { true } else { false };
+        self.s_r.n = if self.a & 0x80 != 0 { true } else { false };
     }
 
     // Set the status register's flags when loading (LDA, LDX, or LDY)
     fn set_load_flags(&mut self, value: u8) {
         if value == 0 {
-            self.s_r.zero = true;
+            self.s_r.z = true;
         }
         if value & 0x80 != 0 {
-            self.s_r.negative = true;
+            self.s_r.n = true;
         }
     }
 }
@@ -103,22 +103,50 @@ impl Cpu {
 mod tests {
     use super::Cpu;
     use assert_hex::assert_eq_hex;
+    #[derive(PartialEq)]
+    enum Flag {
+        Carry,
+        Zero,
+        Interrupt,
+        Decimal,
+        Break,
+        Overflow,
+        Negative,
+    }
+
+    fn check_flags(cpu: &Cpu, flags: Vec<Flag>) {
+        macro_rules! check_flag {
+            ($flag:ident, $flag_enum:ident, $flag_str:literal) => {
+                assert_eq!(
+                    cpu.s_r.$flag,
+                    flags.contains(&Flag::$flag_enum),
+                    "Expected {} flag to be {}",
+                    $flag_str,
+                    flags.contains(&Flag::$flag_enum)
+                );
+            };
+        }
+        check_flag!(c, Carry, "carry");
+        check_flag!(z, Zero, "zero");
+        check_flag!(i, Interrupt, "interrupt");
+        check_flag!(d, Decimal, "decimal");
+        check_flag!(b, Break, "break");
+        check_flag!(v, Overflow, "overflow");
+        check_flag!(n, Negative, "negative");
+    }
 
     macro_rules! ld_test {
         ($ld:ident) => {
             let mut cpu = Cpu::new();
             // Test loading a number doesn't change flags
             cpu.$ld(0x18);
-            assert_eq_hex!(cpu.s_r.zero, false);
-            assert_eq_hex!(cpu.s_r.negative, false);
+            check_flags(&cpu, Vec::new());
             // Test loading zero sets zero flag
             cpu.$ld(0x00);
-            assert_eq_hex!(cpu.s_r.zero, true);
-            assert_eq_hex!(cpu.s_r.negative, false);
+            check_flags(&cpu, vec![Flag::Zero]);
             // Test loading a negative number sets negative flag and doesn't unset zero flag
             cpu.$ld(0x80);
-            assert_eq_hex!(cpu.s_r.zero, true);
-            assert_eq_hex!(cpu.s_r.negative, true);
+            check_flags(&cpu, vec![Flag::Zero, Flag::Negative]);
         };
     }
 
@@ -138,62 +166,59 @@ mod tests {
     fn test_adc() {
         let mut cpu = Cpu::new();
         cpu.adc(0x14);
-        assert_eq_hex!(cpu.a, 0x14);
+        check_flags(&cpu, Vec::new());
         cpu.adc(0x45);
         assert_eq_hex!(cpu.a, 0x14 + 0x45);
-        assert_eq!(cpu.s_r.zero, false);
-        assert_eq!(cpu.s_r.carry, false);
-        assert_eq!(cpu.s_r.overflow, false);
-        assert_eq!(cpu.s_r.negative, false);
+        check_flags(&cpu, Vec::new());
     }
     #[test]
     fn test_adc_zero() {
         let mut cpu = Cpu::new();
-        assert_eq!(cpu.s_r.zero, false);
         cpu.adc(0x0);
         assert_eq_hex!(cpu.a, 0x00);
-        assert_eq!(cpu.s_r.zero, true);
-        assert_eq!(cpu.s_r.carry, false);
-        assert_eq!(cpu.s_r.overflow, false);
-        assert_eq!(cpu.s_r.negative, false);
+        check_flags(&cpu, vec![Flag::Zero]);
     }
     #[test]
     fn test_adc_negative() {
         let mut cpu = Cpu::new();
-        assert_eq!(cpu.s_r.negative, false);
         cpu.adc(0x80);
-        assert_eq!(cpu.s_r.negative, true);
-        assert_eq!(cpu.s_r.overflow, false);
-        assert_eq!(cpu.s_r.zero, false);
+        check_flags(&cpu, vec![Flag::Negative]);
     }
     #[test]
-    fn test_adc_overflow() {
+    fn test_adc_unsigned_overflow() {
         let mut cpu = Cpu::new();
-        assert_eq!(cpu.s_r.overflow, false);
         cpu.adc(0x35);
         cpu.adc(0xFF);
-        assert_eq!(cpu.s_r.carry, true);
-        assert_eq!(cpu.s_r.zero, false);
-        assert_eq!(cpu.s_r.negative, false);
+        check_flags(&cpu, vec![Flag::Carry]);
+    }
+    #[test]
+    fn test_adc_signed_overflow() {
+        let mut cpu = Cpu::new();
+        cpu.adc(0x40);
+        cpu.adc(0x41);
+        check_flags(&cpu, vec![Flag::Overflow, Flag::Negative]);
+        cpu.adc(0x81);
+        check_flags(&cpu, vec![Flag::Overflow, Flag::Carry]);
     }
     #[test]
     fn test_adc_with_carry() {
         let mut cpu = Cpu::new();
         cpu.a = 0x18;
-        cpu.s_r.carry = true;
+        cpu.s_r.c = true;
         cpu.adc(0x45);
         assert_eq_hex!(cpu.a, 0x18 + 0x45 + 0x01);
-        cpu.s_r.carry = false;
+        check_flags(&cpu, vec![]);
         cpu.adc(0x02);
         assert_eq_hex!(cpu.a, 0x18 + 0x45 + 0x01 + 0x02);
+        check_flags(&cpu, vec![]);
     }
     #[test]
     fn test_adc_carry_unsigned_overflow() {
         let mut cpu = Cpu::new();
         cpu.a = 0x65;
-        cpu.s_r.carry = true;
+        cpu.s_r.c = true;
         cpu.adc(0xFF - 0x65);
         assert_eq_hex!(cpu.a, 0x0);
-        assert_eq!(cpu.s_r.carry, true);
+        check_flags(&cpu, vec![Flag::Carry, Flag::Zero]);
     }
 }

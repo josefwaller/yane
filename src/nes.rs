@@ -315,32 +315,34 @@ mod tests {
     fn test_lda_ind_y() {
         ld_ind_offset_test!(a, LDA_IND_Y, y);
     }
+    fn adc_test<F: Fn(&mut Nes, u8)>(f: F) {
+        let mut nes = Nes::new();
+        let init_val = random::<u8>();
+        nes.cpu.a = init_val;
+        let v = random::<u8>();
+        f(&mut nes, v);
+        assert_eq_hex!(nes.cpu.a, init_val.wrapping_add(v));
+    }
     #[test]
     fn test_adc_i() {
-        let mut nes = Nes::new();
-        nes.cpu.a = 0x12;
-        nes.decode_and_execute(&[ADC_I, 0x18]).unwrap();
-        assert_eq_hex!(nes.cpu.a, 0x18 + 0x12);
-        nes.decode_and_execute(&[ADC_I, 0x33]).unwrap();
-        assert_eq_hex!(nes.cpu.a, 0x18 + 0x12 + 0x33);
+        adc_test(|nes, v| {
+            nes.decode_and_execute(&[ADC_I, v]).unwrap();
+        });
     }
     #[test]
     fn test_adc_zp() {
-        let mut nes = Nes::new();
-        let val = random::<u8>();
-        let addr = set_addr_zp(&mut nes, val);
-        nes.decode_and_execute(&[ADC_ZP, addr]).unwrap();
-        assert_eq_hex!(nes.cpu.a, val);
+        adc_test(|nes, v| {
+            let addr = set_addr_zp(nes, v);
+            nes.decode_and_execute(&[ADC_ZP, addr]).unwrap();
+        });
     }
     #[test]
     fn test_adc_zp_x() {
-        let mut nes = Nes::new();
-        let val = random::<u8>();
-        let addr = set_addr_zp_x(&mut nes, val);
-        nes.decode_and_execute(&[ADC_ZP_X, addr]).unwrap();
-        assert_eq_hex!(nes.cpu.a, val);
+        adc_test(|nes, v| {
+            let addr = set_addr_zp_x(nes, v);
+            nes.decode_and_execute(&[ADC_ZP_X, addr]).unwrap();
+        })
     }
-
     // Utility functions to get some addresses in memory set to the value given
     // Set addr and return zero page
     fn set_addr_zp(nes: &mut Nes, value: u8) -> u8 {
