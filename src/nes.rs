@@ -114,6 +114,19 @@ impl Nes {
                     .ldy(self.read_absolute_addr_offset(&opcode[1..], self.cpu.x));
                 Ok(3)
             }
+            ADC_I => {
+                self.cpu.adc(opcode[1]);
+                Ok(2)
+            }
+            ADC_ZP => {
+                self.cpu.adc(self.read_zero_page_addr(opcode[1]));
+                Ok(2)
+            }
+            ADC_ZP_X => {
+                self.cpu
+                    .adc(self.read_zero_page_addr_offset(opcode[1], self.cpu.x));
+                Ok(2)
+            }
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -301,6 +314,46 @@ mod tests {
     #[test]
     fn test_lda_ind_y() {
         ld_ind_offset_test!(a, LDA_IND_Y, y);
+    }
+    #[test]
+    fn test_adc_i() {
+        let mut nes = Nes::new();
+        nes.cpu.a = 0x12;
+        nes.decode_and_execute(&[ADC_I, 0x18]).unwrap();
+        assert_eq_hex!(nes.cpu.a, 0x18 + 0x12);
+        nes.decode_and_execute(&[ADC_I, 0x33]).unwrap();
+        assert_eq_hex!(nes.cpu.a, 0x18 + 0x12 + 0x33);
+    }
+    #[test]
+    fn test_adc_zp() {
+        let mut nes = Nes::new();
+        let val = random::<u8>();
+        let addr = set_addr_zp(&mut nes, val);
+        nes.decode_and_execute(&[ADC_ZP, addr]).unwrap();
+        assert_eq_hex!(nes.cpu.a, val);
+    }
+    #[test]
+    fn test_adc_zp_x() {
+        let mut nes = Nes::new();
+        let val = random::<u8>();
+        let addr = set_addr_zp_x(&mut nes, val);
+        nes.decode_and_execute(&[ADC_ZP_X, addr]).unwrap();
+        assert_eq_hex!(nes.cpu.a, val);
+    }
+
+    // Utility functions to get some addresses in memory set to the value given
+    // Set addr and return zero page
+    fn set_addr_zp(nes: &mut Nes, value: u8) -> u8 {
+        let addr = random::<u8>();
+        nes.mem[addr as usize] = value;
+        return addr;
+    }
+    // Set addr and return zero page with x offset
+    fn set_addr_zp_x(nes: &mut Nes, value: u8) -> u8 {
+        nes.cpu.x = random::<u8>();
+        let addr = random::<u8>();
+        nes.mem[addr.wrapping_add(nes.cpu.x) as usize] = value;
+        return addr;
     }
 
     fn first_byte(addr: u16) -> u8 {

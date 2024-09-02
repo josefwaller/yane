@@ -36,3 +36,12 @@ pub const LDY_ZP_X: u8 = 0xB4;
 pub const LDY_ABS: u8 = 0xAC;
 /// Load Y Absolute X
 pub const LDY_ABS_X: u8 = 0xBC;
+
+pub const ADC_I: u8 = 0x69;
+pub const ADC_ZP: u8 = 0x65;
+pub const ADC_ZP_X: u8 = 0x75;
+pub const ADC_ABS: u8 = 0x6D;
+pub const ADC_ABS_X: u8 = 0x7D;
+pub const ADC_ABS_Y: u8 = 0x79;
+pub const ADC_IND_X: u8 = 0x61;
+pub const ADC_IND_Y: u8 = 0x71;

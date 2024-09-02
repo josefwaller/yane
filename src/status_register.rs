@@ -1,6 +1,6 @@
 /// The status register of the NES.
 pub struct StatusRegister {
-    /// The carry flag
+    /// The carry flag, also known as the unsigned overflow flag
     pub carry: bool,
     /// The zero flag
     pub zero: bool,
@@ -10,7 +10,7 @@ pub struct StatusRegister {
     pub decimal_mode: bool,
     /// The break command flag
     pub break_command: bool,
-    /// the overflow flag
+    /// The (signed) overflow flag
     pub overflow: bool,
     /// The negative flag
     pub negative: bool,
