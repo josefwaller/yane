@@ -62,12 +62,12 @@ impl Nes {
             }
             LDA_IND_X => {
                 self.cpu
-                    .lda(self.read_indirect_addr_offset(&opcode[1..], self.cpu.x));
+                    .lda(self.read_indexed_indirect(opcode[1], self.cpu.x));
                 Ok(2)
             }
             LDA_IND_Y => {
                 self.cpu
-                    .lda(self.read_indirect_addr_offset(&opcode[1..], self.cpu.y));
+                    .lda(self.read_indirect_indexed(opcode[1], self.cpu.y));
                 Ok(2)
             }
             LDX_I => {
@@ -127,6 +127,30 @@ impl Nes {
                     .adc(self.read_zero_page_addr_offset(opcode[1], self.cpu.x));
                 Ok(2)
             }
+            ADC_ABS => {
+                self.cpu.adc(self.read_absolute_addr(&opcode[1..]));
+                Ok(3)
+            }
+            ADC_ABS_X => {
+                self.cpu
+                    .adc(self.read_absolute_addr_offset(&opcode[1..], self.cpu.x));
+                Ok(3)
+            }
+            ADC_ABS_Y => {
+                self.cpu
+                    .adc(self.read_absolute_addr_offset(&opcode[1..], self.cpu.y));
+                Ok(3)
+            }
+            ADC_IND_X => {
+                self.cpu
+                    .adc(self.read_indexed_indirect(opcode[1], self.cpu.x));
+                Ok(2)
+            }
+            ADC_IND_Y => {
+                self.cpu
+                    .adc(self.read_indirect_indexed(opcode[1], self.cpu.y));
+                Ok(2)
+            }
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -152,11 +176,20 @@ impl Nes {
     fn read_absolute_addr_offset(&self, addr: &[u8], offset: u8) -> u8 {
         self.mem[(addr[0] as u16 + ((addr[1] as u16) << 8)).wrapping_add(offset as u16) as usize]
     }
-    // Read using indirect addressing with an offset
-    fn read_indirect_addr_offset(&self, addr: &[u8], offset: u8) -> u8 {
-        let first_addr = addr[0].wrapping_add(offset) as usize;
+    // Read using indexed indirect addressing with an offset.
+    // X is added to the value in the opcode and used to read a pointer from memory.
+    fn read_indexed_indirect(&self, addr: u8, offset: u8) -> u8 {
+        let first_addr = addr.wrapping_add(offset) as usize;
         let second_addr = &self.mem[first_addr..(first_addr + 2)];
         return self.read_absolute_addr(&second_addr);
+    }
+    // Read using indirect indexed addressing.
+    // A pointer is read from the memory using the value in the opcode, and then Y is added to it.
+    fn read_indirect_indexed(&self, addr: u8, offset: u8) -> u8 {
+        let first_addr = addr as usize;
+        let second_addr = (self.mem[first_addr] as u16 + ((self.mem[first_addr + 1] as u16) << 8))
+            .wrapping_add(offset as u16);
+        return self.mem[second_addr as usize];
     }
 }
 
@@ -241,11 +274,11 @@ mod tests {
     macro_rules! ld_abs_test {
         ($reg: ident, $opcode: expr) => {
             let mut nes = Nes::new();
-            let addr = random::<u16>();
-            nes.mem[addr as usize] = 0x18;
-            nes.decode_and_execute(&[$opcode, (addr & 0xFF) as u8, (addr >> 8) as u8])
+            let val = 0x18;
+            let addr = set_addr_abs(&mut nes, val);
+            nes.decode_and_execute(&[$opcode, addr[0], addr[1]])
                 .unwrap();
-            assert_eq_hex!(nes.cpu.$reg, 0x18);
+            assert_eq_hex!(nes.cpu.$reg, val);
         };
     }
     #[test]
@@ -309,11 +342,23 @@ mod tests {
     }
     #[test]
     fn test_lda_ind_x() {
-        ld_ind_offset_test!(a, LDA_IND_X, x);
+        let mut nes = Nes::new();
+        let v = random::<u8>();
+        let x = random::<u8>();
+        nes.cpu.x = x;
+        let addr = set_addr_ind_offset(&mut nes, v, x, 0);
+        nes.decode_and_execute(&[LDA_IND_X, addr]).unwrap();
+        assert_eq_hex!(nes.cpu.a, v);
     }
     #[test]
     fn test_lda_ind_y() {
-        ld_ind_offset_test!(a, LDA_IND_Y, y);
+        let mut nes = Nes::new();
+        let v = random::<u8>();
+        let y = random::<u8>();
+        nes.cpu.y = y;
+        let addr = set_addr_ind_offset(&mut nes, v, 0, y);
+        nes.decode_and_execute(&[LDA_IND_Y, addr]).unwrap();
+        assert_eq_hex!(nes.cpu.a, v);
     }
     fn adc_test<F: Fn(&mut Nes, u8)>(f: F) {
         let mut nes = Nes::new();
@@ -343,6 +388,48 @@ mod tests {
             nes.decode_and_execute(&[ADC_ZP_X, addr]).unwrap();
         })
     }
+    #[test]
+    fn test_adc_abs() {
+        adc_test(|nes, v| {
+            let addr = set_addr_abs(nes, v);
+            nes.decode_and_execute(&[ADC_ABS, addr[0], addr[1]])
+                .unwrap();
+        })
+    }
+    #[test]
+    fn test_adc_abs_x() {
+        adc_test(|nes, v| {
+            let addr = set_addr_abs_offset_x(nes, v);
+            nes.decode_and_execute(&[ADC_ABS_X, addr[0], addr[1]])
+                .unwrap();
+        })
+    }
+    #[test]
+    fn test_adc_abs_y() {
+        adc_test(|nes, v| {
+            let addr = set_addr_abs_offset_y(nes, v);
+            nes.decode_and_execute(&[ADC_ABS_Y, addr[0], addr[1]])
+                .unwrap();
+        })
+    }
+    #[test]
+    fn test_adc_ind_x() {
+        adc_test(|nes, v| {
+            let x = random::<u8>();
+            nes.cpu.x = x;
+            let addr = set_addr_ind_offset(nes, v, x, 0);
+            nes.decode_and_execute(&[ADC_IND_X, addr]).unwrap();
+        });
+    }
+    #[test]
+    fn test_adc_ind_y() {
+        adc_test(|nes, v| {
+            let y = random::<u8>();
+            nes.cpu.y = y;
+            let addr = set_addr_ind_offset(nes, v, 0, y);
+            nes.decode_and_execute(&[ADC_IND_Y, addr]).unwrap();
+        })
+    }
     // Utility functions to get some addresses in memory set to the value given
     // Set addr and return zero page
     fn set_addr_zp(nes: &mut Nes, value: u8) -> u8 {
@@ -357,7 +444,38 @@ mod tests {
         nes.mem[addr.wrapping_add(nes.cpu.x) as usize] = value;
         return addr;
     }
-
+    fn set_addr_abs(nes: &mut Nes, value: u8) -> [u8; 2] {
+        let addr = random::<u16>();
+        nes.mem[addr as usize] = value;
+        return [(addr & 0xFF) as u8, (addr >> 8) as u8];
+    }
+    macro_rules! set_addr_abs_offset {
+        ($nes: ident, $reg: ident, $value: ident) => {
+            let addr = random::<u16>();
+            $nes.cpu.$reg = random::<u8>();
+            $nes.mem[addr.wrapping_add($nes.cpu.$reg as u16) as usize] = $value;
+            return [first_byte(addr), second_byte(addr)];
+        };
+    }
+    fn set_addr_abs_offset_x(nes: &mut Nes, value: u8) -> [u8; 2] {
+        set_addr_abs_offset!(nes, x, value);
+    }
+    fn set_addr_abs_offset_y(nes: &mut Nes, value: u8) -> [u8; 2] {
+        set_addr_abs_offset!(nes, y, value);
+    }
+    fn set_addr_ind_offset(nes: &mut Nes, value: u8, first_offset: u8, second_offset: u8) -> u8 {
+        let pointer = random::<u16>();
+        nes.mem[(pointer.wrapping_add(second_offset as u16)) as usize] = value;
+        let mut addr = random::<u8>();
+        if addr as u16 == pointer.wrapping_add(second_offset as u16) as u16
+            || addr as u16 == pointer.wrapping_add(second_offset as u16).wrapping_sub(1) as u16
+        {
+            addr = addr.wrapping_add(2);
+        }
+        nes.mem[(addr.wrapping_add(first_offset)) as usize] = first_byte(pointer);
+        nes.mem[(addr.wrapping_add(first_offset)) as usize + 1] = second_byte(pointer);
+        return addr;
+    }
     fn first_byte(addr: u16) -> u8 {
         (addr & 0xFF) as u8
     }
