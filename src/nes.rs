@@ -60,12 +60,12 @@ impl Nes {
                     .lda(self.read_absolute_addr_offset(&opcode[1..], self.cpu.y));
                 Ok(3)
             }
-            LDA_IND_X => {
+            LDA_IDX_IND => {
                 self.cpu
                     .lda(self.read_indexed_indirect(opcode[1], self.cpu.x));
                 Ok(2)
             }
-            LDA_IND_Y => {
+            LDA_IND_IDX => {
                 self.cpu
                     .lda(self.read_indirect_indexed(opcode[1], self.cpu.y));
                 Ok(2)
@@ -141,12 +141,12 @@ impl Nes {
                     .adc(self.read_absolute_addr_offset(&opcode[1..], self.cpu.y));
                 Ok(3)
             }
-            ADC_IND_X => {
+            ADC_IDX_IND => {
                 self.cpu
                     .adc(self.read_indexed_indirect(opcode[1], self.cpu.x));
                 Ok(2)
             }
-            ADC_IND_Y => {
+            ADC_IND_IDX => {
                 self.cpu
                     .adc(self.read_indirect_indexed(opcode[1], self.cpu.y));
                 Ok(2)
@@ -178,12 +178,12 @@ impl Nes {
                     .and(self.read_absolute_addr_offset(&opcode[1..], self.cpu.y));
                 Ok(3)
             }
-            AND_IND_X => {
+            AND_IDX_IND => {
                 self.cpu
                     .and(self.read_indexed_indirect(opcode[1], self.cpu.x));
                 Ok(2)
             }
-            AND_IND_Y => {
+            AND_IND_IDX => {
                 self.cpu
                     .and(self.read_indirect_indexed(opcode[1], self.cpu.y));
                 Ok(2)
@@ -386,8 +386,8 @@ mod tests {
         test_absolute!(LDA_ABS);
         test_absolute_x!(LDA_ABS_X);
         test_absolute_y!(LDA_ABS_Y);
-        test_indexed_indirect!(LDA_IND_X);
-        test_indirect_indexed!(LDA_IND_Y);
+        test_indexed_indirect!(LDA_IDX_IND);
+        test_indirect_indexed!(LDA_IND_IDX);
     }
     mod ldx {
         use super::*;
@@ -433,8 +433,8 @@ mod tests {
         test_absolute!(ADC_ABS);
         test_absolute_x!(ADC_ABS_X);
         test_absolute_y!(ADC_ABS_Y);
-        test_indexed_indirect!(ADC_IND_X);
-        test_indirect_indexed!(ADC_IND_Y);
+        test_indexed_indirect!(ADC_IDX_IND);
+        test_indirect_indexed!(ADC_IND_IDX);
     }
     mod and {
         use super::*;
@@ -452,8 +452,8 @@ mod tests {
         test_absolute!(AND_ABS);
         test_absolute_x!(AND_ABS_X);
         test_absolute_y!(AND_ABS_Y);
-        test_indexed_indirect!(AND_IND_X);
-        test_indirect_indexed!(AND_IND_Y);
+        test_indexed_indirect!(AND_IDX_IND);
+        test_indirect_indexed!(AND_IND_IDX);
     }
 
     // Utility functions to get some addresses in memory set to the value given
