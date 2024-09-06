@@ -12,9 +12,9 @@ pub const LDA_ABS: u8 = 0xAD;
 pub const LDA_ABS_X: u8 = 0xBD;
 /// Load A Absolute Y
 pub const LDA_ABS_Y: u8 = 0xB9;
-/// Load A Indirect X
+/// Load A Indexed Indirect
 pub const LDA_IND_X: u8 = 0xA1;
-/// Load A Indirect Y
+/// Load A Indirect Indexed
 pub const LDA_IND_Y: u8 = 0xB1;
 /// Load X Immediate
 pub const LDX_I: u8 = 0xA2;
@@ -36,12 +36,27 @@ pub const LDY_ZP_X: u8 = 0xB4;
 pub const LDY_ABS: u8 = 0xAC;
 /// Load Y Absolute X
 pub const LDY_ABS_X: u8 = 0xBC;
-
+/// Add with Carry Immediate
 pub const ADC_I: u8 = 0x69;
+/// Add with Carry Zero Page
 pub const ADC_ZP: u8 = 0x65;
+/// Add with Carry Zero Page X
 pub const ADC_ZP_X: u8 = 0x75;
+/// Add with Carry Absolute
 pub const ADC_ABS: u8 = 0x6D;
+/// Add with Carry Absolute X
 pub const ADC_ABS_X: u8 = 0x7D;
+/// Add with Carry Absolute Y
 pub const ADC_ABS_Y: u8 = 0x79;
+/// Add with Carry Indexed Indirect
 pub const ADC_IND_X: u8 = 0x61;
+/// Add with Carry Indirect Indexed
 pub const ADC_IND_Y: u8 = 0x71;
+pub const AND_I: u8 = 0x29;
+pub const AND_ZP: u8 = 0x25;
+pub const AND_ZP_X: u8 = 0x35;
+pub const AND_ABS: u8 = 0x2D;
+pub const AND_ABS_X: u8 = 0x3D;
+pub const AND_ABS_Y: u8 = 0x39;
+pub const AND_IND_X: u8 = 0x21;
+pub const AND_IND_Y: u8 = 0x31;

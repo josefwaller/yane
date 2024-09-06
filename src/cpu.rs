@@ -87,6 +87,24 @@ impl Cpu {
         };
         self.s_r.n = if self.a & 0x80 != 0 { true } else { false };
     }
+    /// Perform an AND (`&``) operation between A and some value.
+    /// * Z is set if A is 0
+    /// * N is set if A is negative (i.e. the MSB is set)
+    /// ```
+    /// let mut cpu = yane::Cpu::new();
+    /// cpu.a = 0xAA;
+    /// cpu.and(0x0F);
+    /// assert_eq!(cpu.a, 0x0A);
+    /// ```
+    pub fn and(&mut self, value: u8) {
+        self.a &= value;
+        if self.a == 0 {
+            self.s_r.z = true;
+        }
+        if self.a & 0x80 != 0 {
+            self.s_r.n = true;
+        }
+    }
 
     // Set the status register's flags when loading (LDA, LDX, or LDY)
     fn set_load_flags(&mut self, value: u8) {
@@ -220,5 +238,32 @@ mod tests {
         cpu.adc(0xFF - 0x65);
         assert_eq_hex!(cpu.a, 0x0);
         check_flags(&cpu, vec![Flag::Carry, Flag::Zero]);
+    }
+    #[test]
+    fn test_and() {
+        let mut cpu = Cpu::new();
+        cpu.a = 0x67;
+        cpu.and(0x60);
+        assert_eq_hex!(cpu.a, 0x60);
+        assert_eq!(cpu.s_r.z, false);
+        assert_eq!(cpu.s_r.n, false);
+    }
+    #[test]
+    fn test_and_zero() {
+        let mut cpu = Cpu::new();
+        cpu.a = 0xFF;
+        cpu.and(0x00);
+        assert_eq_hex!(cpu.a, 0x00);
+        assert_eq!(cpu.s_r.z, true);
+        assert_eq!(cpu.s_r.n, false);
+    }
+    #[test]
+    fn test_and_negative() {
+        let mut cpu = Cpu::new();
+        cpu.a = 0xFF;
+        cpu.and(0x85);
+        assert_eq_hex!(cpu.a, 0x85);
+        assert_eq!(cpu.s_r.z, false);
+        assert_eq!(cpu.s_r.n, true);
     }
 }
