@@ -82,3 +82,15 @@ pub const ASL_ABS_X: u8 = 0x1E;
 pub const BCC: u8 = 0x90;
 /// Branch if Carry Set
 pub const BCS: u8 = 0xB0;
+/// Branch if equal (branch if zero flag is set)
+pub const BEQ: u8 = 0xF0;
+/// Branch if not equal (branch if zero flag is cleared)
+pub const BNE: u8 = 0xD0;
+/// Branch if minus (branch if negative flag is set)
+pub const BMI: u8 = 0x30;
+/// Branch if positive (branch if negative flag is cleared)
+pub const BPL: u8 = 0x10;
+/// Branch if overflow cleared
+pub const BVC: u8 = 0x50;
+/// Branch if overflow set
+pub const BVS: u8 = 0x70;

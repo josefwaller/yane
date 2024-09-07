@@ -122,23 +122,21 @@ impl Cpu {
         self.s_r.n = value & 0x40 != 0;
         return value << 1;
     }
-    /// Branch if the carry flag is cleared, i.e. false.
-    /// Does not set any flags.
-    /// Returns `true` if the branch occurs and `false` otherwise.
-    /// ```
-    /// let mut cpu = yane::Cpu::new();
-    /// cpu.s_r.c = false;
-    /// cpu.bcc(0x18);
-    /// assert_eq!(cpu.p_c, 0x18);
-    /// ```
-    pub fn bcc(&mut self, value: u8) -> bool {
-        if !self.s_r.c {
+    /// Perform a branch if `param == true`.
+    /// Updates the PC accordingly.
+    /// Return how many cycles are needed by the branching operation.
+    pub fn branch_if(&mut self, param: bool, value: u8) -> i64 {
+        if param {
+            let pc = self.p_c;
             self.p_c = self.p_c.wrapping_add(value as u16);
-            return true;
+            return 3 + if (pc & 0xFF00) != (self.p_c & 0xFF00) {
+                2
+            } else {
+                0
+            };
         }
-        false
+        2
     }
-
     // Set the status register's flags when loading (LDA, LDX, or LDY)
     fn set_load_flags(&mut self, value: u8) {
         if value == 0 {

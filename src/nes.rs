@@ -294,21 +294,14 @@ impl Nes {
                 self.write_absolute_addr_offset(&opcode[1..], self.cpu.x, v);
                 Ok((3, 7))
             }
-            BCC => {
-                let pc = self.cpu.p_c;
-                let branched = self.cpu.bcc(opcode[1]);
-                Ok((
-                    2,
-                    // +1 cycle if branch succeeded
-                    2 + if branched { 1 } else { 0 }
-                    // +2 cycles if branched to a new page
-                        + if (pc & 0xFF00) != (self.cpu.p_c & 0xFF00) {
-                            2
-                        } else {
-                            0
-                        },
-                ))
-            }
+            BCS => Ok((2, self.cpu.branch_if(self.cpu.s_r.c, opcode[1]))),
+            BCC => Ok((2, self.cpu.branch_if(!self.cpu.s_r.c, opcode[1]))),
+            BEQ => Ok((2, self.cpu.branch_if(self.cpu.s_r.z, opcode[1]))),
+            BNE => Ok((2, self.cpu.branch_if(!self.cpu.s_r.z, opcode[1]))),
+            BMI => Ok((2, self.cpu.branch_if(self.cpu.s_r.n, opcode[1]))),
+            BPL => Ok((2, self.cpu.branch_if(!self.cpu.s_r.n, opcode[1]))),
+            BVS => Ok((2, self.cpu.branch_if(self.cpu.s_r.v, opcode[1]))),
+            BVC => Ok((2, self.cpu.branch_if(!self.cpu.s_r.v, opcode[1]))),
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -695,22 +688,39 @@ mod tests {
             check_flags!(nes, zero, negative, carry);
         }
     }
-    mod bcc {
-        use super::*;
-        use test_case::test_case;
-        #[test_case(false, 0x18, 0x18, 0x30, 3 ; "branches")]
-        #[test_case(true, 0x18, 0x18, 0x18, 2 ; "doesn't branch")]
-        #[test_case(false, 0x18, 0x00, 0x18, 3 ; "branches to same location")]
-        #[test_case(false, 0x0018, 0xFF, 0x0117, 5 ; "branches to different page")]
-        #[test_case(false, 0x00FF, 0x01, 0x0100, 5 ; "branches to a different page 2")]
-        fn test_implied(c: bool, pc: u16, operand: u8, new_pc: u16, cycles: i64) {
-            let mut nes = Nes::new();
-            nes.cpu.p_c = pc;
-            nes.cpu.s_r.c = c;
-            assert_eq!(nes.decode_and_execute(&[BCC, operand]), Ok((2, cycles)));
-            assert_eq_hex!(nes.cpu.p_c, new_pc);
-        }
+    macro_rules! branch_tests {
+        ($name: ident, $opcode: ident, $flag: ident, $value: expr) => {
+            mod $name {
+                use super::*;
+                use test_case::test_case;
+                #[test_case(true, 0x12, 0x34, 0x46, 3 ; "branched")]
+                #[test_case(false, 0x12, 0x34, 0x12, 2 ; "doesn't branch")]
+                #[test_case(true, 0x18, 0x00, 0x18, 3 ; "branches to same location")]
+                #[test_case(true, 0x00ff, 0x05, 0x0104, 5 ; "branches to a different page")]
+                fn test_implied(
+                    should_branch: bool,
+                    pc: u16,
+                    operand: u8,
+                    new_pc: u16,
+                    cycles: i64,
+                ) {
+                    let mut nes = Nes::new();
+                    nes.cpu.p_c = pc;
+                    nes.cpu.s_r.$flag = if should_branch { $value } else { !$value };
+                    assert_eq!(nes.decode_and_execute(&[$opcode, operand]), Ok((2, cycles)));
+                    assert_eq_hex!(nes.cpu.p_c, new_pc);
+                }
+            }
+        };
     }
+    branch_tests!(bcs, BCS, c, true);
+    branch_tests!(bcc, BCC, c, false);
+    branch_tests!(beq, BEQ, z, true);
+    branch_tests!(bne, BNE, z, false);
+    branch_tests!(bmi, BMI, n, true);
+    branch_tests!(bpl, BPL, n, false);
+    branch_tests!(bvs, BVS, v, true);
+    branch_tests!(bvc, BVC, v, false);
     // Utility functions to get some addresses in memory set to the value given
     fn set_addr_zp(nes: &mut Nes, value: u8) -> u8 {
         set_addr_zp_offset(nes, value, 0)
