@@ -188,6 +188,34 @@ impl Nes {
                     .and(self.read_indirect_indexed(opcode[1], self.cpu.y));
                 Ok(2)
             }
+            ASL_A => {
+                self.cpu.a = self.cpu.asl(self.cpu.a);
+                Ok(1)
+            }
+            ASL_ZP => {
+                let v = self.cpu.asl(self.read_zero_page_addr(opcode[1]));
+                self.set_zero_page_addr(opcode[1], v);
+                Ok(2)
+            }
+            ASL_ZP_X => {
+                let v = self
+                    .cpu
+                    .asl(self.read_zero_page_addr_offset(opcode[1], self.cpu.x));
+                self.set_zero_page_addr_offset(opcode[1], self.cpu.x, v);
+                Ok(2)
+            }
+            ASL_ABS => {
+                let v = self.cpu.asl(self.read_absolute_addr(&opcode[1..]));
+                self.write_absolute_addr(&opcode[1..], v);
+                Ok(3)
+            }
+            ASL_ABS_X => {
+                let v = self
+                    .cpu
+                    .asl(self.read_absolute_addr_offset(&opcode[1..], self.cpu.x));
+                self.write_absolute_addr_offset(&opcode[1..], self.cpu.x, v);
+                Ok(3)
+            }
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -197,21 +225,39 @@ impl Nes {
         }
     }
 
-    // Read using zero paging addressing
+    // Zero page addressing
     fn read_zero_page_addr(&self, addr: u8) -> u8 {
         self.mem[addr as usize]
+    }
+    fn set_zero_page_addr(&mut self, addr: u8, val: u8) {
+        self.mem[addr as usize] = val;
     }
     // Read using zero page addressing with an offset
     fn read_zero_page_addr_offset(&self, addr: u8, offset: u8) -> u8 {
         self.mem[addr.wrapping_add(offset) as usize]
     }
-    // Read using absolute addressing
+    fn set_zero_page_addr_offset(&mut self, addr: u8, offset: u8, value: u8) {
+        self.mem[addr.wrapping_add(offset) as usize] = value;
+    }
+    // Absolute addressing
+    fn get_absolute_addr_offset(addr: &[u8], offset: u8) -> usize {
+        (addr[0] as u16 + ((addr[1] as u16) << 8)).wrapping_add(offset as u16) as usize
+    }
+    fn get_absolute_addr(addr: &[u8]) -> usize {
+        Nes::get_absolute_addr_offset(addr, 0)
+    }
     fn read_absolute_addr(&self, addr: &[u8]) -> u8 {
-        self.mem[addr[0] as usize + ((addr[1] as usize) << 8)]
+        self.mem[Nes::get_absolute_addr(addr)]
+    }
+    fn write_absolute_addr(&mut self, addr: &[u8], value: u8) {
+        self.mem[Nes::get_absolute_addr(addr)] = value;
     }
     // Read using absllute addressing with an offset
     fn read_absolute_addr_offset(&self, addr: &[u8], offset: u8) -> u8 {
-        self.mem[(addr[0] as u16 + ((addr[1] as u16) << 8)).wrapping_add(offset as u16) as usize]
+        self.mem[Nes::get_absolute_addr_offset(addr, offset)]
+    }
+    fn write_absolute_addr_offset(&mut self, addr: &[u8], offset: u8, value: u8) {
+        self.mem[Nes::get_absolute_addr_offset(addr, offset)] = value;
     }
     // Read using indexed indirect addressing with an offset.
     // X is added to the value in the opcode and used to read a pointer from memory.
@@ -455,22 +501,120 @@ mod tests {
         test_indexed_indirect!(AND_IDX_IND);
         test_indirect_indexed!(AND_IND_IDX);
     }
+    mod asl {
+        use super::*;
+        use test_case::test_case;
+
+        macro_rules! check_flags {
+            ($nes: ident, $zero: expr, $negative: expr, $carry: expr) => {
+                assert_eq!(
+                    $nes.cpu.s_r.z,
+                    $zero,
+                    "zero should be {}",
+                    if $zero { "set" } else { "unset" }
+                );
+                assert_eq!(
+                    $nes.cpu.s_r.n,
+                    $negative,
+                    "negative should be {}",
+                    if $negative { "set " } else { "unset" }
+                );
+                assert_eq!(
+                    $nes.cpu.s_r.c,
+                    $carry,
+                    "carry should be {}",
+                    if $carry { "set " } else { "unset" }
+                );
+            };
+        }
+
+        #[test_case(0x18, 0x30, false, false, false ; "happy case")]
+        #[test_case(0x45, 0x8A, false, true, false ; "negative is set")]
+        #[test_case(0x88, 0x10, false, false, true ; "carry is set")]
+        #[test_case(0x80, 0x00, true, false, true; "zero is set")]
+        fn test_implied(value: u8, shifted: u8, zero: bool, negative: bool, carry: bool) {
+            let mut nes = Nes::new();
+            nes.cpu.a = value;
+            assert_eq!(nes.decode_and_execute(&[ASL_A]), Ok(1));
+            assert_eq_hex!(nes.cpu.a, shifted, "shifted is correct");
+            check_flags!(nes, zero, negative, carry);
+        }
+        #[test_case(0x01, 0x02, false, false, false ; "happy case")]
+        #[test_case(0x44, 0x88, false, true, false ; "negative is set")]
+        #[test_case(0x00, 0x00, true, false, false ; "zero is set")]
+        #[test_case(0x8A, 0x14, false, false, true ; "carry is set")]
+        fn test_zp(value: u8, shifted: u8, zero: bool, negative: bool, carry: bool) {
+            let mut nes = Nes::new();
+            let addr = set_addr_zp(&mut nes, value);
+            assert_eq!(nes.decode_and_execute(&[ASL_ZP, addr]), Ok(2));
+            assert_eq_hex!(nes.mem[addr as usize], shifted);
+            check_flags!(nes, zero, negative, carry);
+        }
+        #[test_case(0x33, 0x66, false, false, false ; "happy case")]
+        #[test_case(0x45, 0x8A, false, true, false ; "negative set")]
+        #[test_case(0x8F, 0x1E, false, false, true ; "carry set")]
+        #[test_case(0x00, 0x00, true, false, false ; "zero set")]
+        fn test_zp_x(value: u8, shifted: u8, zero: bool, negative: bool, carry: bool) {
+            let mut nes = Nes::new();
+            let x_value = nes.cpu.x;
+            nes.cpu.x = x_value;
+            let addr = set_addr_zp_offset(&mut nes, value, x_value);
+            assert_eq!(nes.decode_and_execute(&[ASL_ZP_X, addr]), Ok(2));
+            assert_eq_hex!(nes.mem[addr as usize], shifted);
+            check_flags!(nes, zero, negative, carry);
+        }
+        #[test_case(0x08, 0x10, false, false, false ; "happy case")]
+        #[test_case(0x48, 0x90, false, true, false ; "negative set")]
+        #[test_case(0x88, 0x10, false, false, true ; "carry set")]
+        #[test_case(0x00, 0x00, true, false, false ; "zero set")]
+        fn test_abs(value: u8, shifted: u8, zero: bool, negative: bool, carry: bool) {
+            let mut nes = Nes::new();
+            let addr = set_addr_abs(&mut nes, value);
+            assert_eq!(nes.decode_and_execute(&[ASL_ABS, addr[0], addr[1]]), Ok(3));
+            assert_eq_hex!(nes.mem[addr_from_bytes(addr)], shifted);
+            check_flags!(nes, zero, negative, carry);
+        }
+        #[test_case(0x07, 0x0E, false, false, false ; "happy case")]
+        #[test_case(0x00, 0x00, true, false, false ; "zero set")]
+        #[test_case(0x45, 0x8A, false, true, false ; "negative set")]
+        #[test_case(0x86, 0x0C, false, false, true ; "carry set")]
+        fn test_abs_x(value: u8, shifted: u8, zero: bool, negative: bool, carry: bool) {
+            let mut nes = Nes::new();
+            let x_value = random::<u8>();
+            let addr = set_addr_abs_offset(&mut nes, value, x_value);
+            assert_eq!(
+                nes.decode_and_execute(&[ASL_ABS_X, addr[0], addr[1]]),
+                Ok(3)
+            );
+            assert_eq_hex!(nes.mem[Nes::get_absolute_addr(&addr)], shifted);
+            check_flags!(nes, zero, negative, carry);
+        }
+    }
 
     // Utility functions to get some addresses in memory set to the value given
     fn set_addr_zp(nes: &mut Nes, value: u8) -> u8 {
+        set_addr_zp_offset(nes, value, 0)
+    }
+    fn set_addr_zp_offset(nes: &mut Nes, value: u8, offset: u8) -> u8 {
         let addr = random::<u8>();
-        nes.mem[addr as usize] = value;
+        nes.mem[addr.wrapping_add(offset) as usize] = value;
         return addr;
     }
-    fn set_addr_abs(nes: &mut Nes, value: u8) -> [u8; 2] {
-        let addr = random::<u16>();
+    fn set_addr_abs_offset(nes: &mut Nes, value: u8, offset: u8) -> [u8; 2] {
+        let addr = random::<u16>().wrapping_add(offset as u16);
         nes.mem[addr as usize] = value;
         return [(addr & 0xFF) as u8, (addr >> 8) as u8];
+    }
+    fn set_addr_abs(nes: &mut Nes, value: u8) -> [u8; 2] {
+        set_addr_abs_offset(nes, value, 0)
     }
     fn first_byte(addr: u16) -> u8 {
         (addr & 0xFF) as u8
     }
     fn second_byte(addr: u16) -> u8 {
         (addr >> 8) as u8
+    }
+    fn addr_from_bytes(addr: [u8; 2]) -> usize {
+        ((addr[1] as usize) << 8) + (addr[0] as usize)
     }
 }

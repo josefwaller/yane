@@ -53,7 +53,7 @@ impl Cpu {
         self.x = value;
         self.set_load_flags(self.x);
     }
-    /// Load some valie into Y.
+    /// Load some value into Y.
     /// Sets the zero flag is Y = 0 and the negative flag if Y =
     ///
     /// ```
@@ -105,6 +105,17 @@ impl Cpu {
             self.s_r.n = true;
         }
     }
+    /// Perform an arithmatic shift left on some value.
+    /// Essentially multiply it by 2
+    /// * C is set to the carry bit (i.e. the MSB before the shift).
+    /// * Z is set if `value` is 0 after the shift.
+    /// * N is set if the MSB of `value` is set after the shift.
+    pub fn asl(&mut self, value: u8) -> u8 {
+        self.s_r.z = value & 0x7F == 0;
+        self.s_r.c = value & 0x80 != 0;
+        self.s_r.n = value & 0x40 != 0;
+        return value << 1;
+    }
 
     // Set the status register's flags when loading (LDA, LDX, or LDY)
     fn set_load_flags(&mut self, value: u8) {
@@ -121,6 +132,7 @@ impl Cpu {
 mod tests {
     use super::Cpu;
     use assert_hex::assert_eq_hex;
+    use test_case::test_case;
     #[derive(PartialEq)]
     enum Flag {
         Carry,
@@ -265,5 +277,18 @@ mod tests {
         assert_eq_hex!(cpu.a, 0x85);
         assert_eq!(cpu.s_r.z, false);
         assert_eq!(cpu.s_r.n, true);
+    }
+    #[test_case(0x12, 0x24, false, false, false ; "happy case")]
+    #[test_case(0x85, 0x0A, false, false, true ; "carry is set")]
+    #[test_case(0x00, 0x00, true, false, false ; "zero is set")]
+    #[test_case(0x80, 0x00, true, false, true ; "zero and carry is set")]
+    #[test_case(0x45, 0x8A, false, true, false ; "negative is set")]
+    #[test_case(0xF0, 0xE0, false, true, true ; "negative and carry are set")]
+    fn test_asl(value: u8, shifted: u8, zero: bool, negative: bool, carry: bool) {
+        let mut cpu = Cpu::new();
+        assert_eq_hex!(cpu.asl(value), shifted, "should shift correctly");
+        assert_eq!(cpu.s_r.z, zero, "zero is correct");
+        assert_eq!(cpu.s_r.c, carry, "carry is correct");
+        assert_eq!(cpu.s_r.n, negative, "negative is correct");
     }
 }

@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 assert_hex = "0.4.1"
 rand = "0.8.5"
+test-case = "3.3.1"
