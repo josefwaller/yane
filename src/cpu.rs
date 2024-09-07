@@ -133,7 +133,7 @@ impl Cpu {
     /// ```
     pub fn bcc(&mut self, value: u8) -> bool {
         if !self.s_r.c {
-            self.p_c = value as u16;
+            self.p_c = self.p_c.wrapping_add(value as u16);
             return true;
         }
         false
