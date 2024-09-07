@@ -302,6 +302,14 @@ impl Nes {
             BPL => Ok((2, self.cpu.branch_if(!self.cpu.s_r.n, opcode[1]))),
             BVS => Ok((2, self.cpu.branch_if(self.cpu.s_r.v, opcode[1]))),
             BVC => Ok((2, self.cpu.branch_if(!self.cpu.s_r.v, opcode[1]))),
+            BIT_ZP => {
+                self.cpu.bit(self.read_zero_page_addr(opcode[1]));
+                Ok((2, 3))
+            }
+            BIT_ABS => {
+                self.cpu.bit(self.read_absolute_addr(&opcode[1..]));
+                Ok((3, 4))
+            }
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -400,7 +408,7 @@ mod tests {
             fn test_zp() {
                 run_test(|nes, v| {
                     let addr = set_addr_zp(nes, v);
-                    assert_eq!(nes.decode_and_execute(&[$opcode, addr]), Ok((2, 3)));
+                    assert_eq!(nes.decode_and_execute(&[$opcode, addr[0]]), Ok((2, 3)));
                 })
             }
         };
@@ -641,8 +649,8 @@ mod tests {
         fn test_zp(value: u8, shifted: u8, zero: bool, negative: bool, carry: bool) {
             let mut nes = Nes::new();
             let addr = set_addr_zp(&mut nes, value);
-            assert_eq!(nes.decode_and_execute(&[ASL_ZP, addr]), Ok((2, 5)));
-            assert_eq_hex!(nes.mem[addr as usize], shifted);
+            assert_eq!(nes.decode_and_execute(&[ASL_ZP, addr[0]]), Ok((2, 5)));
+            assert_eq_hex!(nes.mem[addr[0] as usize], shifted);
             check_flags!(nes, zero, negative, carry);
         }
         #[test_case(0x33, 0x66, false, false, false ; "happy case")]
@@ -654,8 +662,8 @@ mod tests {
             let x_value = nes.cpu.x;
             nes.cpu.x = x_value;
             let addr = set_addr_zp_offset(&mut nes, value, x_value);
-            assert_eq!(nes.decode_and_execute(&[ASL_ZP_X, addr]), Ok((2, 6)));
-            assert_eq_hex!(nes.mem[addr as usize], shifted);
+            assert_eq!(nes.decode_and_execute(&[ASL_ZP_X, addr[0]]), Ok((2, 6)));
+            assert_eq_hex!(nes.mem[addr[0] as usize], shifted);
             check_flags!(nes, zero, negative, carry);
         }
         #[test_case(0x08, 0x10, false, false, false ; "happy case")]
@@ -721,14 +729,42 @@ mod tests {
     branch_tests!(bpl, BPL, n, false);
     branch_tests!(bvs, BVS, v, true);
     branch_tests!(bvc, BVC, v, false);
+    mod bit {
+        use super::*;
+        use test_case::test_case;
+        macro_rules! bit_test {
+            ($name: ident, $opcode: ident, $addr_func: ident, $result: expr) => {
+                #[test_case(0x18, 0x27, true, false, false; "should set the zero flag")]
+                #[test_case(0x18, 0x1F, false, false, false; "should clear the zero flag")]
+                #[test_case(0x12, 0x74, false, true, false; "should set V")]
+                #[test_case(0x11, 0x80, true, false, true; "should set N")]
+                #[test_case(0x18, 0xFF, false, true, true ; "should set Z and N flag")]
+                fn $name(a: u8, value: u8, z: bool, v: bool, n: bool) {
+                    let mut nes = Nes::new();
+                    nes.cpu.a = a;
+                    let addr = $addr_func(&mut nes, value);
+                    assert_eq!(
+                        nes.decode_and_execute(&prepend_with_opcode($opcode, &addr)),
+                        Ok($result)
+                    );
+                    assert_eq_hex!(nes.cpu.a, a, "A is changed");
+                    assert_eq!(nes.cpu.s_r.z, z, "Z is wrong");
+                    assert_eq!(nes.cpu.s_r.v, v, "V is wrong");
+                    assert_eq!(nes.cpu.s_r.n, n, "N is wrong");
+                }
+            };
+        }
+        bit_test!(test_zero_page, BIT_ZP, set_addr_zp, (2, 3));
+        bit_test!(test_absolute, BIT_ABS, set_addr_abs, (3, 4));
+    }
     // Utility functions to get some addresses in memory set to the value given
-    fn set_addr_zp(nes: &mut Nes, value: u8) -> u8 {
+    fn set_addr_zp(nes: &mut Nes, value: u8) -> [u8; 1] {
         set_addr_zp_offset(nes, value, 0)
     }
-    fn set_addr_zp_offset(nes: &mut Nes, value: u8, offset: u8) -> u8 {
+    fn set_addr_zp_offset(nes: &mut Nes, value: u8, offset: u8) -> [u8; 1] {
         let addr = random::<u8>();
         nes.mem[addr.wrapping_add(offset) as usize] = value;
-        return addr;
+        return [addr];
     }
     fn set_addr_abs_offset(nes: &mut Nes, value: u8, offset: u8) -> [u8; 2] {
         let addr = random::<u16>().wrapping_add(offset as u16);
@@ -746,5 +782,12 @@ mod tests {
     }
     fn addr_from_bytes(addr: [u8; 2]) -> usize {
         ((addr[1] as usize) << 8) + (addr[0] as usize)
+    }
+    // ten here since all instructions are way less than 10 bytes and extra ones can ust be ignored
+    fn prepend_with_opcode(opcode: u8, arr: &[u8]) -> [u8; 10] {
+        let mut a: [u8; 10] = [0; 10];
+        a[0] = opcode;
+        a[1..(arr.len() + 1)].copy_from_slice(arr);
+        a
     }
 }

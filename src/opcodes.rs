@@ -94,3 +94,7 @@ pub const BPL: u8 = 0x10;
 pub const BVC: u8 = 0x50;
 /// Branch if overflow set
 pub const BVS: u8 = 0x70;
+/// Bit test zero page
+pub const BIT_ZP: u8 = 0x24;
+/// Bit test absolute
+pub const BIT_ABS: u8 = 0x2C;

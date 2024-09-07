@@ -122,7 +122,7 @@ impl Cpu {
         self.s_r.n = value & 0x40 != 0;
         return value << 1;
     }
-    /// Perform a branch if `param == true`.
+    /// Perform a branch to `value` relatively if `param == true`.
     /// Updates the PC accordingly.
     /// Return how many cycles are needed by the branching operation.
     pub fn branch_if(&mut self, param: bool, value: u8) -> i64 {
@@ -136,6 +136,27 @@ impl Cpu {
             };
         }
         2
+    }
+    /// Perform a bitwise test by ANDing A with `value`.
+    /// Does not store the result, but uses it to set some flags
+    /// * Z is set if the result is 0.
+    /// * V is set to bit 6 of `value`.
+    /// * N is set to bit 7 of `value`.
+    /// ```
+    /// let mut cpu = yane::Cpu::new();
+    /// cpu.a = 0x18;
+    /// cpu.bit(0xE0);
+    /// // A is not affected
+    /// assert_eq!(cpu.a, 0x18);
+    /// assert_eq!(cpu.s_r.z, true);
+    /// assert_eq!(cpu.s_r.v, true);
+    /// assert_eq!(cpu.s_r.n, true);
+    /// ```
+    pub fn bit(&mut self, value: u8) {
+        let result = self.a & value;
+        self.s_r.z = result == 0;
+        self.s_r.v = (value & 0x40) != 0;
+        self.s_r.n = (value & 0x80) != 0;
     }
     // Set the status register's flags when loading (LDA, LDX, or LDY)
     fn set_load_flags(&mut self, value: u8) {
