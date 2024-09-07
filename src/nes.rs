@@ -216,6 +216,10 @@ impl Nes {
                 self.write_absolute_addr_offset(&opcode[1..], self.cpu.x, v);
                 Ok(3)
             }
+            BCC => {
+                self.cpu.bcc(opcode[1]);
+                Ok(2)
+            }
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -590,7 +594,20 @@ mod tests {
             check_flags!(nes, zero, negative, carry);
         }
     }
-
+    mod bcc {
+        use super::*;
+        use test_case::test_case;
+        #[test_case(false, 0x18, 0x00, 0x00 ; "branches")]
+        #[test_case(true, 0x18, 0x00, 0x18 ; "doesn't branch")]
+        #[test_case(false, 0x18, 0x18, 0x18 ; "branches to same location")]
+        fn test_implied(c: bool, pc: u16, operand: u8, new_pc: u16) {
+            let mut nes = Nes::new();
+            nes.cpu.p_c = pc;
+            nes.cpu.s_r.c = c;
+            assert_eq!(nes.decode_and_execute(&[BCC, operand]), Ok(2));
+            assert_eq_hex!(nes.cpu.p_c, new_pc);
+        }
+    }
     // Utility functions to get some addresses in memory set to the value given
     fn set_addr_zp(nes: &mut Nes, value: u8) -> u8 {
         set_addr_zp_offset(nes, value, 0)

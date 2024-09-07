@@ -68,11 +68,17 @@ pub const AND_ABS_Y: u8 = 0x39;
 pub const AND_IND_IDX: u8 = 0x21;
 /// And Indirect Indexed
 pub const AND_IDX_IND: u8 = 0x31;
-/// Arithmatic Shift Left Accumulator
+/// Arithmetic Shift Left Accumulator
 pub const ASL_A: u8 = 0x0A;
-/// Arithmatic Shift Left Zero Page
+/// Arithmetic Shift Left Zero Page
 pub const ASL_ZP: u8 = 0x06;
-/// Arithmatic Shift Left Zero Page X
+/// Arithmetic Shift Left Zero Page X
 pub const ASL_ZP_X: u8 = 0x16;
+/// Arithmetic Shift Left Absolute
 pub const ASL_ABS: u8 = 0x0E;
+/// Arithmetic Shift Left Absolute X
 pub const ASL_ABS_X: u8 = 0x1E;
+/// Branch if Carry Clear
+pub const BCC: u8 = 0x90;
+/// Branch if Carry Set
+pub const BCS: u8 = 0xB0;

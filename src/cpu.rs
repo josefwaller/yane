@@ -110,11 +110,33 @@ impl Cpu {
     /// * C is set to the carry bit (i.e. the MSB before the shift).
     /// * Z is set if `value` is 0 after the shift.
     /// * N is set if the MSB of `value` is set after the shift.
+    /// ```
+    /// let mut cpu = yane::Cpu::new();
+    /// assert_eq!(cpu.asl(0x98), 0x30);
+    /// assert_eq!(cpu.s_r.z, false);
+    /// assert_eq!(cpu.s_r.c, true);
+    /// ```
     pub fn asl(&mut self, value: u8) -> u8 {
         self.s_r.z = value & 0x7F == 0;
         self.s_r.c = value & 0x80 != 0;
         self.s_r.n = value & 0x40 != 0;
         return value << 1;
+    }
+    /// Branch if the carry flag is cleared, i.e. false.
+    /// Does not set any flags.
+    /// Returns `true` if the branch occurs and `false` otherwise.
+    /// ```
+    /// let mut cpu = yane::Cpu::new();
+    /// cpu.s_r.c = false;
+    /// cpu.bcc(0x18);
+    /// assert_eq!(cpu.p_c, 0x18);
+    /// ```
+    pub fn bcc(&mut self, value: u8) -> bool {
+        if !self.s_r.c {
+            self.p_c = value as u16;
+            return true;
+        }
+        false
     }
 
     // Set the status register's flags when loading (LDA, LDX, or LDY)
