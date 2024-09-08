@@ -100,3 +100,13 @@ pub const BIT_ZP: u8 = 0x24;
 pub const BIT_ABS: u8 = 0x2C;
 /// Force interrupt
 pub const BRK: u8 = 0x00;
+/// Clear carry flag
+pub const CLC: u8 = 0x18;
+/// Clear decimal flag
+pub const CLD: u8 = 0xD8;
+/// Clear interrupt disable flag
+pub const CLI: u8 = 0x58;
+/// Clear overflow flag
+pub const CLV: u8 = 0xB8;
+/// Compare with A register Immediate
+pub const CMP_I: u8 = 0xC9;

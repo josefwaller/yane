@@ -175,6 +175,20 @@ impl Cpu {
         self.p_c = location;
         return to_stack;
     }
+    /// "Compare" the two values given and set the status register accordingly
+    /// * C is set to `u >= v`
+    /// * Z is set to `u == v``
+    /// * N is set to the MSB of `u - v`
+    pub fn compare(&mut self, u: u8, v: u8) {
+        self.s_r.c = u >= v;
+        self.s_r.z = u == v;
+        self.s_r.n = (u.wrapping_sub(v) & 0x80) != 0;
+    }
+    /// Compare a value with A.
+    /// Shorthand for `cpu.compare(cpu.a, v)`.
+    pub fn cmp(&mut self, v: u8) {
+        self.compare(self.a, v);
+    }
     // Set the status register's flags when loading (LDA, LDX, or LDY)
     fn set_load_flags(&mut self, value: u8) {
         if value == 0 {

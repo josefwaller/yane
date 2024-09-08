@@ -319,6 +319,26 @@ impl Nes {
                     .copy_from_slice(&to_push);
                 Ok((1, 7))
             }
+            CLC => {
+                self.cpu.s_r.c = false;
+                Ok((1, 2))
+            }
+            CLD => {
+                self.cpu.s_r.d = false;
+                Ok((1, 2))
+            }
+            CLI => {
+                self.cpu.s_r.i = false;
+                Ok((1, 2))
+            }
+            CLV => {
+                self.cpu.s_r.v = false;
+                Ok((1, 2))
+            }
+            CMP_I => {
+                self.cpu.cmp(opcode[1]);
+                Ok((2, 2))
+            }
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -810,6 +830,58 @@ mod tests {
             assert_eq_hex!(nes.mem[0x1FF], sr);
         }
     }
+    macro_rules! test_clear {
+        ($name: ident, $opcode: ident, $flag: ident) => {
+            #[test]
+            fn $name() {
+                let mut nes = Nes::new();
+                nes.cpu.s_r.$flag = true;
+                assert_eq!(nes.decode_and_execute(&[$opcode]), Ok((1, 2)));
+                assert_eq!(nes.cpu.s_r.c, false);
+            }
+        };
+    }
+    test_clear!(test_clc, CLC, c);
+    test_clear!(test_cli, CLI, i);
+    test_clear!(test_clv, CLV, v);
+    test_clear!(test_cld, CLD, d);
+    mod cmp {
+        use super::*;
+        use test_case::test_case;
+        macro_rules! compare_test {
+            ($name: ident, $opcode: ident, $register: ident, $addr_func: ident) => {
+                #[test_case(0xAA, 0xBB, false, false, true ; "happy case")]
+                fn $name(reg_value: u8, comp_value: u8, c: bool, z: bool, n: bool) {
+                    let mut nes = Nes::new();
+                    nes.cpu.$register = reg_value;
+                    let operands = $addr_func(comp_value);
+                    assert_eq!(
+                        nes.decode_and_execute(&prepend_with_opcode($opcode, &operands)),
+                        Ok((2, 2))
+                    );
+                    assert_eq!(
+                        nes.cpu.s_r.c,
+                        c,
+                        "Carry should be {}",
+                        if c { "set" } else { "unset" }
+                    );
+                    assert_eq!(
+                        nes.cpu.s_r.z,
+                        z,
+                        "Overflow should be {}",
+                        if z { "set" } else { "unset" }
+                    );
+                    assert_eq!(
+                        nes.cpu.s_r.n,
+                        n,
+                        "Negative should be {}",
+                        if n { "set" } else { "unset" }
+                    );
+                }
+            };
+        }
+        compare_test!(test_immediate, CMP_I, a, set_addr_immediate);
+    }
     // Utility functions to get some addresses in memory set to the value given
     fn set_addr_zp(nes: &mut Nes, value: u8) -> [u8; 1] {
         set_addr_zp_offset(nes, value, 0)
@@ -826,6 +898,10 @@ mod tests {
     }
     fn set_addr_abs(nes: &mut Nes, value: u8) -> [u8; 2] {
         set_addr_abs_offset(nes, value, 0)
+    }
+    // This is just so that we can use this function in macros instead of using set_addr_zp or set_addr_abs
+    fn set_addr_immediate(value: u8) -> [u8; 1] {
+        [value]
     }
     fn first_byte(addr: u16) -> u8 {
         (addr & 0xFF) as u8
