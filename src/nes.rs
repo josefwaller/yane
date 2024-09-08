@@ -32,31 +32,37 @@ impl Nes {
     /// // Perform a noop
     /// nes.decode_and_execute(&[0xEA]);
     /// ```
-    pub fn decode_and_execute(&mut self, opcode: &[u8]) -> Result<(u16, i64), String> {
-        match opcode[0] {
+    pub fn decode_and_execute(&mut self, instruction: &[u8]) -> Result<(u16, i64), String> {
+        let [opcode, operands @ ..] = instruction else {
+            return Err(format!(
+                "Invalid instruction provided: '{:#X?}'",
+                instruction
+            ));
+        };
+        match *opcode {
             LDA_I => {
-                self.cpu.lda(opcode[1]);
+                self.cpu.lda(operands[0]);
                 Ok((2, 2))
             }
             LDA_ZP => {
-                self.cpu.lda(self.read_zero_page_addr(opcode[1]));
+                self.cpu.lda(self.read_zero_page_addr(operands[0]));
                 Ok((2, 3))
             }
             LDA_ZP_X => {
                 self.cpu
-                    .lda(self.read_zero_page_addr_offset(opcode[1], self.cpu.x));
+                    .lda(self.read_zero_page_addr_offset(operands[0], self.cpu.x));
                 Ok((2, 4))
             }
             LDA_ABS => {
-                self.cpu.lda(self.read_absolute_addr(&opcode[1..]));
+                self.cpu.lda(self.read_absolute_addr(&operands));
                 Ok((3, 4))
             }
             LDA_ABS_X => {
                 self.cpu
-                    .lda(self.read_absolute_addr_offset(&opcode[1..], self.cpu.x));
+                    .lda(self.read_absolute_addr_offset(&operands, self.cpu.x));
                 Ok((
                     3,
-                    4 + if Nes::page_crossed_abs(&opcode[1..], self.cpu.x) {
+                    4 + if Nes::page_crossed_abs(&operands, self.cpu.x) {
                         1
                     } else {
                         0
@@ -65,10 +71,10 @@ impl Nes {
             }
             LDA_ABS_Y => {
                 self.cpu
-                    .lda(self.read_absolute_addr_offset(&opcode[1..], self.cpu.y));
+                    .lda(self.read_absolute_addr_offset(&operands, self.cpu.y));
                 Ok((
                     3,
-                    4 + if Nes::page_crossed_abs(&opcode[1..], self.cpu.y) {
+                    4 + if Nes::page_crossed_abs(&operands, self.cpu.y) {
                         1
                     } else {
                         0
@@ -77,15 +83,15 @@ impl Nes {
             }
             LDA_IDX_IND => {
                 self.cpu
-                    .lda(self.read_indexed_indirect(opcode[1], self.cpu.x));
+                    .lda(self.read_indexed_indirect(operands[0], self.cpu.x));
                 Ok((2, 6))
             }
             LDA_IND_IDX => {
                 self.cpu
-                    .lda(self.read_indirect_indexed(opcode[1], self.cpu.y));
+                    .lda(self.read_indirect_indexed(operands[0], self.cpu.y));
                 Ok((
                     2,
-                    5 + if self.page_crossed_ind_idx(&opcode[1..], self.cpu.y) {
+                    5 + if self.page_crossed_ind_idx(&operands, self.cpu.y) {
                         1
                     } else {
                         0
@@ -93,28 +99,28 @@ impl Nes {
                 ))
             }
             LDX_I => {
-                self.cpu.ldx(opcode[1]);
+                self.cpu.ldx(operands[0]);
                 Ok((2, 2))
             }
             LDX_ZP => {
-                self.cpu.ldx(self.read_zero_page_addr(opcode[1]));
+                self.cpu.ldx(self.read_zero_page_addr(operands[0]));
                 Ok((2, 3))
             }
             LDX_ZP_Y => {
                 self.cpu
-                    .ldx(self.read_zero_page_addr_offset(opcode[1], self.cpu.y));
+                    .ldx(self.read_zero_page_addr_offset(operands[0], self.cpu.y));
                 Ok((2, 4))
             }
             LDX_ABS => {
-                self.cpu.ldx(self.read_absolute_addr(&opcode[1..]));
+                self.cpu.ldx(self.read_absolute_addr(&operands));
                 Ok((3, 4))
             }
             LDX_ABS_Y => {
                 self.cpu
-                    .ldx(self.read_absolute_addr_offset(&opcode[1..], self.cpu.y));
+                    .ldx(self.read_absolute_addr_offset(&operands, self.cpu.y));
                 Ok((
                     3,
-                    4 + if Nes::page_crossed_abs(&opcode[1..], self.cpu.y) {
+                    4 + if Nes::page_crossed_abs(&operands, self.cpu.y) {
                         1
                     } else {
                         0
@@ -122,28 +128,28 @@ impl Nes {
                 ))
             }
             LDY_I => {
-                self.cpu.ldy(opcode[1]);
+                self.cpu.ldy(operands[0]);
                 Ok((2, 2))
             }
             LDY_ZP => {
-                self.cpu.ldy(self.read_zero_page_addr(opcode[1]));
+                self.cpu.ldy(self.read_zero_page_addr(operands[0]));
                 Ok((2, 3))
             }
             LDY_ZP_X => {
                 self.cpu
-                    .ldy(self.read_zero_page_addr_offset(opcode[1], self.cpu.x));
+                    .ldy(self.read_zero_page_addr_offset(operands[0], self.cpu.x));
                 Ok((2, 4))
             }
             LDY_ABS => {
-                self.cpu.ldy(self.read_absolute_addr(&opcode[1..]));
+                self.cpu.ldy(self.read_absolute_addr(&operands));
                 Ok((3, 4))
             }
             LDY_ABS_X => {
                 self.cpu
-                    .ldy(self.read_absolute_addr_offset(&opcode[1..], self.cpu.x));
+                    .ldy(self.read_absolute_addr_offset(&operands, self.cpu.x));
                 Ok((
                     3,
-                    4 + if Nes::page_crossed_abs(&opcode[1..], self.cpu.x) {
+                    4 + if Nes::page_crossed_abs(&operands, self.cpu.x) {
                         1
                     } else {
                         0
@@ -151,28 +157,28 @@ impl Nes {
                 ))
             }
             ADC_I => {
-                self.cpu.adc(opcode[1]);
+                self.cpu.adc(operands[0]);
                 Ok((2, 2))
             }
             ADC_ZP => {
-                self.cpu.adc(self.read_zero_page_addr(opcode[1]));
+                self.cpu.adc(self.read_zero_page_addr(operands[0]));
                 Ok((2, 3))
             }
             ADC_ZP_X => {
                 self.cpu
-                    .adc(self.read_zero_page_addr_offset(opcode[1], self.cpu.x));
+                    .adc(self.read_zero_page_addr_offset(operands[0], self.cpu.x));
                 Ok((2, 4))
             }
             ADC_ABS => {
-                self.cpu.adc(self.read_absolute_addr(&opcode[1..]));
+                self.cpu.adc(self.read_absolute_addr(&operands));
                 Ok((3, 4))
             }
             ADC_ABS_X => {
                 self.cpu
-                    .adc(self.read_absolute_addr_offset(&opcode[1..], self.cpu.x));
+                    .adc(self.read_absolute_addr_offset(&operands, self.cpu.x));
                 Ok((
                     3,
-                    4 + if Nes::page_crossed_abs(&opcode[1..], self.cpu.x) {
+                    4 + if Nes::page_crossed_abs(&operands, self.cpu.x) {
                         1
                     } else {
                         0
@@ -181,10 +187,10 @@ impl Nes {
             }
             ADC_ABS_Y => {
                 self.cpu
-                    .adc(self.read_absolute_addr_offset(&opcode[1..], self.cpu.y));
+                    .adc(self.read_absolute_addr_offset(&operands, self.cpu.y));
                 Ok((
                     3,
-                    4 + if Nes::page_crossed_abs(&opcode[1..], self.cpu.y) {
+                    4 + if Nes::page_crossed_abs(&operands, self.cpu.y) {
                         1
                     } else {
                         0
@@ -193,15 +199,15 @@ impl Nes {
             }
             ADC_IDX_IND => {
                 self.cpu
-                    .adc(self.read_indexed_indirect(opcode[1], self.cpu.x));
+                    .adc(self.read_indexed_indirect(operands[0], self.cpu.x));
                 Ok((2, 6))
             }
             ADC_IND_IDX => {
                 self.cpu
-                    .adc(self.read_indirect_indexed(opcode[1], self.cpu.y));
+                    .adc(self.read_indirect_indexed(operands[0], self.cpu.y));
                 Ok((
                     2,
-                    5 + if self.page_crossed_ind_idx(&opcode[1..], self.cpu.y) {
+                    5 + if self.page_crossed_ind_idx(&operands, self.cpu.y) {
                         1
                     } else {
                         0
@@ -209,28 +215,28 @@ impl Nes {
                 ))
             }
             AND_I => {
-                self.cpu.and(opcode[1]);
+                self.cpu.and(operands[0]);
                 Ok((2, 2))
             }
             AND_ZP => {
-                self.cpu.and(self.read_zero_page_addr(opcode[1]));
+                self.cpu.and(self.read_zero_page_addr(operands[0]));
                 Ok((2, 3))
             }
             AND_ZP_X => {
                 self.cpu
-                    .and(self.read_zero_page_addr_offset(opcode[1], self.cpu.x));
+                    .and(self.read_zero_page_addr_offset(operands[0], self.cpu.x));
                 Ok((2, 4))
             }
             AND_ABS => {
-                self.cpu.and(self.read_absolute_addr(&opcode[1..]));
+                self.cpu.and(self.read_absolute_addr(&operands));
                 Ok((3, 4))
             }
             AND_ABS_X => {
                 self.cpu
-                    .and(self.read_absolute_addr_offset(&opcode[1..], self.cpu.x));
+                    .and(self.read_absolute_addr_offset(&operands, self.cpu.x));
                 Ok((
                     3,
-                    4 + if Nes::page_crossed_abs(&opcode[1..], self.cpu.x) {
+                    4 + if Nes::page_crossed_abs(&operands, self.cpu.x) {
                         1
                     } else {
                         0
@@ -239,10 +245,10 @@ impl Nes {
             }
             AND_ABS_Y => {
                 self.cpu
-                    .and(self.read_absolute_addr_offset(&opcode[1..], self.cpu.y));
+                    .and(self.read_absolute_addr_offset(&operands, self.cpu.y));
                 Ok((
                     3,
-                    4 + if Nes::page_crossed_abs(&opcode[1..], self.cpu.y) {
+                    4 + if Nes::page_crossed_abs(&operands, self.cpu.y) {
                         1
                     } else {
                         0
@@ -251,15 +257,15 @@ impl Nes {
             }
             AND_IDX_IND => {
                 self.cpu
-                    .and(self.read_indexed_indirect(opcode[1], self.cpu.x));
+                    .and(self.read_indexed_indirect(operands[0], self.cpu.x));
                 Ok((2, 6))
             }
             AND_IND_IDX => {
                 self.cpu
-                    .and(self.read_indirect_indexed(opcode[1], self.cpu.y));
+                    .and(self.read_indirect_indexed(operands[0], self.cpu.y));
                 Ok((
                     2,
-                    5 + if self.page_crossed_ind_idx(&opcode[1..], self.cpu.y) {
+                    5 + if self.page_crossed_ind_idx(&operands, self.cpu.y) {
                         1
                     } else {
                         0
@@ -271,43 +277,43 @@ impl Nes {
                 Ok((1, 2))
             }
             ASL_ZP => {
-                let v = self.cpu.asl(self.read_zero_page_addr(opcode[1]));
-                self.set_zero_page_addr(opcode[1], v);
+                let v = self.cpu.asl(self.read_zero_page_addr(operands[0]));
+                self.set_zero_page_addr(operands[0], v);
                 Ok((2, 5))
             }
             ASL_ZP_X => {
                 let v = self
                     .cpu
-                    .asl(self.read_zero_page_addr_offset(opcode[1], self.cpu.x));
-                self.set_zero_page_addr_offset(opcode[1], self.cpu.x, v);
+                    .asl(self.read_zero_page_addr_offset(operands[0], self.cpu.x));
+                self.set_zero_page_addr_offset(operands[0], self.cpu.x, v);
                 Ok((2, 6))
             }
             ASL_ABS => {
-                let v = self.cpu.asl(self.read_absolute_addr(&opcode[1..]));
-                self.write_absolute_addr(&opcode[1..], v);
+                let v = self.cpu.asl(self.read_absolute_addr(&operands));
+                self.write_absolute_addr(&operands, v);
                 Ok((3, 6))
             }
             ASL_ABS_X => {
                 let v = self
                     .cpu
-                    .asl(self.read_absolute_addr_offset(&opcode[1..], self.cpu.x));
-                self.write_absolute_addr_offset(&opcode[1..], self.cpu.x, v);
+                    .asl(self.read_absolute_addr_offset(&operands, self.cpu.x));
+                self.write_absolute_addr_offset(&operands, self.cpu.x, v);
                 Ok((3, 7))
             }
-            BCS => Ok((2, self.cpu.branch_if(self.cpu.s_r.c, opcode[1]))),
-            BCC => Ok((2, self.cpu.branch_if(!self.cpu.s_r.c, opcode[1]))),
-            BEQ => Ok((2, self.cpu.branch_if(self.cpu.s_r.z, opcode[1]))),
-            BNE => Ok((2, self.cpu.branch_if(!self.cpu.s_r.z, opcode[1]))),
-            BMI => Ok((2, self.cpu.branch_if(self.cpu.s_r.n, opcode[1]))),
-            BPL => Ok((2, self.cpu.branch_if(!self.cpu.s_r.n, opcode[1]))),
-            BVS => Ok((2, self.cpu.branch_if(self.cpu.s_r.v, opcode[1]))),
-            BVC => Ok((2, self.cpu.branch_if(!self.cpu.s_r.v, opcode[1]))),
+            BCS => Ok((2, self.cpu.branch_if(self.cpu.s_r.c, operands[0]))),
+            BCC => Ok((2, self.cpu.branch_if(!self.cpu.s_r.c, operands[0]))),
+            BEQ => Ok((2, self.cpu.branch_if(self.cpu.s_r.z, operands[0]))),
+            BNE => Ok((2, self.cpu.branch_if(!self.cpu.s_r.z, operands[0]))),
+            BMI => Ok((2, self.cpu.branch_if(self.cpu.s_r.n, operands[0]))),
+            BPL => Ok((2, self.cpu.branch_if(!self.cpu.s_r.n, operands[0]))),
+            BVS => Ok((2, self.cpu.branch_if(self.cpu.s_r.v, operands[0]))),
+            BVC => Ok((2, self.cpu.branch_if(!self.cpu.s_r.v, operands[0]))),
             BIT_ZP => {
-                self.cpu.bit(self.read_zero_page_addr(opcode[1]));
+                self.cpu.bit(self.read_zero_page_addr(operands[0]));
                 Ok((2, 3))
             }
             BIT_ABS => {
-                self.cpu.bit(self.read_absolute_addr(&opcode[1..]));
+                self.cpu.bit(self.read_absolute_addr(&operands));
                 Ok((3, 4))
             }
             BRK => {
@@ -336,13 +342,13 @@ impl Nes {
                 Ok((1, 2))
             }
             CMP_I => {
-                self.cpu.cmp(opcode[1]);
+                self.cpu.cmp(operands[0]);
                 Ok((2, 2))
             }
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
-                    opcode[0], self.cpu.p_c
+                    opcode, self.cpu.p_c
                 ))
             }
         }
