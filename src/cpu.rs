@@ -24,7 +24,7 @@ impl Cpu {
             x: 0,
             y: 0,
             p_c: 0,
-            s_p: 0,
+            s_p: 0xFF,
             s_r: StatusRegister::new(),
         }
     }
@@ -157,6 +157,23 @@ impl Cpu {
         self.s_r.z = result == 0;
         self.s_r.v = (value & 0x40) != 0;
         self.s_r.n = (value & 0x80) != 0;
+    }
+    /// Perform an interrupt to the location specified.
+    /// Basically just sets the program counter to `location` and sets the interrupt flag.
+    /// Returns an array representing the the program counter and status register, to be pushed to the stack.
+    /// Return array is in the form `[LSB(PC), MSB(PC), SR]`, where:
+    /// * `LSB(PC)` is the least significant byte of the program counter
+    /// * `MSB(PC)` is the most significant byte of the program counter
+    /// * SR is the status register
+    pub fn brk(&mut self, location: u16) -> [u8; 3] {
+        let to_stack: [u8; 3] = [
+            (self.p_c & 0xFF) as u8,
+            (self.p_c >> 8) as u8,
+            self.s_r.to_byte(),
+        ];
+        self.s_r.i = true;
+        self.p_c = location;
+        return to_stack;
     }
     // Set the status register's flags when loading (LDA, LDX, or LDY)
     fn set_load_flags(&mut self, value: u8) {

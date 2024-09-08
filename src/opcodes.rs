@@ -98,3 +98,5 @@ pub const BVS: u8 = 0x70;
 pub const BIT_ZP: u8 = 0x24;
 /// Bit test absolute
 pub const BIT_ABS: u8 = 0x2C;
+/// Force interrupt
+pub const BRK: u8 = 0x00;

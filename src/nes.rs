@@ -310,6 +310,15 @@ impl Nes {
                 self.cpu.bit(self.read_absolute_addr(&opcode[1..]));
                 Ok((3, 4))
             }
+            BRK => {
+                let to_push = self
+                    .cpu
+                    .brk(self.mem[0xFFFE] as u16 + ((self.mem[0xFFFF] as u16) << 8));
+                // Copy into stack
+                self.mem[(0x100 + self.cpu.s_p as usize - 2)..(0x100 + self.cpu.s_p as usize + 1)]
+                    .copy_from_slice(&to_push);
+                Ok((1, 7))
+            }
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -756,6 +765,50 @@ mod tests {
         }
         bit_test!(test_zero_page, BIT_ZP, set_addr_zp, (2, 3));
         bit_test!(test_absolute, BIT_ABS, set_addr_abs, (3, 4));
+    }
+    mod brk {
+        use super::*;
+        use test_case::test_case;
+        #[test_case(
+            0x1234, 0x4567, true, false, true, false, true, false, true, 0b10110101 ; "happy case"
+        )]
+        #[test_case(0xFFFF, 0x0000, true, true, true, true, true, true, true, 0b11111111 ; "all flags true")]
+        #[test_case(0xAABB, 0xBDF1, false, false, false, false, false, false, false, 0b00100000 ; "all flags false")]
+        #[test_case(0x6789, 0x6789, false, false, true, false, true, true, true, 0b00110111 ; "no change in PC")]
+        fn test_implied(
+            init_pc: u16,
+            final_pc: u16,
+            n: bool,
+            v: bool,
+            b: bool,
+            d: bool,
+            i: bool,
+            z: bool,
+            c: bool,
+            sr: u8,
+        ) {
+            let mut nes = Nes::new();
+            nes.cpu.s_r.n = n;
+            nes.cpu.s_r.v = v;
+            nes.cpu.s_r.b = b;
+            nes.cpu.s_r.d = d;
+            nes.cpu.s_r.i = i;
+            nes.cpu.s_r.z = z;
+            nes.cpu.s_r.c = c;
+            nes.cpu.p_c = init_pc;
+            // Set memeory to be read into PC
+            nes.mem[0xFFFE] = first_byte(final_pc);
+            nes.mem[0xFFFF] = second_byte(final_pc);
+            assert_eq!(nes.decode_and_execute(&[BRK]), Ok((1, 7)));
+            // Check flag is set
+            assert_eq!(nes.cpu.s_r.i, true);
+            // Check PC was set
+            assert_eq_hex!(nes.cpu.p_c, final_pc);
+            // Check stuff was pushed onto stack
+            assert_eq_hex!(nes.mem[0x1FD], first_byte(init_pc));
+            assert_eq_hex!(nes.mem[0x1FE], second_byte(init_pc));
+            assert_eq_hex!(nes.mem[0x1FF], sr);
+        }
     }
     // Utility functions to get some addresses in memory set to the value given
     fn set_addr_zp(nes: &mut Nes, value: u8) -> [u8; 1] {
