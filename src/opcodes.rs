@@ -110,3 +110,17 @@ pub const CLI: u8 = 0x58;
 pub const CLV: u8 = 0xB8;
 /// Compare with A register Immediate
 pub const CMP_I: u8 = 0xC9;
+/// Compare with A Zero Page
+pub const CMP_ZP: u8 = 0xC5;
+/// Compare with A Zero Page X
+pub const CMP_ZP_X: u8 = 0xD5;
+/// Compare with A Absolute
+pub const CMP_ABS: u8 = 0xCD;
+/// Compare with A Absolute X
+pub const CMP_ABS_X: u8 = 0xDD;
+/// Compare with A Absolute Y
+pub const CMP_ABS_Y: u8 = 0xD9;
+/// Compare with A Indexed Indirect
+pub const CMP_IDX_IND: u8 = 0xC1;
+/// Compare with A Indirect Indexed
+pub const CMP_IND_IDX: u8 = 0xD1;

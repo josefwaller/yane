@@ -345,6 +345,15 @@ impl Nes {
                 self.cpu.cmp(operands[0]);
                 Ok((2, 2))
             }
+            CMP_ZP => {
+                self.cpu.cmp(self.read_zero_page_addr(operands[0]));
+                Ok((2, 3))
+            }
+            CMP_ZP_X => {
+                self.cpu
+                    .cmp(self.read_zero_page_addr_offset(operands[0], self.cpu.x));
+                Ok((2, 4))
+            }
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -416,6 +425,7 @@ impl Nes {
 #[cfg(test)]
 mod tests {
     use rand::random;
+    use std::cmp::{max, min};
 
     use super::Nes;
     use crate::opcodes::*;
@@ -855,15 +865,17 @@ mod tests {
         use super::*;
         use test_case::test_case;
         macro_rules! compare_test {
-            ($name: ident, $opcode: ident, $register: ident, $addr_func: ident) => {
-                #[test_case(0xAA, 0xBB, false, false, true ; "happy case")]
+            ($name: ident, $opcode: ident, $register: ident, $addr_func: ident, $bytes: expr, $cycles: expr) => {
+                #[test_case(0x12, 0x11, true, false, false; "should set carry")]
+                #[test_case(0x18, 0x18, true, true, false; "should set carry and zero")]
+                #[test_case(0xAA, 0xBB, false, false, true ; "should set negative")]
                 fn $name(reg_value: u8, comp_value: u8, c: bool, z: bool, n: bool) {
                     let mut nes = Nes::new();
                     nes.cpu.$register = reg_value;
-                    let operands = $addr_func(comp_value);
+                    let operands = $addr_func(&mut nes, comp_value);
                     assert_eq!(
                         nes.decode_and_execute(&prepend_with_opcode($opcode, &operands)),
-                        Ok((2, 2))
+                        Ok(($bytes, $cycles))
                     );
                     assert_eq!(
                         nes.cpu.s_r.c,
@@ -874,7 +886,7 @@ mod tests {
                     assert_eq!(
                         nes.cpu.s_r.z,
                         z,
-                        "Overflow should be {}",
+                        "Zero should be {}",
                         if z { "set" } else { "unset" }
                     );
                     assert_eq!(
@@ -886,7 +898,9 @@ mod tests {
                 }
             };
         }
-        compare_test!(test_immediate, CMP_I, a, set_addr_immediate);
+        compare_test!(test_immediate, CMP_I, a, set_addr_immediate, 2, 2);
+        compare_test!(test_zp, CMP_ZP, a, set_addr_zp, 2, 3);
+        compare_test!(test_zp_x, CMP_ZP_X, a, set_addr_zp_x, 2, 4);
     }
     // Utility functions to get some addresses in memory set to the value given
     fn set_addr_zp(nes: &mut Nes, value: u8) -> [u8; 1] {
@@ -897,8 +911,17 @@ mod tests {
         nes.mem[addr.wrapping_add(offset) as usize] = value;
         return [addr];
     }
+    fn set_addr_zp_x(nes: &mut Nes, value: u8) -> [u8; 1] {
+        nes.cpu.x = random::<u8>();
+        set_addr_zp_offset(nes, value, nes.cpu.x)
+    }
+    fn set_addr_zp_y(nes: &mut Nes, value: u8) -> [u8; 1] {
+        nes.cpu.y = random::<u8>();
+        set_addr_zp_offset(nes, value, nes.cpu.y)
+    }
     fn set_addr_abs_offset(nes: &mut Nes, value: u8, offset: u8) -> [u8; 2] {
-        let addr = random::<u16>().wrapping_add(offset as u16);
+        // Make sure we don't cross a page
+        let addr = ((random::<u8>() as u16) << 8) + min(random::<u8>(), 255 - offset) as u16;
         nes.mem[addr as usize] = value;
         return [(addr & 0xFF) as u8, (addr >> 8) as u8];
     }
@@ -906,7 +929,7 @@ mod tests {
         set_addr_abs_offset(nes, value, 0)
     }
     // This is just so that we can use this function in macros instead of using set_addr_zp or set_addr_abs
-    fn set_addr_immediate(value: u8) -> [u8; 1] {
+    fn set_addr_immediate(_nes: &mut Nes, value: u8) -> [u8; 1] {
         [value]
     }
     fn first_byte(addr: u16) -> u8 {
