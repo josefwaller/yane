@@ -13,9 +13,9 @@ pub const LDA_ABS_X: u8 = 0xBD;
 /// Load A Absolute Y
 pub const LDA_ABS_Y: u8 = 0xB9;
 /// Load A Indexed Indirect
-pub const LDA_IDX_IND: u8 = 0xA1;
+pub const LDA_IND_X: u8 = 0xA1;
 /// Load A Indirect Indexed
-pub const LDA_IND_IDX: u8 = 0xB1;
+pub const LDA_IND_Y: u8 = 0xB1;
 /// Load X Immediate
 pub const LDX_I: u8 = 0xA2;
 /// Load X Zero Page
@@ -49,9 +49,9 @@ pub const ADC_ABS_X: u8 = 0x7D;
 /// Add with Carry Absolute Y
 pub const ADC_ABS_Y: u8 = 0x79;
 /// Add with Carry Indexed Indirect
-pub const ADC_IDX_IND: u8 = 0x61;
+pub const ADC_IND_X: u8 = 0x61;
 /// Add with Carry Indirect Indexed
-pub const ADC_IND_IDX: u8 = 0x71;
+pub const ADC_IND_Y: u8 = 0x71;
 /// And Immediate
 pub const AND_I: u8 = 0x29;
 /// And Zero Page
@@ -65,9 +65,9 @@ pub const AND_ABS_X: u8 = 0x3D;
 /// And Absolute Y
 pub const AND_ABS_Y: u8 = 0x39;
 /// And Indexed Indirect
-pub const AND_IND_IDX: u8 = 0x21;
+pub const AND_IND_Y: u8 = 0x21;
 /// And Indirect Indexed
-pub const AND_IDX_IND: u8 = 0x31;
+pub const AND_IND_X: u8 = 0x31;
 /// Arithmetic Shift Left Accumulator
 pub const ASL_A: u8 = 0x0A;
 /// Arithmetic Shift Left Zero Page
@@ -121,6 +121,6 @@ pub const CMP_ABS_X: u8 = 0xDD;
 /// Compare with A Absolute Y
 pub const CMP_ABS_Y: u8 = 0xD9;
 /// Compare with A Indexed Indirect
-pub const CMP_IDX_IND: u8 = 0xC1;
+pub const CMP_IND_X: u8 = 0xC1;
 /// Compare with A Indirect Indexed
-pub const CMP_IND_IDX: u8 = 0xD1;
+pub const CMP_IND_Y: u8 = 0xD1;

@@ -81,12 +81,12 @@ impl Nes {
                     },
                 ))
             }
-            LDA_IDX_IND => {
+            LDA_IND_X => {
                 self.cpu
                     .lda(self.read_indexed_indirect(operands[0], self.cpu.x));
                 Ok((2, 6))
             }
-            LDA_IND_IDX => {
+            LDA_IND_Y => {
                 self.cpu
                     .lda(self.read_indirect_indexed(operands[0], self.cpu.y));
                 Ok((
@@ -197,12 +197,12 @@ impl Nes {
                     },
                 ))
             }
-            ADC_IDX_IND => {
+            ADC_IND_X => {
                 self.cpu
                     .adc(self.read_indexed_indirect(operands[0], self.cpu.x));
                 Ok((2, 6))
             }
-            ADC_IND_IDX => {
+            ADC_IND_Y => {
                 self.cpu
                     .adc(self.read_indirect_indexed(operands[0], self.cpu.y));
                 Ok((
@@ -255,12 +255,12 @@ impl Nes {
                     },
                 ))
             }
-            AND_IDX_IND => {
+            AND_IND_X => {
                 self.cpu
                     .and(self.read_indexed_indirect(operands[0], self.cpu.x));
                 Ok((2, 6))
             }
-            AND_IND_IDX => {
+            AND_IND_Y => {
                 self.cpu
                     .and(self.read_indirect_indexed(operands[0], self.cpu.y));
                 Ok((
@@ -382,16 +382,14 @@ impl Nes {
                     },
                 ))
             }
-            CMP_IDX_IND => {
+            CMP_IND_X => {
                 self.cpu
                     .cmp(self.read_indexed_indirect(operands[0], self.cpu.x));
                 Ok((2, 6))
             }
-            CMP_IND_IDX => {
+            CMP_IND_Y => {
                 self.cpu
                     .cmp(self.read_indirect_indexed(operands[0], self.cpu.y));
-                println!("{:#X?}, {:#X?}", operands, self.cpu.y);
-                println!("{:#X}", self.read_absolute_addr(operands));
                 Ok((
                     2,
                     5 + if Nes::page_crossed_ind_idx(&self, operands, self.cpu.y) {
@@ -628,8 +626,8 @@ mod tests {
         test_absolute!(LDA_ABS);
         test_absolute_x!(LDA_ABS_X);
         test_absolute_y!(LDA_ABS_Y);
-        test_indexed_indirect!(LDA_IDX_IND);
-        test_indirect_indexed!(LDA_IND_IDX);
+        test_indexed_indirect!(LDA_IND_X);
+        test_indirect_indexed!(LDA_IND_Y);
     }
     mod ldx {
         use super::*;
@@ -675,8 +673,8 @@ mod tests {
         test_absolute!(ADC_ABS);
         test_absolute_x!(ADC_ABS_X);
         test_absolute_y!(ADC_ABS_Y);
-        test_indexed_indirect!(ADC_IDX_IND);
-        test_indirect_indexed!(ADC_IND_IDX);
+        test_indexed_indirect!(ADC_IND_X);
+        test_indirect_indexed!(ADC_IND_Y);
     }
     mod and {
         use super::*;
@@ -694,8 +692,8 @@ mod tests {
         test_absolute!(AND_ABS);
         test_absolute_x!(AND_ABS_X);
         test_absolute_y!(AND_ABS_Y);
-        test_indexed_indirect!(AND_IDX_IND);
-        test_indirect_indexed!(AND_IND_IDX);
+        test_indexed_indirect!(AND_IND_X);
+        test_indirect_indexed!(AND_IND_Y);
     }
     mod asl {
         use super::*;
@@ -959,8 +957,8 @@ mod tests {
         compare_test!(a, CMP_ABS_X, set_addr_abs_x_pc, 3, 5, test_abs_x_pc);
         compare_test!(a, CMP_ABS_Y, set_addr_abs_y, 3, 4, test_abs_y);
         compare_test!(a, CMP_ABS_Y, set_addr_abs_y_pc, 3, 5, test_abs_y_pc);
-        compare_test!(a, CMP_IDX_IND, set_addr_ind_x, 2, 6, test_ind_x);
-        compare_test!(a, CMP_IND_IDX, set_addr_ind_y, 2, 5, test_ind_y);
+        compare_test!(a, CMP_IND_X, set_addr_ind_x, 2, 6, test_ind_x);
+        compare_test!(a, CMP_IND_Y, set_addr_ind_y, 2, 5, test_ind_y);
     }
     // mod cmp {
     // Utility functions to get some addresses in memory set to the value given
@@ -983,7 +981,7 @@ mod tests {
     fn set_addr_abs_offset_no_pc(nes: &mut Nes, value: u8, offset: u8) -> [u8; 2] {
         // Make sure we don't cross a page
         let m = (255 - offset) as u16;
-        let addr = ((random::<u8>() as u16) << 8) + if m != 0 { random::<u16>() % m } else { 0xFF };
+        let addr = ((random::<u8>() as u16) << 8) + if m != 0 { random::<u16>() % m } else { 0x00 };
         nes.mem[(addr + offset as u16) as usize] = value;
         println!(
             "Setting {:#X?} + {:#X?} (= {:#X?}) to {:#X} (should not be a page cross)",
