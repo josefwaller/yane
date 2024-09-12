@@ -382,6 +382,25 @@ impl Nes {
                     },
                 ))
             }
+            CMP_IDX_IND => {
+                self.cpu
+                    .cmp(self.read_indexed_indirect(operands[0], self.cpu.x));
+                Ok((2, 6))
+            }
+            CMP_IND_IDX => {
+                self.cpu
+                    .cmp(self.read_indirect_indexed(operands[0], self.cpu.y));
+                println!("{:#X?}, {:#X?}", operands, self.cpu.y);
+                println!("{:#X}", self.read_absolute_addr(operands));
+                Ok((
+                    2,
+                    5 + if Nes::page_crossed_ind_idx(&self, operands, self.cpu.y) {
+                        1
+                    } else {
+                        0
+                    },
+                ))
+            }
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -447,7 +466,7 @@ impl Nes {
     }
     // Return true if a page is crossed by the indirect indexed address and offset given
     fn page_crossed_ind_idx(&self, addr: &[u8], offset: u8) -> bool {
-        255 - self.read_zero_page_addr(addr[0]) >= offset
+        255 - self.read_zero_page_addr(addr[0]) < offset
     }
 }
 
@@ -940,6 +959,8 @@ mod tests {
         compare_test!(a, CMP_ABS_X, set_addr_abs_x_pc, 3, 5, test_abs_x_pc);
         compare_test!(a, CMP_ABS_Y, set_addr_abs_y, 3, 4, test_abs_y);
         compare_test!(a, CMP_ABS_Y, set_addr_abs_y_pc, 3, 5, test_abs_y_pc);
+        compare_test!(a, CMP_IDX_IND, set_addr_ind_x, 2, 6, test_ind_x);
+        compare_test!(a, CMP_IND_IDX, set_addr_ind_y, 2, 5, test_ind_y);
     }
     // mod cmp {
     // Utility functions to get some addresses in memory set to the value given
@@ -1008,6 +1029,30 @@ mod tests {
     // This is just so that we can use this function in macros instead of using set_addr_zp or set_addr_abs
     fn set_addr_immediate(_nes: &mut Nes, value: u8) -> [u8; 1] {
         [value]
+    }
+    fn set_addr_ind_y(nes: &mut Nes, value: u8) -> [u8; 1] {
+        nes.cpu.y = random::<u8>();
+        let addr = set_addr_abs_offset_no_pc(nes, value, nes.cpu.y);
+        // Now store addr in ZP
+        let mut addr_two = random::<u8>();
+        if (addr_two == addr[0] || addr_two == addr[0].wrapping_sub(1)) && addr[1] == 0 {
+            addr_two = addr_two.wrapping_add(2);
+        }
+        nes.mem[addr_two as usize] = addr[0];
+        nes.mem[addr_two.wrapping_add(1) as usize] = addr[1];
+        [addr_two]
+    }
+    fn set_addr_ind_x(nes: &mut Nes, value: u8) -> [u8; 1] {
+        nes.cpu.x = random::<u8>();
+        let addr = set_addr_abs(nes, value);
+        let mut addr_two = random::<u8>();
+        let actual_addr = addr_two.wrapping_add(nes.cpu.x);
+        if (actual_addr == addr[0] || actual_addr == addr[0].wrapping_sub(1)) && addr[1] == 0 {
+            addr_two = addr_two.wrapping_add(2);
+        }
+        nes.mem[addr_two.wrapping_add(nes.cpu.x) as usize] = addr[0];
+        nes.mem[addr_two.wrapping_add(nes.cpu.x).wrapping_add(1) as usize] = addr[1];
+        [addr_two]
     }
     fn first_byte(addr: u16) -> u8 {
         (addr & 0xFF) as u8
