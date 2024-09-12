@@ -124,3 +124,15 @@ pub const CMP_ABS_Y: u8 = 0xD9;
 pub const CMP_IND_X: u8 = 0xC1;
 /// Compare with A Indirect Indexed
 pub const CMP_IND_Y: u8 = 0xD1;
+/// Compare with X Immediate
+pub const CPX_I: u8 = 0xE0;
+/// Compare with X Zero Page
+pub const CPX_ZP: u8 = 0xE4;
+/// Compare with X Absolute
+pub const CPX_ABS: u8 = 0xEC;
+/// Compare with Y Immediate
+pub const CPY_I: u8 = 0xC0;
+/// Compare with Y Zero Page
+pub const CPY_ZP: u8 = 0xC4;
+/// Compare with Y Absolute
+pub const CPY_ABS: u8 = 0xCC;

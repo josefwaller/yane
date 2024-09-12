@@ -189,6 +189,16 @@ impl Cpu {
     pub fn cmp(&mut self, v: u8) {
         self.compare(self.a, v);
     }
+    /// Compare a value with X.
+    /// Shorthand for `cpu.compare(cpu.x, v)`
+    pub fn cpx(&mut self, v: u8) {
+        self.compare(self.x, v);
+    }
+    /// Comapre a value with Y.
+    /// Shorthand for `cpu.compare(cpu.y, v)`
+    pub fn cpy(&mut self, v: u8) {
+        self.compare(self.y, v);
+    }
     // Set the status register's flags when loading (LDA, LDX, or LDY)
     fn set_load_flags(&mut self, value: u8) {
         if value == 0 {

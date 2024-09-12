@@ -399,6 +399,30 @@ impl Nes {
                     },
                 ))
             }
+            CPX_I => {
+                self.cpu.cpx(operands[0]);
+                Ok((2, 2))
+            }
+            CPX_ZP => {
+                self.cpu.cpx(self.read_zero_page_addr(operands[0]));
+                Ok((2, 3))
+            }
+            CPX_ABS => {
+                self.cpu.cpx(self.read_absolute_addr(operands));
+                Ok((3, 4))
+            }
+            CPY_I => {
+                self.cpu.cpy(operands[0]);
+                Ok((2, 2))
+            }
+            CPY_ZP => {
+                self.cpu.cpy(self.read_zero_page_addr(operands[0]));
+                Ok((2, 3))
+            }
+            CPY_ABS => {
+                self.cpu.cpy(self.read_absolute_addr(operands));
+                Ok((3, 4))
+            }
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -960,7 +984,20 @@ mod tests {
         compare_test!(a, CMP_IND_X, set_addr_ind_x, 2, 6, test_ind_x);
         compare_test!(a, CMP_IND_Y, set_addr_ind_y, 2, 5, test_ind_y);
     }
-    // mod cmp {
+    mod cpx {
+        use super::*;
+        use test_case::test_case;
+        compare_test!(x, CPX_I, set_addr_immediate, 2, 2, test_immediate);
+        compare_test!(x, CPX_ZP, set_addr_zp, 2, 3, test_zp);
+        compare_test!(x, CPX_ABS, set_addr_abs, 3, 4, test_abs);
+    }
+    mod cpy {
+        use super::*;
+        use test_case::test_case;
+        compare_test!(y, CPY_I, set_addr_immediate, 2, 2, test_immediate);
+        compare_test!(y, CPY_ZP, set_addr_zp, 2, 3, test_zp);
+        compare_test!(y, CPY_ABS, set_addr_abs, 3, 4, test_abs);
+    }
     // Utility functions to get some addresses in memory set to the value given
     fn set_addr_zp(nes: &mut Nes, value: u8) -> [u8; 1] {
         set_addr_zp_offset(nes, value, 0)
