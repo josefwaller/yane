@@ -354,6 +354,34 @@ impl Nes {
                     .cmp(self.read_zero_page_addr_offset(operands[0], self.cpu.x));
                 Ok((2, 4))
             }
+            CMP_ABS => {
+                self.cpu.cmp(self.read_absolute_addr(&operands));
+                Ok((3, 4))
+            }
+            CMP_ABS_X => {
+                self.cpu
+                    .cmp(self.read_absolute_addr_offset(&operands, self.cpu.x));
+                Ok((
+                    3,
+                    4 + if Nes::page_crossed_abs(&operands, self.cpu.x) {
+                        1
+                    } else {
+                        0
+                    },
+                ))
+            }
+            CMP_ABS_Y => {
+                self.cpu
+                    .cmp(self.read_absolute_addr_offset(&operands, self.cpu.y));
+                Ok((
+                    3,
+                    4 + if Nes::page_crossed_abs(&operands, self.cpu.y) {
+                        1
+                    } else {
+                        0
+                    },
+                ))
+            }
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -413,8 +441,9 @@ impl Nes {
         return self.mem[second_addr as usize];
     }
     // Return true if a page is crossed by an operation using the absolute address and offset given
+    // addr is in little endian form
     fn page_crossed_abs(addr: &[u8], offset: u8) -> bool {
-        255 - addr[1] >= offset
+        255 - addr[0] < offset
     }
     // Return true if a page is crossed by the indirect indexed address and offset given
     fn page_crossed_ind_idx(&self, addr: &[u8], offset: u8) -> bool {
@@ -731,13 +760,15 @@ mod tests {
         #[test_case(0x86, 0x0C, false, false, true ; "carry set")]
         fn test_abs_x(value: u8, shifted: u8, zero: bool, negative: bool, carry: bool) {
             let mut nes = Nes::new();
-            let x_value = random::<u8>();
-            let addr = set_addr_abs_offset(&mut nes, value, x_value);
+            let addr = set_addr_abs_x(&mut nes, value);
             assert_eq!(
                 nes.decode_and_execute(&[ASL_ABS_X, addr[0], addr[1]]),
                 Ok((3, 7))
             );
-            assert_eq_hex!(nes.mem[Nes::get_absolute_addr(&addr)], shifted);
+            assert_eq_hex!(
+                nes.mem[Nes::get_absolute_addr_offset(&addr, nes.cpu.x)],
+                shifted
+            );
             check_flags!(nes, zero, negative, carry);
         }
     }
@@ -861,47 +892,56 @@ mod tests {
     test_clear!(test_cli, CLI, i);
     test_clear!(test_clv, CLV, v);
     test_clear!(test_cld, CLD, d);
-    mod cmp {
+    macro_rules! compare_test {
+        ($reg: ident, $opcode: ident, $addr_func: ident, $cycles: expr, $bytes: expr, $test_name: ident) => {
+            #[test_case(0x12, 0x11, true, false, false ; "Should set the carry bit")]
+            #[test_case(0x45, 0x45, true, true, false ; "Should set the zero flag")]
+            #[test_case(0x00, 0x01, false, false, true ; "Should set the negative flag")]
+            #[test_case(0x80, 0xFF, false, false, true ; "Should set N two")]
+            #[test_case(0x7F, 0x00, true, false, false ; "Should set C two")]
+            #[test_case(0x8F, 0x00, true, false, true; "Should set C and N")]
+            fn $test_name(reg_value: u8, comp_value: u8, c: bool, z: bool, n: bool) {
+                let mut nes = Nes::new();
+                nes.cpu.$reg = reg_value;
+                let addr = $addr_func(&mut nes, comp_value);
+                assert_eq!(
+                    nes.decode_and_execute(&prepend_with_opcode($opcode, &addr)),
+                    Ok(($cycles, $bytes))
+                );
+                assert_eq!(
+                    nes.cpu.s_r.c,
+                    c,
+                    "C should be {}",
+                    if c { "set" } else { "unset" }
+                );
+                assert_eq!(
+                    nes.cpu.s_r.z,
+                    z,
+                    "Z should be {}",
+                    if z { "set" } else { "unset" }
+                );
+                assert_eq!(
+                    nes.cpu.s_r.n,
+                    n,
+                    "N should be {}",
+                    if n { "set" } else { "unset" }
+                );
+            }
+        };
+    }
+    mod cpm {
         use super::*;
         use test_case::test_case;
-        macro_rules! compare_test {
-            ($name: ident, $opcode: ident, $register: ident, $addr_func: ident, $bytes: expr, $cycles: expr) => {
-                #[test_case(0x12, 0x11, true, false, false; "should set carry")]
-                #[test_case(0x18, 0x18, true, true, false; "should set carry and zero")]
-                #[test_case(0xAA, 0xBB, false, false, true ; "should set negative")]
-                fn $name(reg_value: u8, comp_value: u8, c: bool, z: bool, n: bool) {
-                    let mut nes = Nes::new();
-                    nes.cpu.$register = reg_value;
-                    let operands = $addr_func(&mut nes, comp_value);
-                    assert_eq!(
-                        nes.decode_and_execute(&prepend_with_opcode($opcode, &operands)),
-                        Ok(($bytes, $cycles))
-                    );
-                    assert_eq!(
-                        nes.cpu.s_r.c,
-                        c,
-                        "Carry should be {}",
-                        if c { "set" } else { "unset" }
-                    );
-                    assert_eq!(
-                        nes.cpu.s_r.z,
-                        z,
-                        "Zero should be {}",
-                        if z { "set" } else { "unset" }
-                    );
-                    assert_eq!(
-                        nes.cpu.s_r.n,
-                        n,
-                        "Negative should be {}",
-                        if n { "set" } else { "unset" }
-                    );
-                }
-            };
-        }
-        compare_test!(test_immediate, CMP_I, a, set_addr_immediate, 2, 2);
-        compare_test!(test_zp, CMP_ZP, a, set_addr_zp, 2, 3);
-        compare_test!(test_zp_x, CMP_ZP_X, a, set_addr_zp_x, 2, 4);
+        compare_test!(a, CMP_I, set_addr_immediate, 2, 2, test_immediate);
+        compare_test!(a, CMP_ZP, set_addr_zp, 2, 3, test_zp);
+        compare_test!(a, CMP_ZP_X, set_addr_zp_x, 2, 4, test_zp_x);
+        compare_test!(a, CMP_ABS, set_addr_abs, 3, 4, test_abs);
+        compare_test!(a, CMP_ABS_X, set_addr_abs_x, 3, 4, test_abs_x);
+        compare_test!(a, CMP_ABS_X, set_addr_abs_x_pc, 3, 5, test_abs_x_pc);
+        compare_test!(a, CMP_ABS_Y, set_addr_abs_y, 3, 4, test_abs_y);
+        compare_test!(a, CMP_ABS_Y, set_addr_abs_y_pc, 3, 5, test_abs_y_pc);
     }
+    // mod cmp {
     // Utility functions to get some addresses in memory set to the value given
     fn set_addr_zp(nes: &mut Nes, value: u8) -> [u8; 1] {
         set_addr_zp_offset(nes, value, 0)
@@ -919,14 +959,51 @@ mod tests {
         nes.cpu.y = random::<u8>();
         set_addr_zp_offset(nes, value, nes.cpu.y)
     }
-    fn set_addr_abs_offset(nes: &mut Nes, value: u8, offset: u8) -> [u8; 2] {
+    fn set_addr_abs_offset_no_pc(nes: &mut Nes, value: u8, offset: u8) -> [u8; 2] {
         // Make sure we don't cross a page
-        let addr = ((random::<u8>() as u16) << 8) + min(random::<u8>(), 255 - offset) as u16;
-        nes.mem[addr as usize] = value;
-        return [(addr & 0xFF) as u8, (addr >> 8) as u8];
+        let m = (255 - offset) as u16;
+        let addr = ((random::<u8>() as u16) << 8) + if m != 0 { random::<u16>() % m } else { 0xFF };
+        nes.mem[(addr + offset as u16) as usize] = value;
+        println!(
+            "Setting {:#X?} + {:#X?} (= {:#X?}) to {:#X} (should not be a page cross)",
+            addr,
+            offset,
+            addr + offset as u16,
+            value
+        );
+        return [first_byte(addr), second_byte(addr)];
     }
     fn set_addr_abs(nes: &mut Nes, value: u8) -> [u8; 2] {
-        set_addr_abs_offset(nes, value, 0)
+        set_addr_abs_offset_no_pc(nes, value, 0)
+    }
+    fn set_addr_abs_x(nes: &mut Nes, value: u8) -> [u8; 2] {
+        nes.cpu.x = random::<u8>();
+        set_addr_abs_offset_no_pc(nes, value, nes.cpu.x)
+    }
+    fn set_addr_abs_y(nes: &mut Nes, value: u8) -> [u8; 2] {
+        nes.cpu.y = random::<u8>();
+        set_addr_abs_offset_no_pc(nes, value, nes.cpu.y)
+    }
+    fn set_addr_abs_offset_pc(nes: &mut Nes, value: u8, offset: u8) -> [u8; 2] {
+        let addr = (random::<u16>() & 0xFE00) + (0xFF - (random::<u16>() % offset as u16));
+        nes.mem[(addr + offset as u16) as usize] = value;
+        println!(
+            "Setting {:#X?} + {:#X?} (= {:#X?}) to {:#X} (should be a page cross)",
+            addr,
+            offset,
+            addr + offset as u16,
+            value
+        );
+
+        [first_byte(addr), second_byte(addr)]
+    }
+    fn set_addr_abs_x_pc(nes: &mut Nes, value: u8) -> [u8; 2] {
+        nes.cpu.x = max(random::<u8>(), 1);
+        set_addr_abs_offset_pc(nes, value, nes.cpu.x)
+    }
+    fn set_addr_abs_y_pc(nes: &mut Nes, value: u8) -> [u8; 2] {
+        nes.cpu.y = max(random::<u8>(), 1);
+        set_addr_abs_offset_pc(nes, value, nes.cpu.y)
     }
     // This is just so that we can use this function in macros instead of using set_addr_zp or set_addr_abs
     fn set_addr_immediate(_nes: &mut Nes, value: u8) -> [u8; 1] {
