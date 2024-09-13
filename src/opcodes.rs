@@ -136,3 +136,15 @@ pub const CPY_I: u8 = 0xC0;
 pub const CPY_ZP: u8 = 0xC4;
 /// Compare with Y Absolute
 pub const CPY_ABS: u8 = 0xCC;
+/// Decrement Memory Zero Page
+pub const DEC_ZP: u8 = 0xC6;
+/// Decrement Memory Zero Page X
+pub const DEC_ZP_X: u8 = 0xD6;
+/// Decrement Absolute
+pub const DEC_ABS: u8 = 0xCE;
+/// Decrement Absolute X
+pub const DEC_ABS_X: u8 = 0xDE;
+/// Decrement X
+pub const DEX: u8 = 0xCA;
+/// Decrement Y
+pub const DEY: u8 = 0x88;

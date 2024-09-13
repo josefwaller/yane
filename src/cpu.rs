@@ -179,6 +179,15 @@ impl Cpu {
     /// * C is set to `u >= v`
     /// * Z is set to `u == v``
     /// * N is set to the MSB of `u - v`
+    /// ```
+    /// let mut cpu = yane::Cpu::new();
+    /// cpu.compare(0x18, 0x18);
+    /// assert_eq!(cpu.s_r.z, true);
+    /// cpu.compare(0x19, 0x18);
+    /// assert_eq!(cpu.s_r.c, true);
+    /// cpu.compare(0x18, 0x19);
+    /// assert_eq!(cpu.s_r.n, true);
+    /// ```
     pub fn compare(&mut self, u: u8, v: u8) {
         self.s_r.c = u >= v;
         self.s_r.z = u == v;
@@ -198,6 +207,24 @@ impl Cpu {
     /// Shorthand for `cpu.compare(cpu.y, v)`
     pub fn cpy(&mut self, v: u8) {
         self.compare(self.y, v);
+    }
+    /// Decrement some value and set the flags accordingly.
+    /// * Z is set if the return value is `0`
+    /// * N is set if the MSB of the return value is set.
+    /// ```
+    /// let mut cpu = yane::Cpu::new();
+    /// let a = cpu.dec(0x81);
+    /// assert_eq!(a, 0x80);
+    /// // Result is not zero
+    /// assert_eq!(cpu.s_r.z, false);
+    /// // Result is negative
+    /// assert_eq!(cpu.s_r.n, true);
+    /// ```
+    pub fn dec(&mut self, v: u8) -> u8 {
+        self.s_r.z = v == 1;
+        let r = v.wrapping_sub(1);
+        self.s_r.n = (r & 0x80) != 0;
+        return r;
     }
     // Set the status register's flags when loading (LDA, LDX, or LDY)
     fn set_load_flags(&mut self, value: u8) {

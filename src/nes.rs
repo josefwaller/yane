@@ -278,14 +278,14 @@ impl Nes {
             }
             ASL_ZP => {
                 let v = self.cpu.asl(self.read_zero_page_addr(operands[0]));
-                self.set_zero_page_addr(operands[0], v);
+                self.write_zero_page_addr(operands[0], v);
                 Ok((2, 5))
             }
             ASL_ZP_X => {
                 let v = self
                     .cpu
                     .asl(self.read_zero_page_addr_offset(operands[0], self.cpu.x));
-                self.set_zero_page_addr_offset(operands[0], self.cpu.x, v);
+                self.write_zero_page_addr_offset(operands[0], self.cpu.x, v);
                 Ok((2, 6))
             }
             ASL_ABS => {
@@ -423,6 +423,38 @@ impl Nes {
                 self.cpu.cpy(self.read_absolute_addr(operands));
                 Ok((3, 4))
             }
+            DEC_ZP => {
+                let res = self.cpu.dec(self.read_zero_page_addr(operands[0]));
+                self.write_zero_page_addr(operands[0], res);
+                Ok((2, 5))
+            }
+            DEC_ZP_X => {
+                let res = self
+                    .cpu
+                    .dec(self.read_zero_page_addr_offset(operands[0], self.cpu.x));
+                self.write_zero_page_addr_offset(operands[0], self.cpu.x, res);
+                Ok((2, 6))
+            }
+            DEC_ABS => {
+                let res = self.cpu.dec(self.read_absolute_addr(operands));
+                self.write_absolute_addr(operands, res);
+                Ok((3, 6))
+            }
+            DEC_ABS_X => {
+                let res = self
+                    .cpu
+                    .dec(self.read_absolute_addr_offset(operands, self.cpu.x));
+                self.write_absolute_addr_offset(operands, self.cpu.x, res);
+                Ok((3, 7))
+            }
+            DEX => {
+                self.cpu.x = self.cpu.dec(self.cpu.x);
+                Ok((1, 2))
+            }
+            DEY => {
+                self.cpu.y = self.cpu.dec(self.cpu.y);
+                Ok((1, 2))
+            }
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -436,14 +468,14 @@ impl Nes {
     fn read_zero_page_addr(&self, addr: u8) -> u8 {
         self.mem[addr as usize]
     }
-    fn set_zero_page_addr(&mut self, addr: u8, val: u8) {
+    fn write_zero_page_addr(&mut self, addr: u8, val: u8) {
         self.mem[addr as usize] = val;
     }
     // Read using zero page addressing with an offset
     fn read_zero_page_addr_offset(&self, addr: u8, offset: u8) -> u8 {
         self.mem[addr.wrapping_add(offset) as usize]
     }
-    fn set_zero_page_addr_offset(&mut self, addr: u8, offset: u8, value: u8) {
+    fn write_zero_page_addr_offset(&mut self, addr: u8, offset: u8, value: u8) {
         self.mem[addr.wrapping_add(offset) as usize] = value;
     }
     // Absolute addressing
@@ -998,7 +1030,48 @@ mod tests {
         compare_test!(y, CPY_ZP, set_addr_zp, 2, 3, test_zp);
         compare_test!(y, CPY_ABS, set_addr_abs, 3, 4, test_abs);
     }
-    // Utility functions to get some addresses in memory set to the value given
+    macro_rules! dec_test {
+        ($opcode: ident, $get_addr: ident, $set_addr: ident, $cycles: expr, $bytes: expr, $test_name: ident) => {
+            #[test_case(0x12, 0x11, false, false; "happy case")]
+            #[test_case(0x01, 0x00, true, false ; "should set z")]
+            #[test_case(0x00, 0xFF, false, true ; "should wrap")]
+            #[test_case(0x81, 0x80, false, true ; "should set n")]
+            #[test_case(0x80, 0x7F, false, false ; "should set neither")]
+            fn $test_name(pre_val: u8, post_val: u8, z: bool, n: bool) {
+                let mut nes = Nes::new();
+                let addr = $set_addr(&mut nes, pre_val);
+                assert_eq!(
+                    nes.decode_and_execute(&prepend_with_opcode($opcode, &addr)),
+                    Ok(($cycles, $bytes)),
+                );
+                assert_eq_hex!($get_addr(&nes, &addr), post_val);
+                assert_z(&nes, z);
+                assert_n(&nes, n);
+            }
+        };
+    }
+    mod dec {
+        use super::*;
+        use test_case::test_case;
+        dec_test!(DEC_ZP, get_addr_zp, set_addr_zp, 2, 5, test_zp);
+        dec_test!(DEC_ZP_X, get_addr_zp_x, set_addr_zp_x, 2, 6, test_zp_x);
+        dec_test!(DEC_ABS, get_addr_abs, set_addr_abs, 3, 6, test_abs);
+        dec_test!(DEC_ABS_X, get_addr_abs_x, set_addr_abs_x, 3, 7, test_abs_x);
+    }
+    mod dex {
+        use super::*;
+        use test_case::test_case;
+        dec_test!(DEX, get_x, set_x, 1, 2, test_implied);
+    }
+    mod dey {
+        use super::*;
+        use test_case::test_case;
+        dec_test!(DEY, get_y, set_y, 1, 2, test_implied);
+    }
+    // Utility functions to get and setsome addresses in memory set to the value given
+    fn get_addr_zp(nes: &Nes, addr: &[u8]) -> u8 {
+        nes.mem[addr[0] as usize]
+    }
     fn set_addr_zp(nes: &mut Nes, value: u8) -> [u8; 1] {
         set_addr_zp_offset(nes, value, 0)
     }
@@ -1014,6 +1087,9 @@ mod tests {
     fn set_addr_zp_y(nes: &mut Nes, value: u8) -> [u8; 1] {
         nes.cpu.y = random::<u8>();
         set_addr_zp_offset(nes, value, nes.cpu.y)
+    }
+    fn get_addr_zp_x(nes: &Nes, value: &[u8]) -> u8 {
+        nes.mem[value[0].wrapping_add(nes.cpu.x) as usize]
     }
     fn set_addr_abs_offset_no_pc(nes: &mut Nes, value: u8, offset: u8) -> [u8; 2] {
         // Make sure we don't cross a page
@@ -1032,9 +1108,16 @@ mod tests {
     fn set_addr_abs(nes: &mut Nes, value: u8) -> [u8; 2] {
         set_addr_abs_offset_no_pc(nes, value, 0)
     }
+    fn get_addr_abs(nes: &Nes, addr: &[u8]) -> u8 {
+        nes.mem[((addr[1] as usize) << 8) + addr[0] as usize]
+    }
     fn set_addr_abs_x(nes: &mut Nes, value: u8) -> [u8; 2] {
         nes.cpu.x = random::<u8>();
         set_addr_abs_offset_no_pc(nes, value, nes.cpu.x)
+    }
+    fn get_addr_abs_x(nes: &Nes, addr: &[u8]) -> u8 {
+        let a = ((addr[1] as u16) << 8) + addr[0] as u16;
+        nes.mem[a.wrapping_add(nes.cpu.x as u16) as usize]
     }
     fn set_addr_abs_y(nes: &mut Nes, value: u8) -> [u8; 2] {
         nes.cpu.y = random::<u8>();
@@ -1061,9 +1144,23 @@ mod tests {
         nes.cpu.y = max(random::<u8>(), 1);
         set_addr_abs_offset_pc(nes, value, nes.cpu.y)
     }
-    // This is just so that we can use this function in macros instead of using set_addr_zp or set_addr_abs
+    // These are just so that we can use these function in macros instead of using set_addr_zp or set_addr_abs
     fn set_addr_immediate(_nes: &mut Nes, value: u8) -> [u8; 1] {
         [value]
+    }
+    fn set_x(nes: &mut Nes, value: u8) -> [u8; 0] {
+        nes.cpu.x = value;
+        []
+    }
+    fn get_x(nes: &Nes, _addr: &[u8]) -> u8 {
+        nes.cpu.x
+    }
+    fn set_y(nes: &mut Nes, value: u8) -> [u8; 0] {
+        nes.cpu.y = value;
+        []
+    }
+    fn get_y(nes: &Nes, _addr: &[u8]) -> u8 {
+        nes.cpu.y
     }
     fn set_addr_ind_y(nes: &mut Nes, value: u8) -> [u8; 1] {
         nes.cpu.y = random::<u8>();
@@ -1105,4 +1202,20 @@ mod tests {
         a[1..(arr.len() + 1)].copy_from_slice(arr);
         a
     }
+    // Flag assertion functions
+    macro_rules! create_flag_assert_func {
+        ($flag: ident, $str: literal, $name: ident) => {
+            fn $name(nes: &Nes, $flag: bool) {
+                assert_eq!(
+                    nes.cpu.s_r.$flag,
+                    $flag,
+                    "{} should be {}",
+                    $str,
+                    if $flag { "set" } else { "unset" }
+                );
+            }
+        };
+    }
+    create_flag_assert_func!(z, "Z", assert_z);
+    create_flag_assert_func!(n, "N", assert_n);
 }
