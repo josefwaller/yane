@@ -226,8 +226,8 @@ impl Cpu {
         self.s_r.n = (r & 0x80) != 0;
         return r;
     }
-    /// Perform an exclusive OR on A
-    /// Sets A to the result of A ^ `value`
+    /// Perform an exclusive OR on A.
+    /// Sets A to the result of A ^ `value`.
     /// * Z is set to A == 0
     /// * N is set to the MSB of A
     ///```
@@ -242,6 +242,16 @@ impl Cpu {
         self.a ^= value;
         self.s_r.z = self.a == 0;
         self.s_r.n = (self.a & 0x80) != 0;
+    }
+    /// Increment the value given and sets flags accordingly.
+    /// Returns the value after incrementation, wrapping if needed.
+    /// * Z is set if the result is 0
+    /// * N is set if the result is negative
+    pub fn inc(&mut self, value: u8) -> u8 {
+        let v = value.wrapping_add(1);
+        self.s_r.z = v == 0;
+        self.s_r.n = (v & 0x80) != 0;
+        return v;
     }
     // Set the status register's flags when loading (LDA, LDX, or LDY)
     fn set_load_flags(&mut self, value: u8) {

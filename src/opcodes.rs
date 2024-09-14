@@ -164,3 +164,11 @@ pub const EOR_ABS_Y: u8 = 0x59;
 pub const EOR_IND_X: u8 = 0x41;
 /// Exclusive OR Indirect Indexed
 pub const EOR_IND_Y: u8 = 0x51;
+/// Increment Zero Page memory
+pub const INC_ZP: u8 = 0xE6;
+/// Increment memory Zero Page X
+pub const INC_ZP_X: u8 = 0xF6;
+/// Increment memory Absolute
+pub const INC_ABS: u8 = 0xEE;
+/// Increment memory Absolute X
+pub const INC_ABS_X: u8 = 0xFE;

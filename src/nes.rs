@@ -513,6 +513,11 @@ impl Nes {
                     },
                 ))
             }
+            INC_ZP => {
+                let val = self.cpu.inc(self.read_zero_page_addr(operands[0]));
+                self.write_zero_page_addr(operands[0], val);
+                Ok((2, 5))
+            }
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -1132,6 +1137,9 @@ mod tests {
         macro_rules! eor_test {
             ($name: ident, $opcode: ident, $addr_func: ident, $bytes: expr, $cycles: expr) => {
                 #[test_case(0xAB, 0xCD, 0xAB ^ 0xCD, false, false ; "happy case")]
+                #[test_case(0xFF, 0xFF, 0x00, true, false ; "should be zero 1")]
+                #[test_case(0x18, 0x18, 0x00, true, false ; "should be zero 2")]
+                #[test_case(0x18, 0x80, 0x98, false, true ; "should be negatvie")]
                 fn $name(a: u8, val: u8, a_post: u8, z: bool, n: bool) {
                     let mut nes = Nes::new();
                     nes.cpu.a = a;
@@ -1157,6 +1165,30 @@ mod tests {
         eor_test!(test_ind_x, EOR_IND_X, set_addr_ind_x, 2, 6);
         eor_test!(test_ind_y, EOR_IND_Y, set_addr_ind_y, 2, 5);
         eor_test!(test_ind_y_pc, EOR_IND_Y, set_addr_ind_y_pc, 2, 6);
+    }
+    mod inc {
+        use super::*;
+        use test_case::test_case;
+        macro_rules! inc_test {
+            ($name: ident, $opcode: ident, $set_addr: ident, $get_addr: ident, $bytes: expr, $cycles: expr) => {
+                #[test_case(0x00, 0x01, false, false; "happy case")]
+                #[test_case(0xFF, 0x00, true, false ; "should wrap")]
+                #[test_case(0x80, 0x81, false, true ; "should be negative")]
+                #[test_case(0x18, 0x19, false, false ; "happy case 2")]
+                fn $name(pre_val: u8, post_val: u8, z: bool, n: bool) {
+                    let mut nes = Nes::new();
+                    let addr = $set_addr(&mut nes, pre_val);
+                    assert_eq!(
+                        nes.decode_and_execute(&prepend_with_opcode($opcode, &addr)),
+                        Ok(($bytes, $cycles))
+                    );
+                    assert_eq_hex!($get_addr(&nes, &addr), post_val);
+                    assert_n(&nes, n);
+                    assert_z(&nes, z);
+                }
+            };
+        }
+        inc_test!(test_zp, INC_ZP, set_addr_zp, get_addr_zp, 2, 5);
     }
     // Utility functions to get and setsome addresses in memory set to the value given
     fn get_addr_zp(nes: &Nes, addr: &[u8]) -> u8 {
