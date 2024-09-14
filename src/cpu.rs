@@ -243,14 +243,31 @@ impl Cpu {
         self.s_r.z = self.a == 0;
         self.s_r.n = (self.a & 0x80) != 0;
     }
-    /// Increment the value given and sets flags accordingly.
-    /// Returns the value after incrementation, wrapping if needed.
+    /// Increment the value given and sets flag accordingly.
+    /// Return the value after incrementation, wrapping if needed.
     /// * Z is set if the result is 0
     /// * N is set if the result is negative
     pub fn inc(&mut self, value: u8) -> u8 {
         let v = value.wrapping_add(1);
         self.s_r.z = v == 0;
         self.s_r.n = (v & 0x80) != 0;
+        return v;
+    }
+    /// Logically shift the value right and set the flags accordingly.
+    /// Return the value after shifting.
+    /// * C is set to bit 0 of the value before shifting.
+    /// * Z is set if the result is 0.
+    /// ```
+    /// let mut cpu = yane::Cpu::new();
+    /// let value = cpu.lsr(0x81);
+    /// assert_eq!(value, 0x40);
+    /// assert_eq!(cpu.s_r.c, true);
+    /// assert_eq!(cpu.s_r.z, false);
+    /// ```
+    pub fn lsr(&mut self, value: u8) -> u8 {
+        self.s_r.c = (value & 0x01) != 0;
+        let v = value >> 1;
+        self.s_r.z = v == 0;
         return v;
     }
     // Set the status register's flags when loading (LDA, LDX, or LDY)

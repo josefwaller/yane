@@ -182,3 +182,8 @@ pub const JMP_ABS: u8 = 0x4C;
 pub const JMP_IND: u8 = 0x6C;
 /// Jump to Subroutine
 pub const JSR: u8 = 0x20;
+pub const LSR_A: u8 = 0x4A;
+pub const LSR_ZP: u8 = 0x46;
+pub const LSR_ZP_X: u8 = 0x56;
+pub const LSR_ABS: u8 = 0x4E;
+pub const LSR_ABS_X: u8 = 0x5E;

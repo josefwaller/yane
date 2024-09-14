@@ -569,6 +569,34 @@ impl Nes {
                 self.cpu.p_c = Nes::get_absolute_addr(operands) as u16;
                 Ok((3, 6))
             }
+            LSR_A => {
+                self.cpu.a = self.cpu.lsr(self.cpu.a);
+                Ok((1, 2))
+            }
+            LSR_ZP => {
+                let v = self.cpu.lsr(self.read_zero_page_addr(operands[0]));
+                self.write_zero_page_addr(operands[0], v);
+                Ok((2, 5))
+            }
+            LSR_ZP_X => {
+                let v = self
+                    .cpu
+                    .lsr(self.read_zero_page_addr_offset(operands[0], self.cpu.x));
+                self.write_zero_page_addr_offset(operands[0], self.cpu.x, v);
+                Ok((2, 6))
+            }
+            LSR_ABS => {
+                let v = self.cpu.lsr(self.read_absolute_addr(operands));
+                self.write_absolute_addr(operands, v);
+                Ok((3, 6))
+            }
+            LSR_ABS_X => {
+                let v = self
+                    .cpu
+                    .lsr(self.read_absolute_addr_offset(operands, self.cpu.x));
+                self.write_absolute_addr_offset(operands, self.cpu.x, v);
+                Ok((3, 7))
+            }
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -1310,6 +1338,32 @@ mod tests {
             assert_eq_hex!(nes.mem[0x1FE], mem_two);
         }
     }
+    mod lsr {
+        use super::*;
+        use test_case::test_case;
+
+        macro_rules! lsr_test {
+            ($name: ident, $opcode: ident, $set_addr: ident, $get_addr: ident, $bytes: expr, $cycles: expr) => {
+                #[test_case(0x18, 0x0C, false, false ; "happy case")]
+                fn $name(pre_val: u8, post_val: u8, c: bool, z: bool) {
+                    let mut nes = Nes::new();
+                    let addr = $set_addr(&mut nes, pre_val);
+                    assert_eq!(
+                        nes.decode_and_execute(&prepend_with_opcode($opcode, &addr)),
+                        Ok(($bytes, $cycles))
+                    );
+                    assert_eq_hex!($get_addr(&nes, &addr), post_val);
+                    assert_c(&nes, c);
+                    assert_z(&nes, z);
+                }
+            };
+        }
+        lsr_test!(test_acc, LSR_A, set_a, get_a, 1, 2);
+        lsr_test!(test_zp, LSR_ZP, set_addr_zp, get_addr_zp, 2, 5);
+        lsr_test!(test_zp_x, LSR_ZP_X, set_addr_zp_x, get_addr_zp_x, 2, 6);
+        lsr_test!(test_abs, LSR_ABS, set_addr_abs, get_addr_abs, 3, 6);
+        lsr_test!(test_abs_x, LSR_ABS_X, set_addr_abs_x, get_addr_abs_x, 3, 7);
+    }
     // Utility functions to get and setsome addresses in memory set to the value given
     fn get_addr_zp(nes: &Nes, addr: &[u8]) -> u8 {
         nes.mem[addr[0] as usize]
@@ -1390,6 +1444,13 @@ mod tests {
     fn set_addr_immediate(_nes: &mut Nes, value: u8) -> [u8; 1] {
         [value]
     }
+    fn set_a(nes: &mut Nes, value: u8) -> [u8; 0] {
+        nes.cpu.a = value;
+        []
+    }
+    fn get_a(nes: &Nes, _addr: &[u8]) -> u8 {
+        nes.cpu.a
+    }
     fn set_x(nes: &mut Nes, value: u8) -> [u8; 0] {
         nes.cpu.x = value;
         []
@@ -1469,6 +1530,7 @@ mod tests {
             }
         };
     }
+    create_flag_assert_func!(c, "C", assert_c);
     create_flag_assert_func!(z, "Z", assert_z);
     create_flag_assert_func!(n, "N", assert_n);
 }
