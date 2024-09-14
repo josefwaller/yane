@@ -321,8 +321,11 @@ impl Nes {
                     .cpu
                     .brk(self.mem[0xFFFE] as u16 + ((self.mem[0xFFFF] as u16) << 8));
                 // Copy into stack
-                self.mem[(0x100 + self.cpu.s_p as usize - 2)..(0x100 + self.cpu.s_p as usize + 1)]
-                    .copy_from_slice(&to_push);
+                self.push_to_stack(to_push[2]);
+                self.push_to_stack(to_push[1]);
+                self.push_to_stack(to_push[0]);
+                // self.mem[(0x100 + self.cpu.s_p as usize - 2)..(0x100 + self.cpu.s_p as usize + 1)]
+                //     .copy_from_slice(&to_push);
                 Ok((1, 7))
             }
             CLC => {
@@ -557,6 +560,15 @@ impl Nes {
                 ]) as u16;
                 Ok((3, 5))
             }
+            JSR => {
+                // Push PC to stack
+                let to_push = Nes::to_bytes(self.cpu.p_c.wrapping_add(2));
+                self.push_to_stack(to_push[0]);
+                self.push_to_stack(to_push[1]);
+                // Set new PC from instruction
+                self.cpu.p_c = Nes::get_absolute_addr(operands) as u16;
+                Ok((3, 6))
+            }
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -623,6 +635,13 @@ impl Nes {
     // Return true if a page is crossed by the indirect indexed address and offset given
     fn page_crossed_ind_idx(&self, addr: &[u8], offset: u8) -> bool {
         255 - self.read_zero_page_addr(addr[0]) < offset
+    }
+    fn push_to_stack(&mut self, v: u8) {
+        self.mem[0x100 + self.cpu.s_p as usize] = v;
+        self.cpu.s_p -= 1;
+    }
+    fn to_bytes(v: u16) -> [u8; 2] {
+        [(v & 0xFF) as u8, (v >> 8) as u8]
     }
 }
 
@@ -1275,6 +1294,20 @@ mod tests {
                 Ok((3, 5))
             );
             assert_eq_hex!(nes.cpu.p_c, p_c);
+        }
+    }
+    mod jsr {
+        use super::*;
+        use test_case::test_case;
+        #[test_case(0x1234, 0x67, 0x45, 0x4567, 0x36, 0x12; "happy case")]
+        #[test_case(0xFFFF, 0x00, 0x00, 0x0000, 0x01, 0x00; "should wrap")]
+        fn test_absolute(pc: u16, op_one: u8, op_two: u8, post_pc: u16, mem_one: u8, mem_two: u8) {
+            let mut nes = Nes::new();
+            nes.cpu.p_c = pc;
+            assert_eq!(nes.decode_and_execute(&[JSR, op_one, op_two]), Ok((3, 6)));
+            assert_eq_hex!(nes.cpu.p_c, post_pc);
+            assert_eq_hex!(nes.mem[0x1FF], mem_one);
+            assert_eq_hex!(nes.mem[0x1FE], mem_two);
         }
     }
     // Utility functions to get and setsome addresses in memory set to the value given

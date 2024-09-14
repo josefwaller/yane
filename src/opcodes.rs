@@ -180,3 +180,5 @@ pub const INY: u8 = 0xC8;
 pub const JMP_ABS: u8 = 0x4C;
 /// Jump Indirect
 pub const JMP_IND: u8 = 0x6C;
+/// Jump to Subroutine
+pub const JSR: u8 = 0x20;
