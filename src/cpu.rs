@@ -226,6 +226,23 @@ impl Cpu {
         self.s_r.n = (r & 0x80) != 0;
         return r;
     }
+    /// Perform an exclusive OR on A
+    /// Sets A to the result of A ^ `value`
+    /// * Z is set to A == 0
+    /// * N is set to the MSB of A
+    ///```
+    /// let mut cpu = yane::Cpu::new();
+    /// cpu.a = 0xFF;
+    /// cpu.eor(0x77);
+    /// assert_eq!(cpu.a, 0x88);
+    /// assert_eq!(cpu.s_r.z, false);
+    /// assert_eq!(cpu.s_r.n, true);
+    /// ```
+    pub fn eor(&mut self, value: u8) {
+        self.a ^= value;
+        self.s_r.z = self.a == 0;
+        self.s_r.n = (self.a & 0x80) != 0;
+    }
     // Set the status register's flags when loading (LDA, LDX, or LDY)
     fn set_load_flags(&mut self, value: u8) {
         if value == 0 {

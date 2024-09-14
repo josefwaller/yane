@@ -148,3 +148,19 @@ pub const DEC_ABS_X: u8 = 0xDE;
 pub const DEX: u8 = 0xCA;
 /// Decrement Y
 pub const DEY: u8 = 0x88;
+/// Exclusive OR Immediate
+pub const EOR_I: u8 = 0x49;
+/// Exclusive OR Zero Page
+pub const EOR_ZP: u8 = 0x45;
+/// Exclusive OR Zero Page X
+pub const EOR_ZP_X: u8 = 0x55;
+/// Exclusive OR Absolute
+pub const EOR_ABS: u8 = 0x4D;
+/// Exclusive OR Absolute X
+pub const EOR_ABS_X: u8 = 0x5D;
+/// Exclusive OR Absoluve Y
+pub const EOR_ABS_Y: u8 = 0x59;
+/// Exclusive OR Indexed Indirect
+pub const EOR_IND_X: u8 = 0x41;
+/// Exclusive OR Indirect Indexed
+pub const EOR_IND_Y: u8 = 0x51;

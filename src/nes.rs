@@ -455,6 +455,64 @@ impl Nes {
                 self.cpu.y = self.cpu.dec(self.cpu.y);
                 Ok((1, 2))
             }
+            EOR_I => {
+                self.cpu.eor(operands[0]);
+                Ok((2, 2))
+            }
+            EOR_ZP => {
+                self.cpu.eor(self.read_zero_page_addr(operands[0]));
+                Ok((2, 3))
+            }
+            EOR_ZP_X => {
+                self.cpu
+                    .eor(self.read_zero_page_addr_offset(operands[0], self.cpu.x));
+                Ok((2, 4))
+            }
+            EOR_ABS => {
+                self.cpu.eor(self.read_absolute_addr(operands));
+                Ok((3, 4))
+            }
+            EOR_ABS_X => {
+                self.cpu
+                    .eor(self.read_absolute_addr_offset(operands, self.cpu.x));
+                Ok((
+                    3,
+                    4 + if Nes::page_crossed_abs(operands, self.cpu.x) {
+                        1
+                    } else {
+                        0
+                    },
+                ))
+            }
+            EOR_ABS_Y => {
+                self.cpu
+                    .eor(self.read_absolute_addr_offset(operands, self.cpu.y));
+                Ok((
+                    3,
+                    4 + if Nes::page_crossed_abs(operands, self.cpu.y) {
+                        1
+                    } else {
+                        0
+                    },
+                ))
+            }
+            EOR_IND_X => {
+                self.cpu
+                    .eor(self.read_indexed_indirect(operands[0], self.cpu.x));
+                Ok((2, 6))
+            }
+            EOR_IND_Y => {
+                self.cpu
+                    .eor(self.read_indirect_indexed(operands[0], self.cpu.y));
+                Ok((
+                    2,
+                    5 + if Nes::page_crossed_ind_idx(&self, operands, self.cpu.y) {
+                        1
+                    } else {
+                        0
+                    },
+                ))
+            }
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -1068,6 +1126,38 @@ mod tests {
         use test_case::test_case;
         dec_test!(DEY, get_y, set_y, 1, 2, test_implied);
     }
+    mod eor {
+        use super::*;
+        use test_case::test_case;
+        macro_rules! eor_test {
+            ($name: ident, $opcode: ident, $addr_func: ident, $bytes: expr, $cycles: expr) => {
+                #[test_case(0xAB, 0xCD, 0xAB ^ 0xCD, false, false ; "happy case")]
+                fn $name(a: u8, val: u8, a_post: u8, z: bool, n: bool) {
+                    let mut nes = Nes::new();
+                    nes.cpu.a = a;
+                    let addr = $addr_func(&mut nes, val);
+                    assert_eq!(
+                        nes.decode_and_execute(&prepend_with_opcode($opcode, &addr)),
+                        Ok(($bytes, $cycles))
+                    );
+                    assert_eq_hex!(nes.cpu.a, a_post);
+                    assert_z(&nes, z);
+                    assert_n(&nes, n);
+                }
+            };
+        }
+        eor_test!(test_immediate, EOR_I, set_addr_immediate, 2, 2);
+        eor_test!(test_zp, EOR_ZP, set_addr_zp, 2, 3);
+        eor_test!(test_zp_x, EOR_ZP_X, set_addr_zp_x, 2, 4);
+        eor_test!(test_abs, EOR_ABS, set_addr_abs, 3, 4);
+        eor_test!(test_abs_x, EOR_ABS_X, set_addr_abs_x, 3, 4);
+        eor_test!(test_abs_x_pc, EOR_ABS_X, set_addr_abs_x_pc, 3, 5);
+        eor_test!(test_abs_y, EOR_ABS_Y, set_addr_abs_y, 3, 4);
+        eor_test!(test_abs_y_pc, EOR_ABS_Y, set_addr_abs_y_pc, 3, 5);
+        eor_test!(test_ind_x, EOR_IND_X, set_addr_ind_x, 2, 6);
+        eor_test!(test_ind_y, EOR_IND_Y, set_addr_ind_y, 2, 5);
+        eor_test!(test_ind_y_pc, EOR_IND_Y, set_addr_ind_y_pc, 2, 6);
+    }
     // Utility functions to get and setsome addresses in memory set to the value given
     fn get_addr_zp(nes: &Nes, addr: &[u8]) -> u8 {
         nes.mem[addr[0] as usize]
@@ -1166,6 +1256,17 @@ mod tests {
         nes.cpu.y = random::<u8>();
         let addr = set_addr_abs_offset_no_pc(nes, value, nes.cpu.y);
         // Now store addr in ZP
+        let mut addr_two = random::<u8>();
+        if (addr_two == addr[0] || addr_two == addr[0].wrapping_sub(1)) && addr[1] == 0 {
+            addr_two = addr_two.wrapping_add(2);
+        }
+        nes.mem[addr_two as usize] = addr[0];
+        nes.mem[addr_two.wrapping_add(1) as usize] = addr[1];
+        [addr_two]
+    }
+    fn set_addr_ind_y_pc(nes: &mut Nes, value: u8) -> [u8; 1] {
+        nes.cpu.y = max(random::<u8>(), 1);
+        let addr = set_addr_abs_offset_pc(nes, value, nes.cpu.y);
         let mut addr_two = random::<u8>();
         if (addr_two == addr[0] || addr_two == addr[0].wrapping_sub(1)) && addr[1] == 0 {
             addr_two = addr_two.wrapping_add(2);
