@@ -518,6 +518,33 @@ impl Nes {
                 self.write_zero_page_addr(operands[0], val);
                 Ok((2, 5))
             }
+            INC_ZP_X => {
+                let val = self
+                    .cpu
+                    .inc(self.read_zero_page_addr_offset(operands[0], self.cpu.x));
+                self.write_zero_page_addr_offset(operands[0], self.cpu.x, val);
+                Ok((2, 6))
+            }
+            INC_ABS => {
+                let val = self.cpu.inc(self.read_absolute_addr(operands));
+                self.write_absolute_addr(operands, val);
+                Ok((3, 6))
+            }
+            INC_ABS_X => {
+                let val = self
+                    .cpu
+                    .inc(self.read_absolute_addr_offset(operands, self.cpu.x));
+                self.write_absolute_addr_offset(operands, self.cpu.x, val);
+                Ok((3, 7))
+            }
+            INX => {
+                self.cpu.x = self.cpu.inc(self.cpu.x);
+                Ok((1, 2))
+            }
+            INY => {
+                self.cpu.y = self.cpu.inc(self.cpu.y);
+                Ok((1, 2))
+            }
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -1166,29 +1193,43 @@ mod tests {
         eor_test!(test_ind_y, EOR_IND_Y, set_addr_ind_y, 2, 5);
         eor_test!(test_ind_y_pc, EOR_IND_Y, set_addr_ind_y_pc, 2, 6);
     }
+    macro_rules! inc_test {
+        ($name: ident, $opcode: ident, $set_addr: ident, $get_addr: ident, $bytes: expr, $cycles: expr) => {
+            #[test_case(0x00, 0x01, false, false; "happy case")]
+            #[test_case(0xFF, 0x00, true, false ; "should wrap")]
+            #[test_case(0x80, 0x81, false, true ; "should be negative")]
+            #[test_case(0x18, 0x19, false, false ; "happy case 2")]
+            fn $name(pre_val: u8, post_val: u8, z: bool, n: bool) {
+                let mut nes = Nes::new();
+                let addr = $set_addr(&mut nes, pre_val);
+                assert_eq!(
+                    nes.decode_and_execute(&prepend_with_opcode($opcode, &addr)),
+                    Ok(($bytes, $cycles))
+                );
+                assert_eq_hex!($get_addr(&nes, &addr), post_val);
+                assert_n(&nes, n);
+                assert_z(&nes, z);
+            }
+        };
+    }
     mod inc {
         use super::*;
         use test_case::test_case;
-        macro_rules! inc_test {
-            ($name: ident, $opcode: ident, $set_addr: ident, $get_addr: ident, $bytes: expr, $cycles: expr) => {
-                #[test_case(0x00, 0x01, false, false; "happy case")]
-                #[test_case(0xFF, 0x00, true, false ; "should wrap")]
-                #[test_case(0x80, 0x81, false, true ; "should be negative")]
-                #[test_case(0x18, 0x19, false, false ; "happy case 2")]
-                fn $name(pre_val: u8, post_val: u8, z: bool, n: bool) {
-                    let mut nes = Nes::new();
-                    let addr = $set_addr(&mut nes, pre_val);
-                    assert_eq!(
-                        nes.decode_and_execute(&prepend_with_opcode($opcode, &addr)),
-                        Ok(($bytes, $cycles))
-                    );
-                    assert_eq_hex!($get_addr(&nes, &addr), post_val);
-                    assert_n(&nes, n);
-                    assert_z(&nes, z);
-                }
-            };
-        }
+
         inc_test!(test_zp, INC_ZP, set_addr_zp, get_addr_zp, 2, 5);
+        inc_test!(test_zp_x, INC_ZP_X, set_addr_zp_x, get_addr_zp_x, 2, 6);
+        inc_test!(test_abs, INC_ABS, set_addr_abs, get_addr_abs, 3, 6);
+        inc_test!(test_abs_x, INC_ABS_X, set_addr_abs_x, get_addr_abs_x, 3, 7);
+    }
+    mod inx {
+        use super::*;
+        use test_case::test_case;
+        inc_test!(test_implied, INX, set_x, get_x, 1, 2);
+    }
+    mod iny {
+        use super::*;
+        use test_case::test_case;
+        inc_test!(test_implied, INY, set_y, get_y, 1, 2);
     }
     // Utility functions to get and setsome addresses in memory set to the value given
     fn get_addr_zp(nes: &Nes, addr: &[u8]) -> u8 {

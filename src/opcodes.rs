@@ -172,3 +172,7 @@ pub const INC_ZP_X: u8 = 0xF6;
 pub const INC_ABS: u8 = 0xEE;
 /// Increment memory Absolute X
 pub const INC_ABS_X: u8 = 0xFE;
+/// Increment X Implied
+pub const INX: u8 = 0xE8;
+/// Increment Y Implied
+pub const INY: u8 = 0xC8;
