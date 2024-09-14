@@ -545,6 +545,18 @@ impl Nes {
                 self.cpu.y = self.cpu.inc(self.cpu.y);
                 Ok((1, 2))
             }
+            JMP_ABS => {
+                self.cpu.p_c = Nes::get_absolute_addr(operands) as u16;
+                Ok((3, 3))
+            }
+            JMP_IND => {
+                self.cpu.p_c = Nes::get_absolute_addr(&[
+                    self.read_absolute_addr(operands),
+                    // Wrapping add here due to a bug with the NES where reading addresses wraps around the page boundary
+                    self.read_absolute_addr(&[operands[0].wrapping_add(1), operands[1]]),
+                ]) as u16;
+                Ok((3, 5))
+            }
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -581,7 +593,7 @@ impl Nes {
     fn write_absolute_addr(&mut self, addr: &[u8], value: u8) {
         self.mem[Nes::get_absolute_addr(addr)] = value;
     }
-    // Read using absllute addressing with an offset
+    // Read using absolute addressing with an offset
     fn read_absolute_addr_offset(&self, addr: &[u8], offset: u8) -> u8 {
         self.mem[Nes::get_absolute_addr_offset(addr, offset)]
     }
@@ -1230,6 +1242,40 @@ mod tests {
         use super::*;
         use test_case::test_case;
         inc_test!(test_implied, INY, set_y, get_y, 1, 2);
+    }
+    mod jmp {
+        use super::*;
+        use test_case::test_case;
+
+        #[test_case(0xABCD ; "happy case")]
+        #[test_case(0x0000 ; "should be zero")]
+        #[test_case(0xFFFF ; "should be max")]
+        fn test_abs(addr: u16) {
+            let mut nes = Nes::new();
+            assert_eq!(
+                nes.decode_and_execute(&[JMP_ABS, first_byte(addr), second_byte(addr)]),
+                Ok((3, 3))
+            );
+            assert_eq_hex!(nes.cpu.p_c, addr);
+        }
+        #[test_case(0x0120, 0xFC, 0xBA, 0xBAFC; "happy case")]
+        #[test_case(0x0000, 0xFF, 0xFF, 0xFFFF ; "jump to end")]
+        #[test_case(0x02FF, 0x00, 0xA9, 0x0000 ; "should wrap around page boundary")]
+        #[test_case(0x02FE, 0xAB, 0xCD, 0xCDAB ; "should not wrap around page boundary")]
+        fn test_indirect(addr: usize, v1: u8, v2: u8, p_c: u16) {
+            let mut nes = Nes::new();
+            nes.mem[addr] = v1;
+            nes.mem[addr + 1] = v2;
+            assert_eq!(
+                nes.decode_and_execute(&[
+                    JMP_IND,
+                    first_byte(addr as u16),
+                    second_byte(addr as u16)
+                ]),
+                Ok((3, 5))
+            );
+            assert_eq_hex!(nes.cpu.p_c, p_c);
+        }
     }
     // Utility functions to get and setsome addresses in memory set to the value given
     fn get_addr_zp(nes: &Nes, addr: &[u8]) -> u8 {
