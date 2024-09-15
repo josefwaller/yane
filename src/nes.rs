@@ -3,9 +3,9 @@ use crate::{opcodes::*, Cpu};
 /// The NES.
 pub struct Nes {
     /// CPU of the NES
-    cpu: Cpu,
+    pub cpu: Cpu,
     /// Memory of the NES
-    mem: [u8; 0x10000],
+    pub mem: [u8; 0x10000],
 }
 
 impl Nes {
@@ -45,21 +45,19 @@ impl Nes {
                 Ok((2, 2))
             }
             LDA_ZP => {
-                self.cpu.lda(self.read_zero_page_addr(operands[0]));
+                self.cpu.lda(self.read_zp(operands[0]));
                 Ok((2, 3))
             }
             LDA_ZP_X => {
-                self.cpu
-                    .lda(self.read_zero_page_addr_offset(operands[0], self.cpu.x));
+                self.cpu.lda(self.read_zp_x(operands[0]));
                 Ok((2, 4))
             }
             LDA_ABS => {
-                self.cpu.lda(self.read_absolute_addr(&operands));
+                self.cpu.lda(self.read_abs(&operands));
                 Ok((3, 4))
             }
             LDA_ABS_X => {
-                self.cpu
-                    .lda(self.read_absolute_addr_offset(&operands, self.cpu.x));
+                self.cpu.lda(self.read_abs_x(operands));
                 Ok((
                     3,
                     4 + if Nes::page_crossed_abs(&operands, self.cpu.x) {
@@ -70,8 +68,7 @@ impl Nes {
                 ))
             }
             LDA_ABS_Y => {
-                self.cpu
-                    .lda(self.read_absolute_addr_offset(&operands, self.cpu.y));
+                self.cpu.lda(self.read_abs_y(operands));
                 Ok((
                     3,
                     4 + if Nes::page_crossed_abs(&operands, self.cpu.y) {
@@ -82,13 +79,11 @@ impl Nes {
                 ))
             }
             LDA_IND_X => {
-                self.cpu
-                    .lda(self.read_indexed_indirect(operands[0], self.cpu.x));
+                self.cpu.lda(self.read_indexed_indirect(operands[0]));
                 Ok((2, 6))
             }
             LDA_IND_Y => {
-                self.cpu
-                    .lda(self.read_indirect_indexed(operands[0], self.cpu.y));
+                self.cpu.lda(self.read_indirect_indexed(operands[0]));
                 Ok((
                     2,
                     5 + if self.page_crossed_ind_idx(&operands, self.cpu.y) {
@@ -103,21 +98,19 @@ impl Nes {
                 Ok((2, 2))
             }
             LDX_ZP => {
-                self.cpu.ldx(self.read_zero_page_addr(operands[0]));
+                self.cpu.ldx(self.read_zp(operands[0]));
                 Ok((2, 3))
             }
             LDX_ZP_Y => {
-                self.cpu
-                    .ldx(self.read_zero_page_addr_offset(operands[0], self.cpu.y));
+                self.cpu.ldx(self.read_zp_y(operands[0]));
                 Ok((2, 4))
             }
             LDX_ABS => {
-                self.cpu.ldx(self.read_absolute_addr(&operands));
+                self.cpu.ldx(self.read_abs(&operands));
                 Ok((3, 4))
             }
             LDX_ABS_Y => {
-                self.cpu
-                    .ldx(self.read_absolute_addr_offset(&operands, self.cpu.y));
+                self.cpu.ldx(self.read_abs_y(&operands));
                 Ok((
                     3,
                     4 + if Nes::page_crossed_abs(&operands, self.cpu.y) {
@@ -132,21 +125,19 @@ impl Nes {
                 Ok((2, 2))
             }
             LDY_ZP => {
-                self.cpu.ldy(self.read_zero_page_addr(operands[0]));
+                self.cpu.ldy(self.read_zp(operands[0]));
                 Ok((2, 3))
             }
             LDY_ZP_X => {
-                self.cpu
-                    .ldy(self.read_zero_page_addr_offset(operands[0], self.cpu.x));
+                self.cpu.ldy(self.read_zp_x(operands[0]));
                 Ok((2, 4))
             }
             LDY_ABS => {
-                self.cpu.ldy(self.read_absolute_addr(&operands));
+                self.cpu.ldy(self.read_abs(&operands));
                 Ok((3, 4))
             }
             LDY_ABS_X => {
-                self.cpu
-                    .ldy(self.read_absolute_addr_offset(&operands, self.cpu.x));
+                self.cpu.ldy(self.read_abs_x(operands));
                 Ok((
                     3,
                     4 + if Nes::page_crossed_abs(&operands, self.cpu.x) {
@@ -161,21 +152,19 @@ impl Nes {
                 Ok((2, 2))
             }
             ADC_ZP => {
-                self.cpu.adc(self.read_zero_page_addr(operands[0]));
+                self.cpu.adc(self.read_zp(operands[0]));
                 Ok((2, 3))
             }
             ADC_ZP_X => {
-                self.cpu
-                    .adc(self.read_zero_page_addr_offset(operands[0], self.cpu.x));
+                self.cpu.adc(self.read_zp_x(operands[0]));
                 Ok((2, 4))
             }
             ADC_ABS => {
-                self.cpu.adc(self.read_absolute_addr(&operands));
+                self.cpu.adc(self.read_abs(&operands));
                 Ok((3, 4))
             }
             ADC_ABS_X => {
-                self.cpu
-                    .adc(self.read_absolute_addr_offset(&operands, self.cpu.x));
+                self.cpu.adc(self.read_abs_x(operands));
                 Ok((
                     3,
                     4 + if Nes::page_crossed_abs(&operands, self.cpu.x) {
@@ -186,8 +175,7 @@ impl Nes {
                 ))
             }
             ADC_ABS_Y => {
-                self.cpu
-                    .adc(self.read_absolute_addr_offset(&operands, self.cpu.y));
+                self.cpu.adc(self.read_abs_y(operands));
                 Ok((
                     3,
                     4 + if Nes::page_crossed_abs(&operands, self.cpu.y) {
@@ -198,13 +186,11 @@ impl Nes {
                 ))
             }
             ADC_IND_X => {
-                self.cpu
-                    .adc(self.read_indexed_indirect(operands[0], self.cpu.x));
+                self.cpu.adc(self.read_indexed_indirect(operands[0]));
                 Ok((2, 6))
             }
             ADC_IND_Y => {
-                self.cpu
-                    .adc(self.read_indirect_indexed(operands[0], self.cpu.y));
+                self.cpu.adc(self.read_indirect_indexed(operands[0]));
                 Ok((
                     2,
                     5 + if self.page_crossed_ind_idx(&operands, self.cpu.y) {
@@ -219,21 +205,19 @@ impl Nes {
                 Ok((2, 2))
             }
             AND_ZP => {
-                self.cpu.and(self.read_zero_page_addr(operands[0]));
+                self.cpu.and(self.read_zp(operands[0]));
                 Ok((2, 3))
             }
             AND_ZP_X => {
-                self.cpu
-                    .and(self.read_zero_page_addr_offset(operands[0], self.cpu.x));
+                self.cpu.and(self.read_zp_x(operands[0]));
                 Ok((2, 4))
             }
             AND_ABS => {
-                self.cpu.and(self.read_absolute_addr(&operands));
+                self.cpu.and(self.read_abs(&operands));
                 Ok((3, 4))
             }
             AND_ABS_X => {
-                self.cpu
-                    .and(self.read_absolute_addr_offset(&operands, self.cpu.x));
+                self.cpu.and(self.read_abs_x(operands));
                 Ok((
                     3,
                     4 + if Nes::page_crossed_abs(&operands, self.cpu.x) {
@@ -244,8 +228,7 @@ impl Nes {
                 ))
             }
             AND_ABS_Y => {
-                self.cpu
-                    .and(self.read_absolute_addr_offset(&operands, self.cpu.y));
+                self.cpu.and(self.read_abs_y(operands));
                 Ok((
                     3,
                     4 + if Nes::page_crossed_abs(&operands, self.cpu.y) {
@@ -256,13 +239,11 @@ impl Nes {
                 ))
             }
             AND_IND_X => {
-                self.cpu
-                    .and(self.read_indexed_indirect(operands[0], self.cpu.x));
+                self.cpu.and(self.read_indexed_indirect(operands[0]));
                 Ok((2, 6))
             }
             AND_IND_Y => {
-                self.cpu
-                    .and(self.read_indirect_indexed(operands[0], self.cpu.y));
+                self.cpu.and(self.read_indirect_indexed(operands[0]));
                 Ok((
                     2,
                     5 + if self.page_crossed_ind_idx(&operands, self.cpu.y) {
@@ -277,27 +258,23 @@ impl Nes {
                 Ok((1, 2))
             }
             ASL_ZP => {
-                let v = self.cpu.asl(self.read_zero_page_addr(operands[0]));
-                self.write_zero_page_addr(operands[0], v);
+                let v = self.cpu.asl(self.read_zp(operands[0]));
+                self.write_zp(operands[0], v);
                 Ok((2, 5))
             }
             ASL_ZP_X => {
-                let v = self
-                    .cpu
-                    .asl(self.read_zero_page_addr_offset(operands[0], self.cpu.x));
-                self.write_zero_page_addr_offset(operands[0], self.cpu.x, v);
+                let v = self.cpu.asl(self.read_zp_x(operands[0]));
+                self.write_zp_x(operands[0], v);
                 Ok((2, 6))
             }
             ASL_ABS => {
-                let v = self.cpu.asl(self.read_absolute_addr(&operands));
-                self.write_absolute_addr(&operands, v);
+                let v = self.cpu.asl(self.read_abs(&operands));
+                self.write_abs(&operands, v);
                 Ok((3, 6))
             }
             ASL_ABS_X => {
-                let v = self
-                    .cpu
-                    .asl(self.read_absolute_addr_offset(&operands, self.cpu.x));
-                self.write_absolute_addr_offset(&operands, self.cpu.x, v);
+                let v = self.cpu.asl(self.read_abs_x(operands));
+                self.write_abs_x(operands, v);
                 Ok((3, 7))
             }
             BCS => Ok((2, self.cpu.branch_if(self.cpu.s_r.c, operands[0]))),
@@ -309,11 +286,11 @@ impl Nes {
             BVS => Ok((2, self.cpu.branch_if(self.cpu.s_r.v, operands[0]))),
             BVC => Ok((2, self.cpu.branch_if(!self.cpu.s_r.v, operands[0]))),
             BIT_ZP => {
-                self.cpu.bit(self.read_zero_page_addr(operands[0]));
+                self.cpu.bit(self.read_zp(operands[0]));
                 Ok((2, 3))
             }
             BIT_ABS => {
-                self.cpu.bit(self.read_absolute_addr(&operands));
+                self.cpu.bit(self.read_abs(&operands));
                 Ok((3, 4))
             }
             BRK => {
@@ -349,21 +326,19 @@ impl Nes {
                 Ok((2, 2))
             }
             CMP_ZP => {
-                self.cpu.cmp(self.read_zero_page_addr(operands[0]));
+                self.cpu.cmp(self.read_zp(operands[0]));
                 Ok((2, 3))
             }
             CMP_ZP_X => {
-                self.cpu
-                    .cmp(self.read_zero_page_addr_offset(operands[0], self.cpu.x));
+                self.cpu.cmp(self.read_zp_x(operands[0]));
                 Ok((2, 4))
             }
             CMP_ABS => {
-                self.cpu.cmp(self.read_absolute_addr(&operands));
+                self.cpu.cmp(self.read_abs(&operands));
                 Ok((3, 4))
             }
             CMP_ABS_X => {
-                self.cpu
-                    .cmp(self.read_absolute_addr_offset(&operands, self.cpu.x));
+                self.cpu.cmp(self.read_abs_x(operands));
                 Ok((
                     3,
                     4 + if Nes::page_crossed_abs(&operands, self.cpu.x) {
@@ -374,8 +349,7 @@ impl Nes {
                 ))
             }
             CMP_ABS_Y => {
-                self.cpu
-                    .cmp(self.read_absolute_addr_offset(&operands, self.cpu.y));
+                self.cpu.cmp(self.read_abs_y(operands));
                 Ok((
                     3,
                     4 + if Nes::page_crossed_abs(&operands, self.cpu.y) {
@@ -386,13 +360,11 @@ impl Nes {
                 ))
             }
             CMP_IND_X => {
-                self.cpu
-                    .cmp(self.read_indexed_indirect(operands[0], self.cpu.x));
+                self.cpu.cmp(self.read_indexed_indirect(operands[0]));
                 Ok((2, 6))
             }
             CMP_IND_Y => {
-                self.cpu
-                    .cmp(self.read_indirect_indexed(operands[0], self.cpu.y));
+                self.cpu.cmp(self.read_indirect_indexed(operands[0]));
                 Ok((
                     2,
                     5 + if Nes::page_crossed_ind_idx(&self, operands, self.cpu.y) {
@@ -407,11 +379,11 @@ impl Nes {
                 Ok((2, 2))
             }
             CPX_ZP => {
-                self.cpu.cpx(self.read_zero_page_addr(operands[0]));
+                self.cpu.cpx(self.read_zp(operands[0]));
                 Ok((2, 3))
             }
             CPX_ABS => {
-                self.cpu.cpx(self.read_absolute_addr(operands));
+                self.cpu.cpx(self.read_abs(operands));
                 Ok((3, 4))
             }
             CPY_I => {
@@ -419,35 +391,31 @@ impl Nes {
                 Ok((2, 2))
             }
             CPY_ZP => {
-                self.cpu.cpy(self.read_zero_page_addr(operands[0]));
+                self.cpu.cpy(self.read_zp(operands[0]));
                 Ok((2, 3))
             }
             CPY_ABS => {
-                self.cpu.cpy(self.read_absolute_addr(operands));
+                self.cpu.cpy(self.read_abs(operands));
                 Ok((3, 4))
             }
             DEC_ZP => {
-                let res = self.cpu.dec(self.read_zero_page_addr(operands[0]));
-                self.write_zero_page_addr(operands[0], res);
+                let res = self.cpu.dec(self.read_zp(operands[0]));
+                self.write_zp(operands[0], res);
                 Ok((2, 5))
             }
             DEC_ZP_X => {
-                let res = self
-                    .cpu
-                    .dec(self.read_zero_page_addr_offset(operands[0], self.cpu.x));
-                self.write_zero_page_addr_offset(operands[0], self.cpu.x, res);
+                let res = self.cpu.dec(self.read_zp_x(operands[0]));
+                self.write_zp_x(operands[0], res);
                 Ok((2, 6))
             }
             DEC_ABS => {
-                let res = self.cpu.dec(self.read_absolute_addr(operands));
-                self.write_absolute_addr(operands, res);
+                let res = self.cpu.dec(self.read_abs(operands));
+                self.write_abs(operands, res);
                 Ok((3, 6))
             }
             DEC_ABS_X => {
-                let res = self
-                    .cpu
-                    .dec(self.read_absolute_addr_offset(operands, self.cpu.x));
-                self.write_absolute_addr_offset(operands, self.cpu.x, res);
+                let res = self.cpu.dec(self.read_abs_x(operands));
+                self.write_abs_x(operands, res);
                 Ok((3, 7))
             }
             DEX => {
@@ -463,21 +431,19 @@ impl Nes {
                 Ok((2, 2))
             }
             EOR_ZP => {
-                self.cpu.eor(self.read_zero_page_addr(operands[0]));
+                self.cpu.eor(self.read_zp(operands[0]));
                 Ok((2, 3))
             }
             EOR_ZP_X => {
-                self.cpu
-                    .eor(self.read_zero_page_addr_offset(operands[0], self.cpu.x));
+                self.cpu.eor(self.read_zp_x(operands[0]));
                 Ok((2, 4))
             }
             EOR_ABS => {
-                self.cpu.eor(self.read_absolute_addr(operands));
+                self.cpu.eor(self.read_abs(operands));
                 Ok((3, 4))
             }
             EOR_ABS_X => {
-                self.cpu
-                    .eor(self.read_absolute_addr_offset(operands, self.cpu.x));
+                self.cpu.eor(self.read_abs_x(operands));
                 Ok((
                     3,
                     4 + if Nes::page_crossed_abs(operands, self.cpu.x) {
@@ -488,8 +454,7 @@ impl Nes {
                 ))
             }
             EOR_ABS_Y => {
-                self.cpu
-                    .eor(self.read_absolute_addr_offset(operands, self.cpu.y));
+                self.cpu.eor(self.read_abs_y(operands));
                 Ok((
                     3,
                     4 + if Nes::page_crossed_abs(operands, self.cpu.y) {
@@ -500,13 +465,11 @@ impl Nes {
                 ))
             }
             EOR_IND_X => {
-                self.cpu
-                    .eor(self.read_indexed_indirect(operands[0], self.cpu.x));
+                self.cpu.eor(self.read_indexed_indirect(operands[0]));
                 Ok((2, 6))
             }
             EOR_IND_Y => {
-                self.cpu
-                    .eor(self.read_indirect_indexed(operands[0], self.cpu.y));
+                self.cpu.eor(self.read_indirect_indexed(operands[0]));
                 Ok((
                     2,
                     5 + if Nes::page_crossed_ind_idx(&self, operands, self.cpu.y) {
@@ -517,27 +480,23 @@ impl Nes {
                 ))
             }
             INC_ZP => {
-                let val = self.cpu.inc(self.read_zero_page_addr(operands[0]));
-                self.write_zero_page_addr(operands[0], val);
+                let val = self.cpu.inc(self.read_zp(operands[0]));
+                self.write_zp(operands[0], val);
                 Ok((2, 5))
             }
             INC_ZP_X => {
-                let val = self
-                    .cpu
-                    .inc(self.read_zero_page_addr_offset(operands[0], self.cpu.x));
-                self.write_zero_page_addr_offset(operands[0], self.cpu.x, val);
+                let val = self.cpu.inc(self.read_zp_x(operands[0]));
+                self.write_zp_x(operands[0], val);
                 Ok((2, 6))
             }
             INC_ABS => {
-                let val = self.cpu.inc(self.read_absolute_addr(operands));
-                self.write_absolute_addr(operands, val);
+                let val = self.cpu.inc(self.read_abs(operands));
+                self.write_abs(operands, val);
                 Ok((3, 6))
             }
             INC_ABS_X => {
-                let val = self
-                    .cpu
-                    .inc(self.read_absolute_addr_offset(operands, self.cpu.x));
-                self.write_absolute_addr_offset(operands, self.cpu.x, val);
+                let val = self.cpu.inc(self.read_abs_x(operands));
+                self.write_abs_x(operands, val);
                 Ok((3, 7))
             }
             INX => {
@@ -554,9 +513,9 @@ impl Nes {
             }
             JMP_IND => {
                 self.cpu.p_c = Nes::get_absolute_addr(&[
-                    self.read_absolute_addr(operands),
+                    self.read_abs(operands),
                     // Wrapping add here due to a bug with the NES where reading addresses wraps around the page boundary
-                    self.read_absolute_addr(&[operands[0].wrapping_add(1), operands[1]]),
+                    self.read_abs(&[operands[0].wrapping_add(1), operands[1]]),
                 ]) as u16;
                 Ok((3, 5))
             }
@@ -574,27 +533,23 @@ impl Nes {
                 Ok((1, 2))
             }
             LSR_ZP => {
-                let v = self.cpu.lsr(self.read_zero_page_addr(operands[0]));
-                self.write_zero_page_addr(operands[0], v);
+                let v = self.cpu.lsr(self.read_zp(operands[0]));
+                self.write_zp(operands[0], v);
                 Ok((2, 5))
             }
             LSR_ZP_X => {
-                let v = self
-                    .cpu
-                    .lsr(self.read_zero_page_addr_offset(operands[0], self.cpu.x));
-                self.write_zero_page_addr_offset(operands[0], self.cpu.x, v);
+                let v = self.cpu.lsr(self.read_zp_x(operands[0]));
+                self.write_zp_x(operands[0], v);
                 Ok((2, 6))
             }
             LSR_ABS => {
-                let v = self.cpu.lsr(self.read_absolute_addr(operands));
-                self.write_absolute_addr(operands, v);
+                let v = self.cpu.lsr(self.read_abs(operands));
+                self.write_abs(operands, v);
                 Ok((3, 6))
             }
             LSR_ABS_X => {
-                let v = self
-                    .cpu
-                    .lsr(self.read_absolute_addr_offset(operands, self.cpu.x));
-                self.write_absolute_addr_offset(operands, self.cpu.x, v);
+                let v = self.cpu.lsr(self.read_abs_x(operands));
+                self.write_abs_x(operands, v);
                 Ok((3, 7))
             }
             NOP => Ok((1, 2)),
@@ -603,21 +558,19 @@ impl Nes {
                 Ok((2, 2))
             }
             ORA_ZP => {
-                self.cpu.ora(self.read_zero_page_addr(operands[0]));
+                self.cpu.ora(self.read_zp(operands[0]));
                 Ok((2, 3))
             }
             ORA_ZP_X => {
-                self.cpu
-                    .ora(self.read_zero_page_addr_offset(operands[0], self.cpu.x));
+                self.cpu.ora(self.read_zp_x(operands[0]));
                 Ok((2, 4))
             }
             ORA_ABS => {
-                self.cpu.ora(self.read_absolute_addr(operands));
+                self.cpu.ora(self.read_abs(operands));
                 Ok((3, 4))
             }
             ORA_ABS_X => {
-                self.cpu
-                    .ora(self.read_absolute_addr_offset(operands, self.cpu.x));
+                self.cpu.ora(self.read_abs_x(operands));
                 Ok((
                     3,
                     4 + if Nes::page_crossed_abs(operands, self.cpu.x) {
@@ -628,8 +581,7 @@ impl Nes {
                 ))
             }
             ORA_ABS_Y => {
-                self.cpu
-                    .ora(self.read_absolute_addr_offset(operands, self.cpu.y));
+                self.cpu.ora(self.read_abs_y(operands));
                 Ok((
                     3,
                     4 + if Nes::page_crossed_abs(operands, self.cpu.y) {
@@ -640,13 +592,11 @@ impl Nes {
                 ))
             }
             ORA_IND_X => {
-                self.cpu
-                    .ora(self.read_indexed_indirect(operands[0], self.cpu.x));
+                self.cpu.ora(self.read_indexed_indirect(operands[0]));
                 Ok((2, 6))
             }
             ORA_IND_Y => {
-                self.cpu
-                    .ora(self.read_indirect_indexed(operands[0], self.cpu.y));
+                self.cpu.ora(self.read_indirect_indexed(operands[0]));
                 Ok((
                     2,
                     5 + if Nes::page_crossed_ind_idx(&self, operands, self.cpu.y) {
@@ -665,18 +615,59 @@ impl Nes {
         }
     }
 
-    // Zero page addressing
-    fn read_zero_page_addr(&self, addr: u8) -> u8 {
+    /// Read a single byte from a zero page address.
+    /// ```
+    /// let nes = yane::Nes::new();
+    /// nes.read_zp(0x18);
+    /// ```
+    pub fn read_zp(&self, addr: u8) -> u8 {
         self.mem[addr as usize]
     }
-    fn write_zero_page_addr(&mut self, addr: u8, val: u8) {
+    /// Write a single byte to memory using zero page addressing.
+    /// ```
+    /// let mut nes = yane::Nes::new();
+    /// nes.write_zp(0x18, 0x29);
+    /// assert_eq!(nes.read_zp(0x18), 0x29);
+    /// ```
+    pub fn write_zp(&mut self, addr: u8, val: u8) {
         self.mem[addr as usize] = val;
     }
-    // Read using zero page addressing with an offset
-    fn read_zero_page_addr_offset(&self, addr: u8, offset: u8) -> u8 {
+    /// Read a single byte using zero page addressing with X register offset.
+    /// ```
+    /// let mut nes = yane::Nes::new();
+    /// nes.write_zp(0x18, 0x45);
+    /// nes.cpu.ldx(0x08);
+    /// assert_eq!(nes.read_zp_x(0x10), 0x45);
+    /// ```
+    pub fn read_zp_x(&self, addr: u8) -> u8 {
+        self.read_zp_offset(addr, self.cpu.x)
+    }
+    /// Read a single byte using zero page addressing with Y register offset.
+    /// ```
+    /// let mut nes = yane::Nes::new();
+    /// nes.write_zp(0x18, 0x45);
+    /// nes.cpu.ldy(0x08);
+    /// assert_eq!(nes.read_zp_y(0x10), 0x45);
+    /// ```
+    pub fn read_zp_y(&self, addr: u8) -> u8 {
+        self.read_zp_offset(addr, self.cpu.y)
+    }
+    // Read a single byte using zero page offset addressing
+    fn read_zp_offset(&self, addr: u8, offset: u8) -> u8 {
         self.mem[addr.wrapping_add(offset) as usize]
     }
-    fn write_zero_page_addr_offset(&mut self, addr: u8, offset: u8, value: u8) {
+    /// Write a single byte using zero page addressing with X register offset
+    /// ```
+    /// let mut nes = yane::Nes::new();
+    /// nes.cpu.x = 0x10;
+    /// nes.write_zp_x(0x18, 0x05);
+    /// assert_eq!(nes.read_zp(0x28), 0x05);
+    /// ```
+    pub fn write_zp_x(&mut self, addr: u8, value: u8) {
+        self.write_zp_offset(addr, self.cpu.x, value)
+    }
+    // Write a single byte using zero page offset addressing
+    fn write_zp_offset(&mut self, addr: u8, offset: u8, value: u8) {
         self.mem[addr.wrapping_add(offset) as usize] = value;
     }
     // Absolute addressing
@@ -686,32 +677,88 @@ impl Nes {
     fn get_absolute_addr(addr: &[u8]) -> usize {
         Nes::get_absolute_addr_offset(addr, 0)
     }
-    fn read_absolute_addr(&self, addr: &[u8]) -> u8 {
+    /// Read a single byte from memory using absolute addressing.
+    /// Note that absolute addressing uses a little endian system.
+    /// ```
+    /// let mut nes = yane::Nes::new();
+    /// nes.mem[0x1234] = 0x56;
+    /// assert_eq!(nes.read_abs(&[0x34, 0x12]), 0x56);
+    /// ```
+    pub fn read_abs(&self, addr: &[u8]) -> u8 {
         self.mem[Nes::get_absolute_addr(addr)]
     }
-    fn write_absolute_addr(&mut self, addr: &[u8], value: u8) {
+    /// Write a single byte to memory using absolute addressing
+    /// Note that absolute addressing uses a little endian system.
+    /// ```
+    /// let mut nes = yane::Nes::new();
+    /// nes.write_abs(&[0x12, 0x34], 0x56);
+    /// assert_eq!(nes.mem[0x3412], 0x56);
+    /// ```
+    pub fn write_abs(&mut self, addr: &[u8], value: u8) {
         self.mem[Nes::get_absolute_addr(addr)] = value;
     }
     // Read using absolute addressing with an offset
-    fn read_absolute_addr_offset(&self, addr: &[u8], offset: u8) -> u8 {
+    fn read_abs_offset(&self, addr: &[u8], offset: u8) -> u8 {
         self.mem[Nes::get_absolute_addr_offset(addr, offset)]
     }
-    fn write_absolute_addr_offset(&mut self, addr: &[u8], offset: u8, value: u8) {
+    fn write_abs_offset(&mut self, addr: &[u8], offset: u8, value: u8) {
         self.mem[Nes::get_absolute_addr_offset(addr, offset)] = value;
     }
-    // Read using indexed indirect addressing with an offset.
-    // X is added to the value in the opcode and used to read a pointer from memory.
-    fn read_indexed_indirect(&self, addr: u8, offset: u8) -> u8 {
-        let first_addr = addr.wrapping_add(offset) as usize;
-        let second_addr = &self.mem[first_addr..(first_addr + 2)];
-        return self.read_absolute_addr(&second_addr);
+    /// Read a byte from memory using absolute addressing with X register offset.
+    /// ```
+    /// let nes = yane::Nes::new();
+    /// nes.read_abs_x(&[0x12, 0x34]);
+    /// ```
+    pub fn read_abs_x(&self, addr: &[u8]) -> u8 {
+        self.read_abs_offset(addr, self.cpu.x)
     }
-    // Read using indirect indexed addressing.
-    // A pointer is read from the memory using the value in the opcode, and then Y is added to it.
-    fn read_indirect_indexed(&self, addr: u8, offset: u8) -> u8 {
+    /// Read a byte from memory using absolute addressing with Y register offset.
+    /// ```
+    /// let nes = yane::Nes::new();
+    /// nes.read_abs_y(&[0x12, 0x34]);
+    /// ```
+    pub fn read_abs_y(&self, addr: &[u8]) -> u8 {
+        self.read_abs_offset(addr, self.cpu.y)
+    }
+    /// Write a byte to memory using absolute addressing with X register offset.
+    /// ```
+    /// let mut nes = yane::Nes::new();
+    /// nes.write_abs_x(&[0x12, 0x34], 0x56);
+    /// ```
+    pub fn write_abs_x(&mut self, addr: &[u8], value: u8) {
+        self.write_abs_offset(addr, self.cpu.x, value)
+    }
+    /// Write a byte to memory using absolute addressing with Y register offset.
+    /// ```
+    /// let mut nes = yane::Nes::new();
+    /// nes.write_abs_y(&[0x12, 0x34], 0x56);
+    /// ```
+    pub fn write_abs_y(&mut self, addr: &[u8], value: u8) {
+        self.write_abs_offset(addr, self.cpu.y, value)
+    }
+    /// Read a single byte from memory using indexed indirect addressing.
+    /// A 2 byte value is read from the zero page address `addr`, which the X register is added to.
+    /// This value is then used as a little endian address of the actual value.
+    /// ```
+    /// let mut nes = yane::Nes::new();
+    /// nes.read_indexed_indirect(0x12);
+    /// ```
+    pub fn read_indexed_indirect(&self, addr: u8) -> u8 {
+        let first_addr = addr.wrapping_add(self.cpu.x) as usize;
+        let second_addr = &self.mem[first_addr..(first_addr + 2)];
+        return self.read_abs(&second_addr);
+    }
+    /// Read a single byte from memory using indirect indexed addressing.
+    /// A 2 byte value is read from the zero page address `addr`.
+    /// The Y value is then added to this value, and the result is used as the little endian address of the actual value.
+    /// ```
+    /// let mut nes = yane::Nes::new();
+    /// nes.read_indirect_indexed(0x18);
+    /// ```
+    pub fn read_indirect_indexed(&self, addr: u8) -> u8 {
         let first_addr = addr as usize;
         let second_addr = (self.mem[first_addr] as u16 + ((self.mem[first_addr + 1] as u16) << 8))
-            .wrapping_add(offset as u16);
+            .wrapping_add(self.cpu.y as u16);
         return self.mem[second_addr as usize];
     }
     // Return true if a page is crossed by an operation using the absolute address and offset given
@@ -721,7 +768,7 @@ impl Nes {
     }
     // Return true if a page is crossed by the indirect indexed address and offset given
     fn page_crossed_ind_idx(&self, addr: &[u8], offset: u8) -> bool {
-        255 - self.read_zero_page_addr(addr[0]) < offset
+        255 - self.read_zp(addr[0]) < offset
     }
     fn push_to_stack(&mut self, v: u8) {
         self.mem[0x100 + self.cpu.s_p as usize] = v;
