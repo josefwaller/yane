@@ -182,8 +182,31 @@ pub const JMP_ABS: u8 = 0x4C;
 pub const JMP_IND: u8 = 0x6C;
 /// Jump to Subroutine
 pub const JSR: u8 = 0x20;
+/// Right Shift Accumulator
 pub const LSR_A: u8 = 0x4A;
+/// Right Shift Zero PAge
 pub const LSR_ZP: u8 = 0x46;
+/// Right Shift Zero Page X
 pub const LSR_ZP_X: u8 = 0x56;
+/// Right Shift Absolute
 pub const LSR_ABS: u8 = 0x4E;
+/// Right Shift Absolute X:w
 pub const LSR_ABS_X: u8 = 0x5E;
+/// No Operation
+pub const NOP: u8 = 0xEA;
+/// Or A Immediate
+pub const ORA_I: u8 = 0x09;
+/// Or A Zero Page
+pub const ORA_ZP: u8 = 0x05;
+/// Or A Zero Page X
+pub const ORA_ZP_X: u8 = 0x15;
+/// Or A Absolute
+pub const ORA_ABS: u8 = 0x0D;
+/// Or A Absolute X
+pub const ORA_ABS_X: u8 = 0x1D;
+/// Or A Absolute Y
+pub const ORA_ABS_Y: u8 = 0x19;
+/// Or A Indexed Indirect
+pub const ORA_IND_X: u8 = 0x01;
+/// Or A Indirect Indexed
+pub const ORA_IND_Y: u8 = 0x11;

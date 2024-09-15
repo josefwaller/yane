@@ -597,6 +597,65 @@ impl Nes {
                 self.write_absolute_addr_offset(operands, self.cpu.x, v);
                 Ok((3, 7))
             }
+            NOP => Ok((1, 2)),
+            ORA_I => {
+                self.cpu.ora(operands[0]);
+                Ok((2, 2))
+            }
+            ORA_ZP => {
+                self.cpu.ora(self.read_zero_page_addr(operands[0]));
+                Ok((2, 3))
+            }
+            ORA_ZP_X => {
+                self.cpu
+                    .ora(self.read_zero_page_addr_offset(operands[0], self.cpu.x));
+                Ok((2, 4))
+            }
+            ORA_ABS => {
+                self.cpu.ora(self.read_absolute_addr(operands));
+                Ok((3, 4))
+            }
+            ORA_ABS_X => {
+                self.cpu
+                    .ora(self.read_absolute_addr_offset(operands, self.cpu.x));
+                Ok((
+                    3,
+                    4 + if Nes::page_crossed_abs(operands, self.cpu.x) {
+                        1
+                    } else {
+                        0
+                    },
+                ))
+            }
+            ORA_ABS_Y => {
+                self.cpu
+                    .ora(self.read_absolute_addr_offset(operands, self.cpu.y));
+                Ok((
+                    3,
+                    4 + if Nes::page_crossed_abs(operands, self.cpu.y) {
+                        1
+                    } else {
+                        0
+                    },
+                ))
+            }
+            ORA_IND_X => {
+                self.cpu
+                    .ora(self.read_indexed_indirect(operands[0], self.cpu.x));
+                Ok((2, 6))
+            }
+            ORA_IND_Y => {
+                self.cpu
+                    .ora(self.read_indirect_indexed(operands[0], self.cpu.y));
+                Ok((
+                    2,
+                    5 + if Nes::page_crossed_ind_idx(&self, operands, self.cpu.y) {
+                        1
+                    } else {
+                        0
+                    },
+                ))
+            }
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -1154,7 +1213,7 @@ mod tests {
     mod cpm {
         use super::*;
         use test_case::test_case;
-        compare_test!(a, CMP_I, set_addr_immediate, 2, 2, test_immediate);
+        compare_test!(a, CMP_I, set_addr_i, 2, 2, test_immediate);
         compare_test!(a, CMP_ZP, set_addr_zp, 2, 3, test_zp);
         compare_test!(a, CMP_ZP_X, set_addr_zp_x, 2, 4, test_zp_x);
         compare_test!(a, CMP_ABS, set_addr_abs, 3, 4, test_abs);
@@ -1168,14 +1227,14 @@ mod tests {
     mod cpx {
         use super::*;
         use test_case::test_case;
-        compare_test!(x, CPX_I, set_addr_immediate, 2, 2, test_immediate);
+        compare_test!(x, CPX_I, set_addr_i, 2, 2, test_immediate);
         compare_test!(x, CPX_ZP, set_addr_zp, 2, 3, test_zp);
         compare_test!(x, CPX_ABS, set_addr_abs, 3, 4, test_abs);
     }
     mod cpy {
         use super::*;
         use test_case::test_case;
-        compare_test!(y, CPY_I, set_addr_immediate, 2, 2, test_immediate);
+        compare_test!(y, CPY_I, set_addr_i, 2, 2, test_immediate);
         compare_test!(y, CPY_ZP, set_addr_zp, 2, 3, test_zp);
         compare_test!(y, CPY_ABS, set_addr_abs, 3, 4, test_abs);
     }
@@ -1240,7 +1299,7 @@ mod tests {
                 }
             };
         }
-        eor_test!(test_immediate, EOR_I, set_addr_immediate, 2, 2);
+        eor_test!(test_immediate, EOR_I, set_addr_i, 2, 2);
         eor_test!(test_zp, EOR_ZP, set_addr_zp, 2, 3);
         eor_test!(test_zp_x, EOR_ZP_X, set_addr_zp_x, 2, 4);
         eor_test!(test_abs, EOR_ABS, set_addr_abs, 3, 4);
@@ -1364,6 +1423,38 @@ mod tests {
         lsr_test!(test_abs, LSR_ABS, set_addr_abs, get_addr_abs, 3, 6);
         lsr_test!(test_abs_x, LSR_ABS_X, set_addr_abs_x, get_addr_abs_x, 3, 7);
     }
+    mod ora {
+        use super::*;
+        use test_case::test_case;
+        macro_rules! ora_test {
+            ($name: ident, $opcode: ident, $set_addr: ident, $bytes: expr, $cycles: expr) => {
+                #[test_case(0x00, 0xAB, 0xAB, false, true; "happy case")]
+                fn $name(a: u8, pre_val: u8, post_val: u8, z: bool, n: bool) {
+                    let mut nes = Nes::new();
+                    nes.cpu.a = a;
+                    let addr = $set_addr(&mut nes, pre_val);
+                    assert_eq!(
+                        nes.decode_and_execute(&prepend_with_opcode($opcode, &addr)),
+                        Ok(($bytes, $cycles))
+                    );
+                    assert_eq!(nes.cpu.a, post_val);
+                    assert_n(&nes, n);
+                    assert_z(&nes, z);
+                }
+            };
+        }
+        ora_test!(test_immediate, ORA_I, set_addr_i, 2, 2);
+        ora_test!(test_zp, ORA_ZP, set_addr_zp, 2, 3);
+        ora_test!(test_zp_x, ORA_ZP_X, set_addr_zp_x, 2, 4);
+        ora_test!(test_abs, ORA_ABS, set_addr_abs, 3, 4);
+        ora_test!(test_abs_x, ORA_ABS_X, set_addr_abs_x, 3, 4);
+        ora_test!(test_abs_x_pc, ORA_ABS_X, set_addr_abs_x_pc, 3, 5);
+        ora_test!(test_abs_y, ORA_ABS_Y, set_addr_abs_y, 3, 4);
+        ora_test!(test_abs_y_pc, ORA_ABS_Y, set_addr_abs_y_pc, 3, 5);
+        ora_test!(test_ind_x, ORA_IND_X, set_addr_ind_x, 2, 6);
+        ora_test!(test_ind_y, ORA_IND_Y, set_addr_ind_y, 2, 5);
+        ora_test!(test_ind_y_pc, ORA_IND_Y, set_addr_ind_y_pc, 2, 6);
+    }
     // Utility functions to get and setsome addresses in memory set to the value given
     fn get_addr_zp(nes: &Nes, addr: &[u8]) -> u8 {
         nes.mem[addr[0] as usize]
@@ -1441,8 +1532,11 @@ mod tests {
         set_addr_abs_offset_pc(nes, value, nes.cpu.y)
     }
     // These are just so that we can use these function in macros instead of using set_addr_zp or set_addr_abs
-    fn set_addr_immediate(_nes: &mut Nes, value: u8) -> [u8; 1] {
+    fn set_addr_i(_nes: &mut Nes, value: u8) -> [u8; 1] {
         [value]
+    }
+    fn get_addr_i(_name: &mut Nes, addr: u8) -> [u8; 1] {
+        [addr]
     }
     fn set_a(nes: &mut Nes, value: u8) -> [u8; 0] {
         nes.cpu.a = value;

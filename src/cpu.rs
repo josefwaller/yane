@@ -270,6 +270,26 @@ impl Cpu {
         self.s_r.z = v == 0;
         return v;
     }
+    /// Perform a bitwise OR with A and `value`.
+    /// Modifies A and sets teh status register accordinly.
+    /// * Z is set if A == 0
+    /// * N is set if A is negative
+    /// ```
+    /// let mut cpu = yane::Cpu::new();
+    /// cpu.ora(0x18);
+    /// assert_eq!(cpu.a, 0x18);
+    /// assert_eq!(cpu.s_r.n, false);
+    /// assert_eq!(cpu.s_r.z, false);
+    /// cpu.ora(0x81);
+    /// assert_eq!(cpu.a, 0x99);
+    /// assert_eq!(cpu.s_r.n, true);
+    /// assert_eq!(cpu.s_r.z, false);
+    /// ```
+    pub fn ora(&mut self, value: u8) {
+        self.a |= value;
+        self.s_r.z = self.a == 0;
+        self.s_r.n = (self.a & 0x80) != 0;
+    }
     // Set the status register's flags when loading (LDA, LDX, or LDY)
     fn set_load_flags(&mut self, value: u8) {
         if value == 0 {
