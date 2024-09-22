@@ -174,26 +174,11 @@ impl Nes {
             CPY_I => cpu_func!(cpy, read_immediate, 2, 2),
             CPY_ZP => cpu_func!(cpy, read_zp, 2, 3),
             CPY_ABS => cpu_func!(cpy, read_abs, 3, 4),
-            DEC_ZP => {
-                let res = self.cpu.dec(self.read_zp(&operands));
-                self.write_zp(operands, res);
-                Ok((2, 5))
-            }
-            DEC_ZP_X => {
-                let res = self.cpu.dec(self.read_zp_x(&operands));
-                self.write_zp_x(operands, res);
-                Ok((2, 6))
-            }
-            DEC_ABS => {
-                let res = self.cpu.dec(self.read_abs(operands));
-                self.write_abs(operands, res);
-                Ok((3, 6))
-            }
-            DEC_ABS_X => {
-                let res = self.cpu.dec(self.read_abs_x(operands));
-                self.write_abs_x(operands, res);
-                Ok((3, 7))
-            }
+            // DEC
+            DEC_ZP => cpu_write_func!(dec, read_zp, write_zp, 2, 5),
+            DEC_ZP_X => cpu_write_func!(dec, read_zp_x, write_zp_x, 2, 6),
+            DEC_ABS => cpu_write_func!(dec, read_abs, write_abs, 3, 6),
+            DEC_ABS_X => cpu_write_func!(dec, read_abs_x, write_abs_x, 3, 7),
             DEX => {
                 self.cpu.x = self.cpu.dec(self.cpu.x);
                 Ok((1, 2))
@@ -202,79 +187,20 @@ impl Nes {
                 self.cpu.y = self.cpu.dec(self.cpu.y);
                 Ok((1, 2))
             }
-            EOR_I => {
-                self.cpu.eor(operands[0]);
-                Ok((2, 2))
-            }
-            EOR_ZP => {
-                self.cpu.eor(self.read_zp(&operands));
-                Ok((2, 3))
-            }
-            EOR_ZP_X => {
-                self.cpu.eor(self.read_zp_x(&operands));
-                Ok((2, 4))
-            }
-            EOR_ABS => {
-                self.cpu.eor(self.read_abs(operands));
-                Ok((3, 4))
-            }
-            EOR_ABS_X => {
-                self.cpu.eor(self.read_abs_x(operands));
-                Ok((
-                    3,
-                    4 + if Nes::page_crossed_abs(operands, self.cpu.x) {
-                        1
-                    } else {
-                        0
-                    },
-                ))
-            }
-            EOR_ABS_Y => {
-                self.cpu.eor(self.read_abs_y(operands));
-                Ok((
-                    3,
-                    4 + if Nes::page_crossed_abs(operands, self.cpu.y) {
-                        1
-                    } else {
-                        0
-                    },
-                ))
-            }
-            EOR_IND_X => {
-                self.cpu.eor(self.read_indexed_indirect(operands));
-                Ok((2, 6))
-            }
-            EOR_IND_Y => {
-                self.cpu.eor(self.read_indirect_indexed(operands));
-                Ok((
-                    2,
-                    5 + if Nes::page_crossed_ind_idx(&self, operands, self.cpu.y) {
-                        1
-                    } else {
-                        0
-                    },
-                ))
-            }
-            INC_ZP => {
-                let val = self.cpu.inc(self.read_zp(&operands));
-                self.write_zp(operands, val);
-                Ok((2, 5))
-            }
-            INC_ZP_X => {
-                let val = self.cpu.inc(self.read_zp_x(&operands));
-                self.write_zp_x(operands, val);
-                Ok((2, 6))
-            }
-            INC_ABS => {
-                let val = self.cpu.inc(self.read_abs(operands));
-                self.write_abs(operands, val);
-                Ok((3, 6))
-            }
-            INC_ABS_X => {
-                let val = self.cpu.inc(self.read_abs_x(operands));
-                self.write_abs_x(operands, val);
-                Ok((3, 7))
-            }
+            // EOR
+            EOR_I => cpu_func!(eor, read_immediate, 2, 2),
+            EOR_ZP => cpu_func!(eor, read_zp, 2, 3),
+            EOR_ZP_X => cpu_func!(eor, read_zp_x, 2, 4),
+            EOR_ABS => cpu_func!(eor, read_abs, 3, 4),
+            EOR_ABS_X => cpu_func!(eor, read_abs_x, pc_x, 3, 4, 5),
+            EOR_ABS_Y => cpu_func!(eor, read_abs_y, pc_y, 3, 4, 5),
+            EOR_IND_X => cpu_func!(eor, read_indexed_indirect, 2, 6),
+            EOR_IND_Y => cpu_func!(eor, read_indirect_indexed, pc_ind, 2, 5, 6),
+            // INC
+            INC_ZP => cpu_write_func!(inc, read_zp, write_zp, 2, 5),
+            INC_ZP_X => cpu_write_func!(inc, read_zp_x, write_zp_x, 2, 6),
+            INC_ABS => cpu_write_func!(inc, read_abs, write_abs, 3, 6),
+            INC_ABS_X => cpu_write_func!(inc, read_abs_x, write_abs_x, 3, 7),
             INX => {
                 self.cpu.x = self.cpu.inc(self.cpu.x);
                 Ok((1, 2))
@@ -304,84 +230,22 @@ impl Nes {
                 self.cpu.p_c = Nes::get_absolute_addr(operands) as u16;
                 Ok((3, 6))
             }
-            LSR_A => {
-                self.cpu.a = self.cpu.lsr(self.cpu.a);
-                Ok((1, 2))
-            }
-            LSR_ZP => {
-                let v = self.cpu.lsr(self.read_zp(&operands));
-                self.write_zp(operands, v);
-                Ok((2, 5))
-            }
-            LSR_ZP_X => {
-                let v = self.cpu.lsr(self.read_zp_x(&operands));
-                self.write_zp_x(operands, v);
-                Ok((2, 6))
-            }
-            LSR_ABS => {
-                let v = self.cpu.lsr(self.read_abs(operands));
-                self.write_abs(operands, v);
-                Ok((3, 6))
-            }
-            LSR_ABS_X => {
-                let v = self.cpu.lsr(self.read_abs_x(operands));
-                self.write_abs_x(operands, v);
-                Ok((3, 7))
-            }
+            // LSR
+            LSR_A => cpu_write_func!(lsr, read_a, write_a, 1, 2),
+            LSR_ZP => cpu_write_func!(lsr, read_zp, write_zp, 2, 5),
+            LSR_ZP_X => cpu_write_func!(lsr, read_zp_x, write_zp_x, 2, 6),
+            LSR_ABS => cpu_write_func!(lsr, read_abs, write_abs, 3, 6),
+            LSR_ABS_X => cpu_write_func!(lsr, read_abs_x, write_abs_x, 3, 7),
             NOP => Ok((1, 2)),
-            ORA_I => {
-                self.cpu.ora(operands[0]);
-                Ok((2, 2))
-            }
-            ORA_ZP => {
-                self.cpu.ora(self.read_zp(&operands));
-                Ok((2, 3))
-            }
-            ORA_ZP_X => {
-                self.cpu.ora(self.read_zp_x(&operands));
-                Ok((2, 4))
-            }
-            ORA_ABS => {
-                self.cpu.ora(self.read_abs(operands));
-                Ok((3, 4))
-            }
-            ORA_ABS_X => {
-                self.cpu.ora(self.read_abs_x(operands));
-                Ok((
-                    3,
-                    4 + if Nes::page_crossed_abs(operands, self.cpu.x) {
-                        1
-                    } else {
-                        0
-                    },
-                ))
-            }
-            ORA_ABS_Y => {
-                self.cpu.ora(self.read_abs_y(operands));
-                Ok((
-                    3,
-                    4 + if Nes::page_crossed_abs(operands, self.cpu.y) {
-                        1
-                    } else {
-                        0
-                    },
-                ))
-            }
-            ORA_IND_X => {
-                self.cpu.ora(self.read_indexed_indirect(operands));
-                Ok((2, 6))
-            }
-            ORA_IND_Y => {
-                self.cpu.ora(self.read_indirect_indexed(operands));
-                Ok((
-                    2,
-                    5 + if Nes::page_crossed_ind_idx(&self, operands, self.cpu.y) {
-                        1
-                    } else {
-                        0
-                    },
-                ))
-            }
+            // ORA
+            ORA_I => cpu_func!(ora, read_immediate, 2, 2),
+            ORA_ZP => cpu_func!(ora, read_zp, 2, 3),
+            ORA_ZP_X => cpu_func!(ora, read_zp_x, 2, 4),
+            ORA_ABS => cpu_func!(ora, read_abs, 3, 4),
+            ORA_ABS_X => cpu_func!(ora, read_abs_x, pc_x, 3, 4, 5),
+            ORA_ABS_Y => cpu_func!(ora, read_abs_y, pc_y, 3, 4, 5),
+            ORA_IND_X => cpu_func!(ora, read_indexed_indirect, 2, 6),
+            ORA_IND_Y => cpu_func!(ora, read_indirect_indexed, pc_ind, 2, 5, 6),
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
