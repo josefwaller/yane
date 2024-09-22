@@ -218,3 +218,13 @@ pub const PHP: u8 = 0x08;
 pub const PLA: u8 = 0x68;
 /// Pull to Status Processor
 pub const PLP: u8 = 0x28;
+/// Rotate A left
+pub const ROL_A: u8 = 0x2A;
+/// Rotate Left Zero Page
+pub const ROL_ZP: u8 = 0x26;
+/// Rotate Left Zero Page X
+pub const ROL_ZP_X: u8 = 0x36;
+/// Rotate Left Absolute
+pub const ROL_ABS: u8 = 0x2E;
+/// Rotate Left Absolute X
+pub const ROL_ABS_X: u8 = 0x3E;

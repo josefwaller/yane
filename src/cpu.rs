@@ -290,6 +290,20 @@ impl Cpu {
         self.s_r.z = self.a == 0;
         self.s_r.n = (self.a & 0x80) != 0;
     }
+    /// Rotate a byte left and set the flags accordingly
+    /// * Z is set if the result is 0
+    /// * C is set to the MSB of the value given
+    /// * N is set to the MSB of the result
+    pub fn rol(&mut self, value: u8) -> u8 {
+        let mut new_val = value << 1;
+        if self.s_r.c {
+            new_val |= 0x01;
+        }
+        self.s_r.c = (value & 0x80) != 0;
+        self.s_r.z = new_val == 0;
+        self.s_r.n = (new_val & 0x80) != 0;
+        new_val
+    }
     // Set the status register's flags when loading (LDA, LDX, or LDY)
     fn set_load_flags(&mut self, value: u8) {
         if value == 0 {

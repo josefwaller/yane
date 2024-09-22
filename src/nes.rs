@@ -263,6 +263,11 @@ impl Nes {
                 self.cpu.s_r.from_byte(v);
                 Ok((1, 3))
             }
+            ROL_A => cpu_write_func!(rol, read_a, write_a, 1, 2),
+            ROL_ZP => cpu_write_func!(rol, read_zp, write_zp, 2, 5),
+            ROL_ZP_X => cpu_write_func!(rol, read_zp_x, write_zp_x, 2, 6),
+            ROL_ABS => cpu_write_func!(rol, read_abs, write_abs, 3, 6),
+            ROL_ABS_X => cpu_write_func!(rol, read_abs_x, write_abs_x, 3, 7),
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -1247,6 +1252,39 @@ mod tests {
         assert_b(&nes, true);
         assert_v(&nes, false);
         assert_n(&nes, false);
+    }
+    mod rol {
+        use super::*;
+        use test_case::test_case;
+        macro_rules! rol_test {
+            ($name: ident, $opcode: ident, $get_addr: ident, $set_addr: ident, $bytes: expr, $cycles: expr) => {
+                #[test_case(0x18, false, 0x30, false, false, false; "happy case")]
+                #[test_case(0x8F, false, 0x1E, true, false, false; "should set C")]
+                #[test_case(0x40, false, 0x80, false, true, false ; "should set N")]
+                #[test_case(0x80, false, 0x00, true, false, true ; "should set Z")]
+                #[test_case(0xFF, true, 0xFF, true, true, false ; "full rotation")]
+                #[test_case(0x00, false, 0x00, false, false, true ; "fully zero")]
+                #[test_case(0x00, true, 0x01, false, false, false ; "only carry set")]
+                fn $name(value: u8, c_before: bool, rotated: u8, c: bool, n: bool, z: bool) {
+                    let mut nes = Nes::new();
+                    let addr = $set_addr(&mut nes, value);
+                    nes.cpu.s_r.c = c_before;
+                    assert_eq!(
+                        nes.decode_and_execute(&prepend_with_opcode($opcode, &addr)),
+                        Ok(($bytes, $cycles))
+                    );
+                    assert_eq_hex!($get_addr(&nes, &addr), rotated);
+                    assert_c(&nes, c);
+                    assert_n(&nes, n);
+                    assert_z(&nes, z);
+                }
+            };
+        }
+        rol_test!(test_a, ROL_A, get_a, set_a, 1, 2);
+        rol_test!(test_zp, ROL_ZP, get_addr_zp, set_addr_zp, 2, 5);
+        rol_test!(test_zp_x, ROL_ZP_X, get_addr_zp_x, set_addr_zp_x, 2, 6);
+        rol_test!(test_abs, ROL_ABS, get_addr_abs, set_addr_abs, 3, 6);
+        rol_test!(test_abs_x, ROL_ABS_X, get_addr_abs_x, set_addr_abs_x, 3, 7);
     }
     // Utility functions to get and setsome addresses in memory set to the value given
     fn get_addr_zp(nes: &Nes, addr: &[u8]) -> u8 {
