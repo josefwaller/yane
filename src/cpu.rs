@@ -291,8 +291,8 @@ impl Cpu {
         self.s_r.n = (self.a & 0x80) != 0;
     }
     /// Rotate a byte left and set the flags accordingly
-    /// * Z is set if the result is 0
     /// * C is set to the MSB of the value given
+    /// * Z is set if the result is 0
     /// * N is set to the MSB of the result
     pub fn rol(&mut self, value: u8) -> u8 {
         let mut new_val = value << 1;
@@ -300,6 +300,20 @@ impl Cpu {
             new_val |= 0x01;
         }
         self.s_r.c = (value & 0x80) != 0;
+        self.s_r.z = new_val == 0;
+        self.s_r.n = (new_val & 0x80) != 0;
+        new_val
+    }
+    /// Rotate a byte right and set the flags accordingly
+    /// * C is set the the LSB of the value given (i.e. the value that is lost)
+    /// * Z is set is the result is 0
+    /// * N is set if the result is negative
+    pub fn ror(&mut self, value: u8) -> u8 {
+        let mut new_val = value >> 1;
+        if self.s_r.c {
+            new_val |= 0x80;
+        }
+        self.s_r.c = (value & 0x01) != 0;
         self.s_r.z = new_val == 0;
         self.s_r.n = (new_val & 0x80) != 0;
         new_val

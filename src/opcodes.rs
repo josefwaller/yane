@@ -228,3 +228,13 @@ pub const ROL_ZP_X: u8 = 0x36;
 pub const ROL_ABS: u8 = 0x2E;
 /// Rotate Left Absolute X
 pub const ROL_ABS_X: u8 = 0x3E;
+/// Rotate A right
+pub const ROR_A: u8 = 0x6A;
+/// Rotate Right Zero Page
+pub const ROR_ZP: u8 = 0x66;
+/// Rotate Right Zero Page X
+pub const ROR_ZP_X: u8 = 0x76;
+/// Rotate Right Absolute
+pub const ROR_ABS: u8 = 0x6E;
+/// Rotate Right Absolute X
+pub const ROR_ABS_X: u8 = 0x7E;
