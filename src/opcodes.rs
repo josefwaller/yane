@@ -210,3 +210,11 @@ pub const ORA_ABS_Y: u8 = 0x19;
 pub const ORA_IND_X: u8 = 0x01;
 /// Or A Indirect Indexed
 pub const ORA_IND_Y: u8 = 0x11;
+/// Push A
+pub const PHA: u8 = 0x48;
+// Push Status Processer
+pub const PHP: u8 = 0x08;
+/// Pull to A
+pub const PLA: u8 = 0x68;
+/// Pull to Status Processor
+pub const PLP: u8 = 0x28;

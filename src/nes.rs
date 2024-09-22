@@ -246,6 +246,23 @@ impl Nes {
             ORA_ABS_Y => cpu_func!(ora, read_abs_y, pc_y, 3, 4, 5),
             ORA_IND_X => cpu_func!(ora, read_indexed_indirect, 2, 6),
             ORA_IND_Y => cpu_func!(ora, read_indirect_indexed, pc_ind, 2, 5, 6),
+            PHA => {
+                self.push_to_stack(self.cpu.a);
+                Ok((1, 3))
+            }
+            PHP => {
+                self.push_to_stack(self.cpu.s_r.to_byte());
+                Ok((1, 3))
+            }
+            PLA => {
+                self.cpu.a = self.pull_from_stack();
+                Ok((1, 3))
+            }
+            PLP => {
+                let v = self.pull_from_stack();
+                self.cpu.s_r.from_byte(v);
+                Ok((1, 3))
+            }
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -436,6 +453,10 @@ impl Nes {
     fn push_to_stack(&mut self, v: u8) {
         self.mem[0x100 + self.cpu.s_p as usize] = v;
         self.cpu.s_p -= 1;
+    }
+    fn pull_from_stack(&mut self) -> u8 {
+        self.cpu.s_p += 1;
+        self.mem[0x100 + self.cpu.s_p as usize]
     }
     fn to_bytes(v: u16) -> [u8; 2] {
         [(v & 0xFF) as u8, (v >> 8) as u8]
@@ -1165,6 +1186,68 @@ mod tests {
         ora_test!(test_ind_y, ORA_IND_Y, set_addr_ind_y, 2, 5);
         ora_test!(test_ind_y_pc, ORA_IND_Y, set_addr_ind_y_pc, 2, 6);
     }
+    #[test]
+    fn test_pha() {
+        let mut nes = Nes::new();
+        nes.cpu.a = 0x18;
+        assert_eq!(nes.decode_and_execute(&[PHA]), Ok((1, 3)));
+        assert_eq_hex!(nes.mem[0x1FF], 0x18);
+        assert_eq!(nes.decode_and_execute(&[PHA]), Ok((1, 3)));
+        assert_eq_hex!(nes.mem[0x1FE], 0x18);
+    }
+    #[test]
+    fn test_php() {
+        let mut nes = Nes::new();
+        nes.cpu.s_r.c = true;
+        nes.cpu.s_r.n = true;
+        assert_eq!(nes.decode_and_execute(&[PHP]), Ok((1, 3)));
+        assert_eq_hex!(nes.mem[0x1FF], 0xA1);
+        assert_eq!(nes.decode_and_execute(&[PHP]), Ok((1, 3)));
+        assert_eq_hex!(nes.mem[0x1FE], 0xA1);
+    }
+    #[test]
+    fn test_pla() {
+        let mut nes = Nes::new();
+        nes.mem[0x1FF] = 0x12;
+        nes.mem[0x1FE] = 0x34;
+        nes.cpu.s_p = 0xFD;
+        assert_eq!(nes.decode_and_execute(&[PLA]), Ok((1, 3)));
+        assert_eq_hex!(nes.cpu.a, 0x34);
+        assert_eq!(nes.decode_and_execute(&[PLA]), Ok((1, 3)));
+        assert_eq_hex!(nes.cpu.a, 0x12);
+    }
+    #[test]
+    fn test_plp() {
+        let mut nes = Nes::new();
+        nes.mem[0x1FF] = 0x18;
+        nes.mem[0x1FE] = 0x00;
+        nes.mem[0x1FD] = 0xFF;
+        nes.cpu.s_p = 0xFC;
+        assert_eq!(nes.decode_and_execute(&[PLP]), Ok((1, 3)));
+        assert_c(&nes, true);
+        assert_z(&nes, true);
+        assert_i(&nes, true);
+        assert_d(&nes, true);
+        assert_b(&nes, true);
+        assert_v(&nes, true);
+        assert_n(&nes, true);
+        assert_eq!(nes.decode_and_execute(&[PLP]), Ok((1, 3)));
+        assert_c(&nes, false);
+        assert_z(&nes, false);
+        assert_i(&nes, false);
+        assert_d(&nes, false);
+        assert_b(&nes, false);
+        assert_v(&nes, false);
+        assert_n(&nes, false);
+        assert_eq!(nes.decode_and_execute(&[PLP]), Ok((1, 3)));
+        assert_c(&nes, false);
+        assert_z(&nes, false);
+        assert_i(&nes, false);
+        assert_d(&nes, true);
+        assert_b(&nes, true);
+        assert_v(&nes, false);
+        assert_n(&nes, false);
+    }
     // Utility functions to get and setsome addresses in memory set to the value given
     fn get_addr_zp(nes: &Nes, addr: &[u8]) -> u8 {
         nes.mem[addr[0] as usize]
@@ -1342,4 +1425,8 @@ mod tests {
     create_flag_assert_func!(c, "C", assert_c);
     create_flag_assert_func!(z, "Z", assert_z);
     create_flag_assert_func!(n, "N", assert_n);
+    create_flag_assert_func!(i, "I", assert_i);
+    create_flag_assert_func!(b, "B", assert_b);
+    create_flag_assert_func!(d, "D", assert_d);
+    create_flag_assert_func!(v, "V", assert_v);
 }

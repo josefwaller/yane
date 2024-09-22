@@ -64,4 +64,22 @@ impl StatusRegister {
         }
         b
     }
+    /// Set the status register from a given byte that contains one bit per flag.
+    /// ```
+    /// let mut s = yane::StatusRegister::new();
+    /// s.from_byte(0b11001010);
+    /// assert_eq!(s.d, true);
+    /// assert_eq!(s.v, true);
+    /// assert_eq!(s.d, true);
+    /// assert_eq!(s.z, true);
+    /// ```
+    pub fn from_byte(&mut self, byte: u8) {
+        self.c = (byte & 0x01) != 0;
+        self.z = (byte & 0x02) != 0;
+        self.i = (byte & 0x04) != 0;
+        self.d = (byte & 0x08) != 0;
+        self.b = (byte & 0x10) != 0;
+        self.v = (byte & 0x40) != 0;
+        self.n = (byte & 0x80) != 0;
+    }
 }
