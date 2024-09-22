@@ -40,7 +40,7 @@ impl Nes {
             ));
         };
         /*
-         * Simple macro to create a black that just calls a CPU function
+         * Simple macro to create a block that just calls a CPU function
          */
         macro_rules! cpu_func {
             ($func: ident, $read_addr: ident, $bytes: expr, $cycles: expr) => {{
@@ -59,7 +59,18 @@ impl Nes {
                 ))
             }};
         }
+        /*
+         * Simple macro to create a block that calls a CPU function and stores the result somewhere
+         */
+        macro_rules! cpu_write_func {
+            ($func: ident, $read_addr: ident, $write_addr: ident, $bytes: expr, $cycles: expr) => {{
+                let value = self.cpu.$func(self.$read_addr(operands));
+                self.$write_addr(operands, value);
+                Ok(($bytes, $cycles))
+            }};
+        }
         match *opcode {
+            // LDA
             LDA_I => cpu_func!(lda, read_immediate, 2, 2),
             LDA_ZP => cpu_func!(lda, read_zp, 2, 3),
             LDA_ZP_X => cpu_func!(lda, read_zp_x, 2, 4),
@@ -68,190 +79,43 @@ impl Nes {
             LDA_ABS_Y => cpu_func!(lda, read_abs_y, pc_y, 3, 4, 5),
             LDA_IND_X => cpu_func!(lda, read_indexed_indirect, 2, 6),
             LDA_IND_Y => cpu_func!(lda, read_indirect_indexed, pc_ind, 2, 5, 6),
-            LDX_I => {
-                self.cpu.ldx(operands[0]);
-                Ok((2, 2))
-            }
-            LDX_ZP => {
-                self.cpu.ldx(self.read_zp(&operands));
-                Ok((2, 3))
-            }
-            LDX_ZP_Y => {
-                self.cpu.ldx(self.read_zp_y(operands[0]));
-                Ok((2, 4))
-            }
-            LDX_ABS => {
-                self.cpu.ldx(self.read_abs(&operands));
-                Ok((3, 4))
-            }
-            LDX_ABS_Y => {
-                self.cpu.ldx(self.read_abs_y(&operands));
-                Ok((
-                    3,
-                    4 + if Nes::page_crossed_abs(&operands, self.cpu.y) {
-                        1
-                    } else {
-                        0
-                    },
-                ))
-            }
-            LDY_I => {
-                self.cpu.ldy(operands[0]);
-                Ok((2, 2))
-            }
-            LDY_ZP => {
-                self.cpu.ldy(self.read_zp(&operands));
-                Ok((2, 3))
-            }
-            LDY_ZP_X => {
-                self.cpu.ldy(self.read_zp_x(&operands));
-                Ok((2, 4))
-            }
-            LDY_ABS => {
-                self.cpu.ldy(self.read_abs(&operands));
-                Ok((3, 4))
-            }
-            LDY_ABS_X => {
-                self.cpu.ldy(self.read_abs_x(operands));
-                Ok((
-                    3,
-                    4 + if Nes::page_crossed_abs(&operands, self.cpu.x) {
-                        1
-                    } else {
-                        0
-                    },
-                ))
-            }
-            ADC_I => {
-                self.cpu.adc(operands[0]);
-                Ok((2, 2))
-            }
-            ADC_ZP => {
-                self.cpu.adc(self.read_zp(&operands));
-                Ok((2, 3))
-            }
-            ADC_ZP_X => {
-                self.cpu.adc(self.read_zp_x(&operands));
-                Ok((2, 4))
-            }
-            ADC_ABS => {
-                self.cpu.adc(self.read_abs(&operands));
-                Ok((3, 4))
-            }
-            ADC_ABS_X => {
-                self.cpu.adc(self.read_abs_x(operands));
-                Ok((
-                    3,
-                    4 + if Nes::page_crossed_abs(&operands, self.cpu.x) {
-                        1
-                    } else {
-                        0
-                    },
-                ))
-            }
-            ADC_ABS_Y => {
-                self.cpu.adc(self.read_abs_y(operands));
-                Ok((
-                    3,
-                    4 + if Nes::page_crossed_abs(&operands, self.cpu.y) {
-                        1
-                    } else {
-                        0
-                    },
-                ))
-            }
-            ADC_IND_X => {
-                self.cpu.adc(self.read_indexed_indirect(operands));
-                Ok((2, 6))
-            }
-            ADC_IND_Y => {
-                self.cpu.adc(self.read_indirect_indexed(operands));
-                Ok((
-                    2,
-                    5 + if self.page_crossed_ind_idx(&operands, self.cpu.y) {
-                        1
-                    } else {
-                        0
-                    },
-                ))
-            }
-            AND_I => {
-                self.cpu.and(operands[0]);
-                Ok((2, 2))
-            }
-            AND_ZP => {
-                self.cpu.and(self.read_zp(&operands));
-                Ok((2, 3))
-            }
-            AND_ZP_X => {
-                self.cpu.and(self.read_zp_x(&operands));
-                Ok((2, 4))
-            }
-            AND_ABS => {
-                self.cpu.and(self.read_abs(&operands));
-                Ok((3, 4))
-            }
-            AND_ABS_X => {
-                self.cpu.and(self.read_abs_x(operands));
-                Ok((
-                    3,
-                    4 + if Nes::page_crossed_abs(&operands, self.cpu.x) {
-                        1
-                    } else {
-                        0
-                    },
-                ))
-            }
-            AND_ABS_Y => {
-                self.cpu.and(self.read_abs_y(operands));
-                Ok((
-                    3,
-                    4 + if Nes::page_crossed_abs(&operands, self.cpu.y) {
-                        1
-                    } else {
-                        0
-                    },
-                ))
-            }
-            AND_IND_X => {
-                self.cpu.and(self.read_indexed_indirect(operands));
-                Ok((2, 6))
-            }
-            AND_IND_Y => {
-                self.cpu.and(self.read_indirect_indexed(operands));
-                Ok((
-                    2,
-                    5 + if self.page_crossed_ind_idx(&operands, self.cpu.y) {
-                        1
-                    } else {
-                        0
-                    },
-                ))
-            }
-            ASL_A => {
-                self.cpu.a = self.cpu.asl(self.cpu.a);
-                Ok((1, 2))
-            }
-            ASL_ZP => {
-                let v = self.cpu.asl(self.read_zp(&operands));
-                self.write_zp(operands[0], v);
-                Ok((2, 5))
-            }
-            ASL_ZP_X => {
-                let v = self.cpu.asl(self.read_zp_x(&operands));
-                self.write_zp_x(operands[0], v);
-                Ok((2, 6))
-            }
-            ASL_ABS => {
-                let v = self.cpu.asl(self.read_abs(&operands));
-                self.write_abs(&operands, v);
-                Ok((3, 6))
-            }
-            ASL_ABS_X => {
-                let v = self.cpu.asl(self.read_abs_x(operands));
-                self.write_abs_x(operands, v);
-                Ok((3, 7))
-            }
+            // LDX
+            LDX_I => cpu_func!(ldx, read_immediate, 2, 2),
+            LDX_ZP => cpu_func!(ldx, read_zp, 2, 3),
+            LDX_ZP_Y => cpu_func!(ldx, read_zp_y, 2, 4),
+            LDX_ABS => cpu_func!(ldx, read_abs, 3, 4),
+            LDX_ABS_Y => cpu_func!(ldx, read_abs_y, pc_y, 3, 4, 5),
+            // LDY
+            LDY_I => cpu_func!(ldy, read_immediate, 2, 2),
+            LDY_ZP => cpu_func!(ldy, read_zp, 2, 3),
+            LDY_ZP_X => cpu_func!(ldy, read_zp_x, 2, 4),
+            LDY_ABS => cpu_func!(ldy, read_abs, 3, 4),
+            LDY_ABS_X => cpu_func!(ldy, read_abs_x, pc_x, 3, 4, 5),
+            // ADC
+            ADC_I => cpu_func!(adc, read_immediate, 2, 2),
+            ADC_ZP => cpu_func!(adc, read_zp, 2, 3),
+            ADC_ZP_X => cpu_func!(adc, read_zp_x, 2, 4),
+            ADC_ABS => cpu_func!(adc, read_abs, 3, 4),
+            ADC_ABS_X => cpu_func!(adc, read_abs_x, pc_x, 3, 4, 5),
+            ADC_ABS_Y => cpu_func!(adc, read_abs_y, pc_y, 3, 4, 5),
+            ADC_IND_X => cpu_func!(adc, read_indexed_indirect, 2, 6),
+            ADC_IND_Y => cpu_func!(adc, read_indirect_indexed, pc_ind, 2, 5, 6),
+            // AND
+            AND_I => cpu_func!(and, read_immediate, 2, 2),
+            AND_ZP => cpu_func!(and, read_zp, 2, 3),
+            AND_ZP_X => cpu_func!(and, read_zp_x, 2, 4),
+            AND_ABS => cpu_func!(and, read_abs, 3, 4),
+            AND_ABS_X => cpu_func!(and, read_abs_x, pc_x, 3, 4, 5),
+            AND_ABS_Y => cpu_func!(and, read_abs_y, pc_y, 3, 4, 5),
+            AND_IND_X => cpu_func!(and, read_indexed_indirect, 2, 6),
+            AND_IND_Y => cpu_func!(and, read_indirect_indexed, pc_ind, 2, 5, 6),
+            // ASL
+            ASL_A => cpu_write_func!(asl, read_a, write_a, 1, 2),
+            ASL_ZP => cpu_write_func!(asl, read_zp, write_zp, 2, 5),
+            ASL_ZP_X => cpu_write_func!(asl, read_zp_x, write_zp_x, 2, 6),
+            ASL_ABS => cpu_write_func!(asl, read_abs, write_abs, 3, 6),
+            ASL_ABS_X => cpu_write_func!(asl, read_abs_x, write_abs_x, 3, 7),
+            // Various branching functions
             BCS => Ok((2, self.cpu.branch_if(self.cpu.s_r.c, operands[0]))),
             BCC => Ok((2, self.cpu.branch_if(!self.cpu.s_r.c, operands[0]))),
             BEQ => Ok((2, self.cpu.branch_if(self.cpu.s_r.z, operands[0]))),
@@ -260,14 +124,10 @@ impl Nes {
             BPL => Ok((2, self.cpu.branch_if(!self.cpu.s_r.n, operands[0]))),
             BVS => Ok((2, self.cpu.branch_if(self.cpu.s_r.v, operands[0]))),
             BVC => Ok((2, self.cpu.branch_if(!self.cpu.s_r.v, operands[0]))),
-            BIT_ZP => {
-                self.cpu.bit(self.read_zp(&operands));
-                Ok((2, 3))
-            }
-            BIT_ABS => {
-                self.cpu.bit(self.read_abs(&operands));
-                Ok((3, 4))
-            }
+            // BIT
+            BIT_ZP => cpu_func!(bit, read_zp, 2, 3),
+            BIT_ABS => cpu_func!(bit, read_abs, 3, 4),
+            // BRK
             BRK => {
                 let to_push = self
                     .cpu
@@ -280,6 +140,7 @@ impl Nes {
                 //     .copy_from_slice(&to_push);
                 Ok((1, 7))
             }
+            // Various flag clearing functions
             CLC => {
                 self.cpu.s_r.c = false;
                 Ok((1, 2))
@@ -296,91 +157,31 @@ impl Nes {
                 self.cpu.s_r.v = false;
                 Ok((1, 2))
             }
-            CMP_I => {
-                self.cpu.cmp(operands[0]);
-                Ok((2, 2))
-            }
-            CMP_ZP => {
-                self.cpu.cmp(self.read_zp(&operands));
-                Ok((2, 3))
-            }
-            CMP_ZP_X => {
-                self.cpu.cmp(self.read_zp_x(&operands));
-                Ok((2, 4))
-            }
-            CMP_ABS => {
-                self.cpu.cmp(self.read_abs(&operands));
-                Ok((3, 4))
-            }
-            CMP_ABS_X => {
-                self.cpu.cmp(self.read_abs_x(operands));
-                Ok((
-                    3,
-                    4 + if Nes::page_crossed_abs(&operands, self.cpu.x) {
-                        1
-                    } else {
-                        0
-                    },
-                ))
-            }
-            CMP_ABS_Y => {
-                self.cpu.cmp(self.read_abs_y(operands));
-                Ok((
-                    3,
-                    4 + if Nes::page_crossed_abs(&operands, self.cpu.y) {
-                        1
-                    } else {
-                        0
-                    },
-                ))
-            }
-            CMP_IND_X => {
-                self.cpu.cmp(self.read_indexed_indirect(operands));
-                Ok((2, 6))
-            }
-            CMP_IND_Y => {
-                self.cpu.cmp(self.read_indirect_indexed(operands));
-                Ok((
-                    2,
-                    5 + if Nes::page_crossed_ind_idx(&self, operands, self.cpu.y) {
-                        1
-                    } else {
-                        0
-                    },
-                ))
-            }
-            CPX_I => {
-                self.cpu.cpx(operands[0]);
-                Ok((2, 2))
-            }
-            CPX_ZP => {
-                self.cpu.cpx(self.read_zp(&operands));
-                Ok((2, 3))
-            }
-            CPX_ABS => {
-                self.cpu.cpx(self.read_abs(operands));
-                Ok((3, 4))
-            }
-            CPY_I => {
-                self.cpu.cpy(operands[0]);
-                Ok((2, 2))
-            }
-            CPY_ZP => {
-                self.cpu.cpy(self.read_zp(&operands));
-                Ok((2, 3))
-            }
-            CPY_ABS => {
-                self.cpu.cpy(self.read_abs(operands));
-                Ok((3, 4))
-            }
+            // CMP
+            CMP_I => cpu_func!(cmp, read_immediate, 2, 2),
+            CMP_ZP => cpu_func!(cmp, read_zp, 2, 3),
+            CMP_ZP_X => cpu_func!(cmp, read_zp_x, 2, 4),
+            CMP_ABS => cpu_func!(cmp, read_abs, 3, 4),
+            CMP_ABS_X => cpu_func!(cmp, read_abs_x, pc_x, 3, 4, 5),
+            CMP_ABS_Y => cpu_func!(cmp, read_abs_y, pc_y, 3, 4, 5),
+            CMP_IND_X => cpu_func!(cmp, read_indexed_indirect, 2, 6),
+            CMP_IND_Y => cpu_func!(cmp, read_indirect_indexed, pc_ind, 2, 5, 6),
+            // CPX
+            CPX_I => cpu_func!(cpx, read_immediate, 2, 2),
+            CPX_ZP => cpu_func!(cpx, read_zp, 2, 3),
+            CPX_ABS => cpu_func!(cpx, read_abs, 3, 4),
+            // CPX
+            CPY_I => cpu_func!(cpy, read_immediate, 2, 2),
+            CPY_ZP => cpu_func!(cpy, read_zp, 2, 3),
+            CPY_ABS => cpu_func!(cpy, read_abs, 3, 4),
             DEC_ZP => {
                 let res = self.cpu.dec(self.read_zp(&operands));
-                self.write_zp(operands[0], res);
+                self.write_zp(operands, res);
                 Ok((2, 5))
             }
             DEC_ZP_X => {
                 let res = self.cpu.dec(self.read_zp_x(&operands));
-                self.write_zp_x(operands[0], res);
+                self.write_zp_x(operands, res);
                 Ok((2, 6))
             }
             DEC_ABS => {
@@ -456,12 +257,12 @@ impl Nes {
             }
             INC_ZP => {
                 let val = self.cpu.inc(self.read_zp(&operands));
-                self.write_zp(operands[0], val);
+                self.write_zp(operands, val);
                 Ok((2, 5))
             }
             INC_ZP_X => {
                 let val = self.cpu.inc(self.read_zp_x(&operands));
-                self.write_zp_x(operands[0], val);
+                self.write_zp_x(operands, val);
                 Ok((2, 6))
             }
             INC_ABS => {
@@ -509,12 +310,12 @@ impl Nes {
             }
             LSR_ZP => {
                 let v = self.cpu.lsr(self.read_zp(&operands));
-                self.write_zp(operands[0], v);
+                self.write_zp(operands, v);
                 Ok((2, 5))
             }
             LSR_ZP_X => {
                 let v = self.cpu.lsr(self.read_zp_x(&operands));
-                self.write_zp_x(operands[0], v);
+                self.write_zp_x(operands, v);
                 Ok((2, 6))
             }
             LSR_ABS => {
@@ -594,6 +395,13 @@ impl Nes {
     fn read_immediate(&self, addr: &[u8]) -> u8 {
         addr[0]
     }
+    #[inline]
+    fn read_a(&self, _addr: &[u8]) -> u8 {
+        self.cpu.a
+    }
+    fn write_a(&mut self, _addr: &[u8], value: u8) {
+        self.cpu.a = value;
+    }
     /// Read a single byte from a zero page address.
     /// ```
     /// let nes = yane::Nes::new();
@@ -605,16 +413,16 @@ impl Nes {
     /// Write a single byte to memory using zero page addressing.
     /// ```
     /// let mut nes = yane::Nes::new();
-    /// nes.write_zp(0x18, 0x29);
+    /// nes.write_zp(&[0x18], 0x29);
     /// assert_eq!(nes.read_zp(&[0x18]), 0x29);
     /// ```
-    pub fn write_zp(&mut self, addr: u8, val: u8) {
-        self.mem[addr as usize] = val;
+    pub fn write_zp(&mut self, addr: &[u8], val: u8) {
+        self.mem[addr[0] as usize] = val;
     }
     /// Read a single byte using zero page addressing with X register offset.
     /// ```
     /// let mut nes = yane::Nes::new();
-    /// nes.write_zp(0x18, 0x45);
+    /// nes.write_zp(&[0x18], 0x45);
     /// nes.cpu.ldx(0x08);
     /// assert_eq!(nes.read_zp_x(&[0x10]), 0x45);
     /// ```
@@ -624,12 +432,12 @@ impl Nes {
     /// Read a single byte using zero page addressing with Y register offset.
     /// ```
     /// let mut nes = yane::Nes::new();
-    /// nes.write_zp(0x18, 0x45);
+    /// nes.write_zp(&[0x18], 0x45);
     /// nes.cpu.ldy(0x08);
-    /// assert_eq!(nes.read_zp_y(0x10), 0x45);
+    /// assert_eq!(nes.read_zp_y(&[0x10]), 0x45);
     /// ```
-    pub fn read_zp_y(&self, addr: u8) -> u8 {
-        self.read_zp_offset(addr, self.cpu.y)
+    pub fn read_zp_y(&self, addr: &[u8]) -> u8 {
+        self.read_zp_offset(addr[0], self.cpu.y)
     }
     // Read a single byte using zero page offset addressing
     fn read_zp_offset(&self, addr: u8, offset: u8) -> u8 {
@@ -639,11 +447,11 @@ impl Nes {
     /// ```
     /// let mut nes = yane::Nes::new();
     /// nes.cpu.x = 0x10;
-    /// nes.write_zp_x(0x18, 0x05);
+    /// nes.write_zp_x(&[0x18], 0x05);
     /// assert_eq!(nes.read_zp(&[0x28]), 0x05);
     /// ```
-    pub fn write_zp_x(&mut self, addr: u8, value: u8) {
-        self.write_zp_offset(addr, self.cpu.x, value)
+    pub fn write_zp_x(&mut self, addr: &[u8], value: u8) {
+        self.write_zp_offset(addr[0], self.cpu.x, value)
     }
     // Write a single byte using zero page offset addressing
     fn write_zp_offset(&mut self, addr: u8, offset: u8, value: u8) {
@@ -1628,8 +1436,13 @@ mod tests {
         if (actual_addr == addr[0] || actual_addr == addr[0].wrapping_sub(1)) && addr[1] == 0 {
             addr_two = addr_two.wrapping_add(2);
         }
-        nes.mem[addr_two.wrapping_add(nes.cpu.x) as usize] = addr[0];
-        nes.mem[addr_two.wrapping_add(nes.cpu.x).wrapping_add(1) as usize] = addr[1];
+        let final_addr = addr_two.wrapping_add(nes.cpu.x) as u16;
+        println!(
+            "Setting indirect address {:#X} to {:#X} and {:#X}",
+            final_addr, addr[0], addr[1]
+        );
+        nes.mem[final_addr as usize] = addr[0];
+        nes.mem[final_addr.wrapping_add(1) as usize] = addr[1];
         [addr_two]
     }
     fn first_byte(addr: u16) -> u8 {
