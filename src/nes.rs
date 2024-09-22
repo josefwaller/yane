@@ -246,6 +246,7 @@ impl Nes {
             ORA_ABS_Y => cpu_func!(ora, read_abs_y, pc_y, 3, 4, 5),
             ORA_IND_X => cpu_func!(ora, read_indexed_indirect, 2, 6),
             ORA_IND_Y => cpu_func!(ora, read_indirect_indexed, pc_ind, 2, 5, 6),
+            // Pushing to stack
             PHA => {
                 self.push_to_stack(self.cpu.a);
                 Ok((1, 3))
@@ -254,6 +255,7 @@ impl Nes {
                 self.push_to_stack(self.cpu.s_r.to_byte());
                 Ok((1, 3))
             }
+            // Pulling from stack
             PLA => {
                 self.cpu.a = self.pull_from_stack();
                 Ok((1, 3))
@@ -263,6 +265,7 @@ impl Nes {
                 self.cpu.s_r.from_byte(v);
                 Ok((1, 3))
             }
+            // ROL
             ROL_A => cpu_write_func!(rol, read_a, write_a, 1, 2),
             ROL_ZP => cpu_write_func!(rol, read_zp, write_zp, 2, 5),
             ROL_ZP_X => cpu_write_func!(rol, read_zp_x, write_zp_x, 2, 6),
@@ -273,6 +276,13 @@ impl Nes {
             ROR_ZP_X => cpu_write_func!(ror, read_zp_x, write_zp_x, 2, 6),
             ROR_ABS => cpu_write_func!(ror, read_abs, write_abs, 3, 6),
             ROR_ABS_X => cpu_write_func!(ror, read_abs_x, write_abs_x, 3, 7),
+            RTI => {
+                self.cpu.p_c =
+                    (self.pull_from_stack() as u16) + ((self.pull_from_stack() as u16) << 8);
+                let v = self.pull_from_stack();
+                self.cpu.s_r.from_byte(v);
+                Ok((1, 6))
+            }
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -479,7 +489,7 @@ mod tests {
     use std::cmp::{max, min};
 
     use super::Nes;
-    use crate::opcodes::*;
+    use crate::{opcodes::*, StatusRegister};
     use assert_hex::assert_eq_hex;
 
     #[test]
@@ -1324,6 +1334,42 @@ mod tests {
         ror_test!(test_zp_x, ROR_ZP_X, get_addr_zp_x, set_addr_zp_x, 2, 6);
         ror_test!(test_abs, ROR_ABS, get_addr_abs, set_addr_abs, 3, 6);
         ror_test!(test_abs_x, ROR_ABS_X, get_addr_abs_x, set_addr_abs_x, 3, 7);
+    }
+    #[test_case::test_case(0x1018, true, true, true, true, true, true, true ; "happy case")]
+    #[test_case::test_case(0xFFFF, false, false, false, false, false, false, false ; "happy case 2")]
+    #[test_case::test_case(0x0000, true, false, true, false, true, false, true ; "happy case 3")]
+    fn test_rti(p_c: u16, c: bool, z: bool, i: bool, d: bool, b: bool, v: bool, n: bool) {
+        let mut nes = Nes::new();
+        nes.cpu.p_c = p_c;
+        nes.cpu.s_r = StatusRegister {
+            c,
+            z,
+            i,
+            d,
+            b,
+            v,
+            n,
+        };
+        assert_eq!(nes.decode_and_execute(&[BRK]), Ok((1, 7)));
+        nes.cpu.p_c = random::<u16>();
+        nes.cpu.s_r = StatusRegister {
+            c: !c,
+            z: !z,
+            i: !i,
+            d: !d,
+            b: !b,
+            v: !v,
+            n: !n,
+        };
+        assert_eq!(nes.decode_and_execute(&[RTI]), Ok((1, 6)));
+        assert_eq_hex!(nes.cpu.p_c, p_c);
+        assert_c(&nes, c);
+        assert_z(&nes, z);
+        assert_i(&nes, i);
+        assert_d(&nes, d);
+        assert_b(&nes, b);
+        assert_v(&nes, v);
+        assert_n(&nes, n);
     }
     // Utility functions to get and setsome addresses in memory set to the value given
     fn get_addr_zp(nes: &Nes, addr: &[u8]) -> u8 {

@@ -238,3 +238,5 @@ pub const ROR_ZP_X: u8 = 0x76;
 pub const ROR_ABS: u8 = 0x6E;
 /// Rotate Right Absolute X
 pub const ROR_ABS_X: u8 = 0x7E;
+/// Return from interrupt
+pub const RTI: u8 = 0x40;
