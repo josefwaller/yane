@@ -250,3 +250,6 @@ pub const SBC_ABS_X: u8 = 0xFD;
 pub const SBC_ABS_Y: u8 = 0xF9;
 pub const SBC_IND_X: u8 = 0xE1;
 pub const SBC_IND_Y: u8 = 0xF1;
+pub const SEC: u8 = 0x38;
+pub const SED: u8 = 0xF8;
+pub const SEI: u8 = 0x78;

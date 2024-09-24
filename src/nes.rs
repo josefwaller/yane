@@ -69,6 +69,12 @@ impl Nes {
                 Ok(($bytes, $cycles))
             }};
         }
+        macro_rules! flag_func {
+            ($flag: ident, $val: expr) => {{
+                self.cpu.s_r.$flag = $val;
+                Ok((1, 2))
+            }};
+        }
         match *opcode {
             // LDA
             LDA_I => cpu_func!(lda, read_immediate, 2, 2),
@@ -141,22 +147,10 @@ impl Nes {
                 Ok((1, 7))
             }
             // Various flag clearing functions
-            CLC => {
-                self.cpu.s_r.c = false;
-                Ok((1, 2))
-            }
-            CLD => {
-                self.cpu.s_r.d = false;
-                Ok((1, 2))
-            }
-            CLI => {
-                self.cpu.s_r.i = false;
-                Ok((1, 2))
-            }
-            CLV => {
-                self.cpu.s_r.v = false;
-                Ok((1, 2))
-            }
+            CLC => flag_func!(c, false),
+            CLD => flag_func!(d, false),
+            CLI => flag_func!(i, false),
+            CLV => flag_func!(v, false),
             // CMP
             CMP_I => cpu_func!(cmp, read_immediate, 2, 2),
             CMP_ZP => cpu_func!(cmp, read_zp, 2, 3),
@@ -292,6 +286,9 @@ impl Nes {
             SBC_ABS_Y => cpu_func!(sbc, read_abs_y, pc_y, 3, 4, 5),
             SBC_IND_X => cpu_func!(sbc, read_indexed_indirect, 2, 6),
             SBC_IND_Y => cpu_func!(sbc, read_indirect_indexed, pc_ind, 2, 5, 6),
+            SEC => flag_func!(c, true),
+            SEI => flag_func!(i, true),
+            SED => flag_func!(d, true),
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -454,7 +451,8 @@ impl Nes {
     /// ```
     pub fn read_indirect_indexed(&self, addr: &[u8]) -> u8 {
         let first_addr = addr[0] as usize;
-        let second_addr = (self.mem[first_addr] as u16 + ((self.mem[first_addr + 1] as u16) << 8))
+        let second_addr = (self.mem[first_addr] as u16
+            + ((self.mem[first_addr.wrapping_add(1)] as u16) << 8))
             .wrapping_add(self.cpu.y as u16);
         return self.mem[second_addr as usize];
     }
@@ -1454,6 +1452,22 @@ mod tests {
         sbc_test!(test_ind_y, SBC_IND_Y, set_addr_ind_y, 2, 5);
         sbc_test!(test_ind_y_pc, SBC_IND_Y, set_addr_ind_y_pc, 2, 6);
     }
+    macro_rules! test_set {
+        ($name: ident, $opcode: ident, $flag: ident) => {
+            #[test]
+            fn $name() {
+                let mut nes = Nes::new();
+                assert_eq!(nes.decode_and_execute(&[$opcode]), Ok((1, 2)));
+                assert_eq!(nes.cpu.s_r.$flag, true);
+                // Test it stays true
+                assert_eq!(nes.decode_and_execute(&[$opcode]), Ok((1, 2)));
+                assert_eq!(nes.cpu.s_r.$flag, true);
+            }
+        };
+    }
+    test_set!(test_sec, SEC, c);
+    test_set!(test_sed, SED, d);
+    test_set!(test_sei, SEI, i);
     // Utility functions to get and setsome addresses in memory set to the value given
     fn get_addr_zp(nes: &Nes, addr: &[u8]) -> u8 {
         nes.mem[addr[0] as usize]
@@ -1566,6 +1580,10 @@ mod tests {
         if (addr_two == addr[0] || addr_two == addr[0].wrapping_sub(1)) && addr[1] == 0 {
             addr_two = addr_two.wrapping_add(2);
         }
+        println!(
+            "Storing memory address [{:#X}, {:#X}] at {:#X}",
+            addr[0], addr[1], addr_two
+        );
         nes.mem[addr_two as usize] = addr[0];
         nes.mem[addr_two.wrapping_add(1) as usize] = addr[1];
         [addr_two]
