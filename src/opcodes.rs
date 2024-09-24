@@ -242,3 +242,11 @@ pub const ROR_ABS_X: u8 = 0x7E;
 pub const RTI: u8 = 0x40;
 /// Return from subroutine
 pub const RTS: u8 = 0x60;
+pub const SBC_I: u8 = 0xE9;
+pub const SBC_ZP: u8 = 0xE5;
+pub const SBC_ZP_X: u8 = 0xF5;
+pub const SBC_ABS: u8 = 0xED;
+pub const SBC_ABS_X: u8 = 0xFD;
+pub const SBC_ABS_Y: u8 = 0xF9;
+pub const SBC_IND_X: u8 = 0xE1;
+pub const SBC_IND_Y: u8 = 0xF1;

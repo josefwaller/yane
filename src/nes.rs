@@ -284,6 +284,14 @@ impl Nes {
                 self.cpu.p_c = self.pull_from_stack_u16();
                 Ok((1, 6))
             }
+            SBC_I => cpu_func!(sbc, read_immediate, 2, 2),
+            SBC_ZP => cpu_func!(sbc, read_zp, 2, 3),
+            SBC_ZP_X => cpu_func!(sbc, read_zp_x, 2, 4),
+            SBC_ABS => cpu_func!(sbc, read_abs, 3, 4),
+            SBC_ABS_X => cpu_func!(sbc, read_abs_x, pc_x, 3, 4, 5),
+            SBC_ABS_Y => cpu_func!(sbc, read_abs_y, pc_y, 3, 4, 5),
+            SBC_IND_X => cpu_func!(sbc, read_indexed_indirect, 2, 6),
+            SBC_IND_Y => cpu_func!(sbc, read_indirect_indexed, pc_ind, 2, 5, 6),
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -1395,6 +1403,56 @@ mod tests {
         // Wrapping add here since we should save 1 byte before the next address
         // And since the JSR command is 3 bytes long, we want to end up 2 bytes ahead of where we left
         assert_eq_hex!(nes.cpu.p_c, p_c.wrapping_add(2));
+    }
+    mod sbc {
+        use super::*;
+        use test_case::test_case;
+
+        macro_rules! sbc_test {
+            ($name: ident, $opcode: ident, $get_addr: ident, $bytes: expr, $cycles: expr) => {
+                #[test_case(0x0C, 0x01, 0x0B, true, true, false, false, false ; "simple happy case")]
+                #[test_case(0xFF, 0xFF, 0x00, true, true, true, false, false ; "subtracts to 0")]
+                #[test_case(0xAB, 0x00, 0xAB, true, true, false, false, true ; "is unchanged")]
+                #[test_case(0x05, 0x0A, 0xFB, true, false, false, false, true ; "is negative")]
+                #[test_case(0x00, 0x7F, 0x81, true, false, false, false, true ; "is negative 127")]
+                fn $name(
+                    pre_a: u8,
+                    value: u8,
+                    post_a: u8,
+                    pre_c: bool,
+                    c: bool,
+                    z: bool,
+                    v: bool,
+                    n: bool,
+                ) {
+                    let mut nes = Nes::new();
+                    nes.cpu.a = pre_a;
+                    nes.cpu.s_r.c = pre_c;
+                    let addr = $get_addr(&mut nes, value);
+                    assert_eq!(
+                        nes.decode_and_execute(&prepend_with_opcode($opcode, &addr)),
+                        Ok(($bytes, $cycles))
+                    );
+                    assert_eq_hex!(nes.cpu.a, post_a);
+                    assert_c(&nes, c);
+                    assert_z(&nes, z);
+                    assert_v(&nes, v);
+                    assert_n(&nes, n);
+                }
+            };
+        }
+
+        sbc_test!(test_i, SBC_I, set_addr_i, 2, 2);
+        sbc_test!(test_zp, SBC_ZP, set_addr_zp, 2, 3);
+        sbc_test!(test_zp_x, SBC_ZP_X, set_addr_zp_x, 2, 4);
+        sbc_test!(test_zp_abs, SBC_ABS, set_addr_abs, 3, 4);
+        sbc_test!(test_zp_abs_x, SBC_ABS_X, set_addr_abs_x, 3, 4);
+        sbc_test!(test_zp_abs_x_pc, SBC_ABS_X, set_addr_abs_x_pc, 3, 5);
+        sbc_test!(test_zp_abs_y, SBC_ABS_Y, set_addr_abs_y, 3, 4);
+        sbc_test!(test_zp_abs_y_pc, SBC_ABS_Y, set_addr_abs_y_pc, 3, 5);
+        sbc_test!(test_ind_x, SBC_IND_X, set_addr_ind_x, 2, 6);
+        sbc_test!(test_ind_y, SBC_IND_Y, set_addr_ind_y, 2, 5);
+        sbc_test!(test_ind_y_pc, SBC_IND_Y, set_addr_ind_y_pc, 2, 6);
     }
     // Utility functions to get and setsome addresses in memory set to the value given
     fn get_addr_zp(nes: &Nes, addr: &[u8]) -> u8 {

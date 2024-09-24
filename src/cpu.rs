@@ -77,7 +77,11 @@ impl Cpu {
             .wrapping_add(if self.s_r.c { 1 } else { 0 });
         self.s_r.z = if self.a == 0 { true } else { false };
         // Way of checking for (unsigned) overflow
-        self.s_r.c = if self.a < value { true } else { false };
+        self.s_r.c = if self.a < i || (self.a == i && value > 0) {
+            true
+        } else {
+            false
+        };
         // Way of checking for (signed) overflow
         // If I and value are the same sign (i.e. both positive/negative) but the result is a different sign, overflow has occured
         self.s_r.v = if (i & 0x80) == (value & 0x80) && (i & 0x80) != (self.a & 0x80) {
@@ -317,6 +321,16 @@ impl Cpu {
         self.s_r.z = new_val == 0;
         self.s_r.n = (new_val & 0x80) != 0;
         new_val
+    }
+    /// Subtract a number from the accumulator with the NOT of the C bit.
+    /// If C is 0, then it will subtract `value` + 1.
+    /// * C is cleared if there is overflow
+    /// * Z is set if A is 0
+    /// * V is set if the sign bit is incorrect (i.e. if signed overflow has occurred)
+    /// * N is set if the MSB is set
+    pub fn sbc(&mut self, value: u8) {
+        // Two's complement addition
+        self.adc(value ^ 0xFF)
     }
     // Set the status register's flags when loading (LDA, LDX, or LDY)
     fn set_load_flags(&mut self, value: u8) {
