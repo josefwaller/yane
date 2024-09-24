@@ -223,9 +223,7 @@ impl Nes {
             }
             JSR => {
                 // Push PC to stack
-                let to_push = Nes::to_bytes(self.cpu.p_c.wrapping_add(2));
-                self.push_to_stack(to_push[0]);
-                self.push_to_stack(to_push[1]);
+                self.push_to_stack_u16(self.cpu.p_c.wrapping_add(2));
                 // Set new PC from instruction
                 self.cpu.p_c = Nes::get_absolute_addr(operands) as u16;
                 Ok((3, 6))
@@ -277,10 +275,13 @@ impl Nes {
             ROR_ABS => cpu_write_func!(ror, read_abs, write_abs, 3, 6),
             ROR_ABS_X => cpu_write_func!(ror, read_abs_x, write_abs_x, 3, 7),
             RTI => {
-                self.cpu.p_c =
-                    (self.pull_from_stack() as u16) + ((self.pull_from_stack() as u16) << 8);
+                self.cpu.p_c = self.pull_from_stack_u16();
                 let v = self.pull_from_stack();
                 self.cpu.s_r.from_byte(v);
+                Ok((1, 6))
+            }
+            RTS => {
+                self.cpu.p_c = self.pull_from_stack_u16();
                 Ok((1, 6))
             }
             _ => {
@@ -477,6 +478,13 @@ impl Nes {
     fn pull_from_stack(&mut self) -> u8 {
         self.cpu.s_p += 1;
         self.mem[0x100 + self.cpu.s_p as usize]
+    }
+    fn push_to_stack_u16(&mut self, v: u16) {
+        self.push_to_stack((v >> 8) as u8);
+        self.push_to_stack((v & 0xFF) as u8);
+    }
+    fn pull_from_stack_u16(&mut self) -> u16 {
+        (self.pull_from_stack() as u16) + ((self.pull_from_stack() as u16) << 8)
     }
     fn to_bytes(v: u16) -> [u8; 2] {
         [(v & 0xFF) as u8, (v >> 8) as u8]
@@ -1137,8 +1145,8 @@ mod tests {
     mod jsr {
         use super::*;
         use test_case::test_case;
-        #[test_case(0x1234, 0x67, 0x45, 0x4567, 0x36, 0x12; "happy case")]
-        #[test_case(0xFFFF, 0x00, 0x00, 0x0000, 0x01, 0x00; "should wrap")]
+        #[test_case(0x1234, 0x67, 0x45, 0x4567, 0x12, 0x36; "happy case")]
+        #[test_case(0xFFFF, 0x00, 0x00, 0x0000, 0x00, 0x01; "should wrap")]
         fn test_absolute(pc: u16, op_one: u8, op_two: u8, post_pc: u16, mem_one: u8, mem_two: u8) {
             let mut nes = Nes::new();
             nes.cpu.p_c = pc;
@@ -1370,6 +1378,23 @@ mod tests {
         assert_b(&nes, b);
         assert_v(&nes, v);
         assert_n(&nes, n);
+    }
+    #[test_case::test_case(0x1234, 0x5678 ; "happy case")]
+    fn test_rts(p_c: u16, addr: u16) {
+        let mut nes = Nes::new();
+        nes.cpu.p_c = p_c;
+        assert_eq!(
+            nes.decode_and_execute(&prepend_with_opcode(
+                JSR,
+                &[first_byte(addr), second_byte(addr)]
+            )),
+            Ok((3, 6))
+        );
+        assert_eq_hex!(nes.cpu.p_c, addr);
+        assert_eq!(nes.decode_and_execute(&[RTS]), Ok((1, 6)));
+        // Wrapping add here since we should save 1 byte before the next address
+        // And since the JSR command is 3 bytes long, we want to end up 2 bytes ahead of where we left
+        assert_eq_hex!(nes.cpu.p_c, p_c.wrapping_add(2));
     }
     // Utility functions to get and setsome addresses in memory set to the value given
     fn get_addr_zp(nes: &Nes, addr: &[u8]) -> u8 {

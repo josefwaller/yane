@@ -240,3 +240,5 @@ pub const ROR_ABS: u8 = 0x6E;
 pub const ROR_ABS_X: u8 = 0x7E;
 /// Return from interrupt
 pub const RTI: u8 = 0x40;
+/// Return from subroutine
+pub const RTS: u8 = 0x60;
