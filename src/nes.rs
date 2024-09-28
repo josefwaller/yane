@@ -83,6 +83,14 @@ impl Nes {
                 Ok(($bytes, $cycles))
             }};
         }
+        macro_rules! transfer_func {
+            ($from_reg: ident, $to_reg: ident) => {{
+                self.cpu.$to_reg = self.cpu.$from_reg;
+                self.cpu.s_r.z = self.cpu.$to_reg == 0;
+                self.cpu.s_r.n = (self.cpu.$to_reg & 0x80) != 0;
+                Ok((1, 2))
+            }};
+        }
         match *opcode {
             // LDA
             LDA_I => cpu_func!(lda, read_immediate, 2, 2),
@@ -310,6 +318,12 @@ impl Nes {
             STY_ZP => store_func!(y, write_zp, 2, 3),
             STY_ZP_X => store_func!(y, write_zp_x, 2, 4),
             STY_ABS => store_func!(y, write_abs, 3, 4),
+            TAX => transfer_func!(a, x),
+            TAY => transfer_func!(a, y),
+            TSX => transfer_func!(s_p, x),
+            TXA => transfer_func!(x, a),
+            TXS => transfer_func!(x, s_p),
+            TYA => transfer_func!(y, a),
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -1570,6 +1584,32 @@ mod tests {
         test_store!(test_zp_x, STY_ZP_X, y, get_addr_zp_x, set_addr_zp_x, 2, 4);
         test_store!(test_abs, STY_ABS, y, get_addr_abs, set_addr_abs, 3, 4);
     }
+    mod tranfer {
+        use super::*;
+        use test_case::test_case;
+        macro_rules! test_transfer {
+            ($name: ident, $opcode: ident, $from_reg: ident, $to_reg: ident) => {
+                #[test_case(0x18, false, false ; "happy case")]
+                #[test_case(0x00, true, false ; "sets Z")]
+                #[test_case(0x80, false, true ; "sets N")]
+                fn $name(v: u8, z: bool, n: bool) {
+                    let mut nes = Nes::new();
+                    nes.cpu.$from_reg = v;
+                    assert_eq!(nes.decode_and_execute(&[$opcode]), Ok((1, 2)));
+                    assert_eq_hex!(nes.cpu.$to_reg, v);
+                    assert_eq_hex!(nes.cpu.$from_reg, v);
+                    assert_z(&nes, z);
+                    assert_n(&nes, n);
+                }
+            };
+        }
+        test_transfer!(test_tax, TAX, a, x);
+        test_transfer!(test_tay, TAY, a, y);
+        test_transfer!(test_tsx, TSX, s_p, x);
+        test_transfer!(test_txa, TXA, x, a);
+        test_transfer!(test_txs, TXS, x, s_p);
+        test_transfer!(test_tya, TYA, y, a);
+    }
     // Utility functions to get and setsome addresses in memory set to the value given
     fn get_addr_zp(nes: &Nes, addr: &[u8]) -> u8 {
         nes.mem[addr[0] as usize]
@@ -1688,6 +1728,9 @@ mod tests {
         let mut addr_two = random::<u8>();
         if (addr_two == addr[0] || addr_two == addr[0].wrapping_sub(1)) && addr[1] == 0 {
             addr_two = addr_two.wrapping_add(2);
+        }
+        if addr_two == 0xFF {
+            addr_two = 0x00;
         }
         println!(
             "Storing memory address [{:#X}, {:#X}] at {:#X}",

@@ -278,9 +278,27 @@ pub const STA_ABS_Y: u8 = 0x99;
 pub const STA_IND_X: u8 = 0x81;
 /// Store Accumulator Indirect Indexed
 pub const STA_IND_Y: u8 = 0x91;
+/// Store X Zero Page
 pub const STX_ZP: u8 = 0x86;
+/// Store X Zero Page Y
 pub const STX_ZP_Y: u8 = 0x96;
+/// Store X Absolute
 pub const STX_ABS: u8 = 0x8E;
+/// Store Y Zero Page
 pub const STY_ZP: u8 = 0x84;
+/// Store Y Zero Page X
 pub const STY_ZP_X: u8 = 0x94;
+/// Store Y Absolute
 pub const STY_ABS: u8 = 0x8C;
+/// Transfer A to X
+pub const TAX: u8 = 0xAA;
+/// Transfer A to Y
+pub const TAY: u8 = 0xA8;
+/// Transfer Stack Pointer to X
+pub const TSX: u8 = 0xBA;
+/// Transfer X to A
+pub const TXA: u8 = 0x8A;
+/// Transfer X to Stack Pointer
+pub const TXS: u8 = 0x9A;
+/// Transfer Y to A
+pub const TYA: u8 = 0x98;
