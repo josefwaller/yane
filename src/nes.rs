@@ -69,10 +69,18 @@ impl Nes {
                 Ok(($bytes, $cycles))
             }};
         }
+        // Macro to set or unset a CPU flag
         macro_rules! flag_func {
             ($flag: ident, $val: expr) => {{
                 self.cpu.s_r.$flag = $val;
                 Ok((1, 2))
+            }};
+        }
+        // Macro to write a CPU register to memory
+        macro_rules! store_func {
+            ($reg: ident, $write_addr: ident, $bytes: expr, $cycles: expr) => {{
+                self.$write_addr(operands, self.cpu.s_r.$reg);
+                Ok(($bytes, $cycles))
             }};
         }
         match *opcode {
@@ -1413,6 +1421,8 @@ mod tests {
                 #[test_case(0xAB, 0x00, 0xAB, true, true, false, false, true ; "is unchanged")]
                 #[test_case(0x05, 0x0A, 0xFB, true, false, false, false, true ; "is negative")]
                 #[test_case(0x00, 0x7F, 0x81, true, false, false, false, true ; "is negative 127")]
+                #[test_case(0x80, 0x00, 0x7F, false, true, false, true, false ; "happy case 2")]
+                #[test_case(0xC0, 0x40, 0x7F, false, true, false, true, false; "test")]
                 fn $name(
                     pre_a: u8,
                     value: u8,
