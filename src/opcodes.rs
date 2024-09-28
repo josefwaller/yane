@@ -278,3 +278,9 @@ pub const STA_ABS_Y: u8 = 0x99;
 pub const STA_IND_X: u8 = 0x81;
 /// Store Accumulator Indirect Indexed
 pub const STA_IND_Y: u8 = 0x91;
+pub const STX_ZP: u8 = 0x86;
+pub const STX_ZP_Y: u8 = 0x96;
+pub const STX_ABS: u8 = 0x8E;
+pub const STY_ZP: u8 = 0x84;
+pub const STY_ZP_X: u8 = 0x94;
+pub const STY_ABS: u8 = 0x8C;

@@ -304,6 +304,12 @@ impl Nes {
             STA_ABS_Y => store_func!(a, write_abs_y, 3, 5),
             STA_IND_X => store_func!(a, write_indexed_indirect, 2, 6),
             STA_IND_Y => store_func!(a, write_indirect_indexed, 2, 6),
+            STX_ZP => store_func!(x, write_zp, 2, 3),
+            STX_ZP_Y => store_func!(x, write_zp_y, 2, 4),
+            STX_ABS => store_func!(x, write_abs, 3, 4),
+            STY_ZP => store_func!(y, write_zp, 2, 3),
+            STY_ZP_X => store_func!(y, write_zp_x, 2, 4),
+            STY_ABS => store_func!(y, write_abs, 3, 4),
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -374,6 +380,10 @@ impl Nes {
     /// ```
     pub fn write_zp_x(&mut self, addr: &[u8], value: u8) {
         self.write_zp_offset(addr[0], self.cpu.x, value)
+    }
+    /// Write a single byte using zero page addressing with Y register offset
+    pub fn write_zp_y(&mut self, addr: &[u8], value: u8) {
+        self.write_zp_offset(addr[0], self.cpu.y, value)
     }
     // Write a single byte using zero page offset addressing
     fn write_zp_offset(&mut self, addr: u8, offset: u8, value: u8) {
@@ -1546,6 +1556,20 @@ mod tests {
             5
         );
     }
+    mod stx {
+        use super::*;
+        use test_case::test_case;
+        test_store!(test_zp, STX_ZP, x, get_addr_zp, set_addr_zp, 2, 3);
+        test_store!(test_zp_y, STX_ZP_Y, x, get_addr_zp_y, set_addr_zp_y, 2, 4);
+        test_store!(test_abs, STX_ABS, x, get_addr_abs, set_addr_abs, 3, 4);
+    }
+    mod sty {
+        use super::*;
+        use test_case::test_case;
+        test_store!(test_zp, STY_ZP, y, get_addr_zp, set_addr_zp, 2, 3);
+        test_store!(test_zp_x, STY_ZP_X, y, get_addr_zp_x, set_addr_zp_x, 2, 4);
+        test_store!(test_abs, STY_ABS, y, get_addr_abs, set_addr_abs, 3, 4);
+    }
     // Utility functions to get and setsome addresses in memory set to the value given
     fn get_addr_zp(nes: &Nes, addr: &[u8]) -> u8 {
         nes.mem[addr[0] as usize]
@@ -1568,6 +1592,9 @@ mod tests {
     }
     fn get_addr_zp_x(nes: &Nes, value: &[u8]) -> u8 {
         nes.mem[value[0].wrapping_add(nes.cpu.x) as usize]
+    }
+    fn get_addr_zp_y(nes: &Nes, value: &[u8]) -> u8 {
+        nes.mem[value[0].wrapping_add(nes.cpu.y) as usize]
     }
     fn set_addr_abs_offset_no_pc(nes: &mut Nes, value: u8, offset: u8) -> [u8; 2] {
         // Make sure we don't cross a page
