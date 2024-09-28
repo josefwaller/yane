@@ -79,7 +79,7 @@ impl Nes {
         // Macro to write a CPU register to memory
         macro_rules! store_func {
             ($reg: ident, $write_addr: ident, $bytes: expr, $cycles: expr) => {{
-                self.$write_addr(operands, self.cpu.s_r.$reg);
+                self.$write_addr(operands, self.cpu.$reg);
                 Ok(($bytes, $cycles))
             }};
         }
@@ -297,6 +297,13 @@ impl Nes {
             SEC => flag_func!(c, true),
             SEI => flag_func!(i, true),
             SED => flag_func!(d, true),
+            STA_ZP => store_func!(a, write_zp, 2, 3),
+            STA_ZP_X => store_func!(a, write_zp_x, 2, 4),
+            STA_ABS => store_func!(a, write_abs, 3, 4),
+            STA_ABS_X => store_func!(a, write_abs_x, 3, 5),
+            STA_ABS_Y => store_func!(a, write_abs_y, 3, 5),
+            STA_IND_X => store_func!(a, write_indexed_indirect, 2, 6),
+            STA_IND_Y => store_func!(a, write_indirect_indexed, 2, 6),
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
@@ -450,6 +457,12 @@ impl Nes {
         let second_addr = &self.mem[first_addr..(first_addr + 2)];
         return self.read_abs(&second_addr);
     }
+    /// Write a single byte using indexed indirect addressing
+    pub fn write_indexed_indirect(&mut self, addr: &[u8], value: u8) {
+        let first_addr = addr[0].wrapping_add(self.cpu.x) as usize;
+        let second_addr = &self.mem[first_addr..(first_addr + 2)].to_owned();
+        self.write_abs(&second_addr, value);
+    }
     /// Read a single byte from memory using indirect indexed addressing.
     /// A 2 byte value is read from the zero page address `addr`.
     /// The Y value is then added to this value, and the result is used as the little endian address of the actual value.
@@ -463,6 +476,20 @@ impl Nes {
             + ((self.mem[first_addr.wrapping_add(1)] as u16) << 8))
             .wrapping_add(self.cpu.y as u16);
         return self.mem[second_addr as usize];
+    }
+    /// Write a single byte to memory using indirect indexed addressing.
+    /// ```
+    /// let mut nes = yane::Nes::new();
+    /// nes.write_indirect_indexed(&[0x12], 0x34);
+    /// assert_eq!(nes.read_indirect_indexed(&[0x12]), 0x34);
+    /// ```
+    pub fn write_indirect_indexed(&mut self, addr: &[u8], value: u8) {
+        let first_addr = addr[0] as usize;
+        let second_addr = (self.mem[first_addr] as u16
+            + ((self.mem[first_addr.wrapping_add(1)] as u16) << 8))
+            .wrapping_add(self.cpu.y as u16)
+            .to_owned();
+        self.mem[second_addr as usize] = value;
     }
     // Return true if a page is crossed by an operation using the absolute address and offset given
     // addr is in little endian form
@@ -1478,6 +1505,47 @@ mod tests {
     test_set!(test_sec, SEC, c);
     test_set!(test_sed, SED, d);
     test_set!(test_sei, SEI, i);
+    macro_rules! test_store {
+        ($name: ident, $opcode: ident, $reg: ident, $get_addr: ident, $set_addr: ident, $bytes: expr, $cycles: expr) => {
+            #[test_case(0x12 ; "happy case")]
+            fn $name(v: u8) {
+                let mut nes = Nes::new();
+                nes.cpu.$reg = v;
+                // The value we set here doesn't matter, we just want to get the address (and potentially set up X/Y)
+                let addr = $set_addr(&mut nes, 0x00);
+                assert_eq!(
+                    nes.decode_and_execute(&prepend_with_opcode($opcode, &addr)),
+                    Ok(($bytes, $cycles))
+                );
+                assert_eq_hex!($get_addr(&mut nes, &addr), v);
+            }
+        };
+    }
+    mod sta {
+        use super::*;
+        use test_case::test_case;
+        test_store!(test_zp, STA_ZP, a, get_addr_zp, set_addr_zp, 2, 3);
+        test_store!(test_zp_x, STA_ZP_X, a, get_addr_zp_x, set_addr_zp_x, 2, 4);
+        test_store!(test_abs, STA_ABS, a, get_addr_abs, set_addr_abs, 3, 4);
+        test_store!(
+            test_abs_x,
+            STA_ABS_X,
+            a,
+            get_addr_abs_x,
+            set_addr_abs_x,
+            3,
+            5
+        );
+        test_store!(
+            test_abs_y,
+            STA_ABS_Y,
+            a,
+            get_addr_abs_y,
+            set_addr_abs_y,
+            3,
+            5
+        );
+    }
     // Utility functions to get and setsome addresses in memory set to the value given
     fn get_addr_zp(nes: &Nes, addr: &[u8]) -> u8 {
         nes.mem[addr[0] as usize]
@@ -1528,6 +1596,10 @@ mod tests {
     fn get_addr_abs_x(nes: &Nes, addr: &[u8]) -> u8 {
         let a = ((addr[1] as u16) << 8) + addr[0] as u16;
         nes.mem[a.wrapping_add(nes.cpu.x as u16) as usize]
+    }
+    fn get_addr_abs_y(nes: &Nes, addr: &[u8]) -> u8 {
+        let a = ((addr[1] as u16) << 8) + addr[0] as u16;
+        nes.mem[a.wrapping_add(nes.cpu.y as u16) as usize]
     }
     fn set_addr_abs_y(nes: &mut Nes, value: u8) -> [u8; 2] {
         nes.cpu.y = random::<u8>();

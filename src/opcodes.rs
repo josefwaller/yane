@@ -242,14 +242,39 @@ pub const ROR_ABS_X: u8 = 0x7E;
 pub const RTI: u8 = 0x40;
 /// Return from subroutine
 pub const RTS: u8 = 0x60;
+/// Subtract with Carry Immediate
 pub const SBC_I: u8 = 0xE9;
+/// Subtract with Carry Zero Page
 pub const SBC_ZP: u8 = 0xE5;
+/// Subtract with Carry Zero Page X
 pub const SBC_ZP_X: u8 = 0xF5;
+/// Subtract with Carry Absolute
 pub const SBC_ABS: u8 = 0xED;
+/// Subtract with Carry Absolute X
 pub const SBC_ABS_X: u8 = 0xFD;
+/// Subtract with Carry Absolute Y
 pub const SBC_ABS_Y: u8 = 0xF9;
+/// Subtract with Carry Indexed Indirect
 pub const SBC_IND_X: u8 = 0xE1;
+/// Subtract with Carry Indirect Indexed
 pub const SBC_IND_Y: u8 = 0xF1;
+/// Set C flag
 pub const SEC: u8 = 0x38;
+/// Set D flag
 pub const SED: u8 = 0xF8;
+/// Set I flag
 pub const SEI: u8 = 0x78;
+/// Store Accumulator Zero Page
+pub const STA_ZP: u8 = 0x85;
+/// Store Accumulator Zero Page X
+pub const STA_ZP_X: u8 = 0x95;
+/// Store Accumulator Absolute
+pub const STA_ABS: u8 = 0x8D;
+/// Store Accumulator Absolute X
+pub const STA_ABS_X: u8 = 0x9D;
+/// Store Acuumulator Absolute Y
+pub const STA_ABS_Y: u8 = 0x99;
+/// Store Accumulator Indexed Indirect
+pub const STA_IND_X: u8 = 0x81;
+/// Store Accumulator Indirect Indexed
+pub const STA_IND_Y: u8 = 0x91;
