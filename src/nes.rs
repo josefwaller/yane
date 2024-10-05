@@ -77,9 +77,9 @@ impl Nes {
     /// let mut nes = Nes::new();
     /// // Load 0x18 into A
     /// nes.decode_and_execute(&[0xA9, 0x18]);
-    /// // Load the memory at 0x1234 into A
-    /// nes.decode_and_execute(&[0xAE, 0x34, 0x12]);
-    /// // Perform a noop
+    /// // Load the memory at 0x0234 into A
+    /// nes.decode_and_execute(&[0xAE, 0x34, 0x02]);
+    /// // Perform a nop
     /// nes.decode_and_execute(&[0xEA]);
     /// ```
     pub fn decode_and_execute(&mut self, instruction: &[u8]) -> Result<(u16, i64), String> {
@@ -413,8 +413,8 @@ impl Nes {
             unofficial::LAX_ABS => cpu_func!(lax, read_abs, 3, 4),
             unofficial::LAX_ABS_Y => cpu_func!(lax, read_abs_y, 3, 4),
             unofficial::LAX_IND_X => cpu_func!(lax, read_indexed_indirect, 2, 6),
-            unofficial::LAX_IND_Y => cpu_func!(lax, read_indirect_indexed, 2, 5),
-            unofficial::SAX_ZP => store_func!(self.cpu.a & self.cpu.x, write_zp, 2, 4),
+            unofficial::LAX_IND_Y => cpu_func!(lax, read_indirect_indexed, pc_ind, 2, 5, 6),
+            unofficial::SAX_ZP => store_func!(self.cpu.a & self.cpu.x, write_zp, 2, 3),
             unofficial::SAX_ZP_Y => store_func!(self.cpu.a & self.cpu.x, write_zp_y, 2, 4),
             unofficial::SAX_ABS => store_func!(self.cpu.a & self.cpu.x, write_abs, 3, 4),
             unofficial::SAX_IND_X => {
@@ -426,7 +426,7 @@ impl Nes {
             unofficial::DCP_ABS_X => cpu_write_func!(dcp, read_abs_x, write_abs_x, 3, 7),
             unofficial::DCP_ABS_Y => cpu_write_func!(dcp, read_abs_y, write_abs_y, 3, 7),
             unofficial::DCP_IND_X => {
-                cpu_write_func!(dcp, read_indexed_indirect, write_indexed_indirect, 2, 6)
+                cpu_write_func!(dcp, read_indexed_indirect, write_indexed_indirect, 2, 8)
             }
             unofficial::DCP_IND_Y => {
                 cpu_write_func!(dcp, read_indirect_indexed, write_indirect_indexed, 2, 8)
@@ -437,7 +437,7 @@ impl Nes {
             unofficial::ISC_ABS_X => cpu_write_func!(isc, read_abs_x, write_abs_x, 3, 7),
             unofficial::ISC_ABS_Y => cpu_write_func!(isc, read_abs_y, write_abs_y, 3, 7),
             unofficial::ISC_IND_X => {
-                cpu_write_func!(isc, read_indexed_indirect, write_indexed_indirect, 2, 6)
+                cpu_write_func!(isc, read_indexed_indirect, write_indexed_indirect, 2, 8)
             }
             unofficial::ISC_IND_Y => {
                 cpu_write_func!(isc, read_indirect_indexed, write_indirect_indexed, 2, 8)
@@ -448,7 +448,7 @@ impl Nes {
             unofficial::RLA_ABS_X => cpu_write_func!(rla, read_abs_x, write_abs_x, 3, 7),
             unofficial::RLA_ABS_Y => cpu_write_func!(rla, read_abs_y, write_abs_y, 3, 7),
             unofficial::RLA_IND_X => {
-                cpu_write_func!(rla, read_indexed_indirect, write_indexed_indirect, 2, 6)
+                cpu_write_func!(rla, read_indexed_indirect, write_indexed_indirect, 2, 8)
             }
             unofficial::RLA_IND_Y => {
                 cpu_write_func!(rla, read_indirect_indexed, write_indirect_indexed, 2, 8)
@@ -459,7 +459,7 @@ impl Nes {
             unofficial::RRA_ABS_X => cpu_write_func!(rra, read_abs_x, write_abs_x, 3, 7),
             unofficial::RRA_ABS_Y => cpu_write_func!(rra, read_abs_y, write_abs_y, 3, 7),
             unofficial::RRA_IND_X => {
-                cpu_write_func!(rra, read_indexed_indirect, write_indexed_indirect, 2, 6)
+                cpu_write_func!(rra, read_indexed_indirect, write_indexed_indirect, 2, 8)
             }
             unofficial::RRA_IND_Y => {
                 cpu_write_func!(rra, read_indirect_indexed, write_indirect_indexed, 2, 8)
@@ -470,7 +470,7 @@ impl Nes {
             unofficial::SLO_ABS_X => cpu_write_func!(slo, read_abs_x, write_abs_x, 3, 7),
             unofficial::SLO_ABS_Y => cpu_write_func!(slo, read_abs_y, write_abs_y, 3, 7),
             unofficial::SLO_IND_X => {
-                cpu_write_func!(slo, read_indexed_indirect, write_indexed_indirect, 2, 6)
+                cpu_write_func!(slo, read_indexed_indirect, write_indexed_indirect, 2, 8)
             }
             unofficial::SLO_IND_Y => {
                 cpu_write_func!(slo, read_indirect_indexed, write_indirect_indexed, 2, 8)
@@ -481,7 +481,7 @@ impl Nes {
             unofficial::SRE_ABS_X => cpu_write_func!(sre, read_abs_x, write_abs_x, 3, 7),
             unofficial::SRE_ABS_Y => cpu_write_func!(sre, read_abs_y, write_abs_y, 3, 7),
             unofficial::SRE_IND_X => {
-                cpu_write_func!(sre, read_indexed_indirect, write_indexed_indirect, 2, 6)
+                cpu_write_func!(sre, read_indexed_indirect, write_indexed_indirect, 2, 8)
             }
             unofficial::SRE_IND_Y => {
                 cpu_write_func!(sre, read_indirect_indexed, write_indirect_indexed, 2, 8)
@@ -614,7 +614,7 @@ impl Nes {
     /// Read a byte from memory using absolute addressing with X register offset.
     /// ```
     /// let nes = yane::Nes::new();
-    /// nes.read_abs_x(&[0x12, 0x34]);
+    /// nes.read_abs_x(&[0x12, 0x00]);
     /// ```
     pub fn read_abs_x(&self, addr: &[u8]) -> u8 {
         self.read_abs_offset(addr, self.cpu.x)
@@ -622,7 +622,7 @@ impl Nes {
     /// Read a byte from memory using absolute addressing with Y register offset.
     /// ```
     /// let nes = yane::Nes::new();
-    /// nes.read_abs_y(&[0x12, 0x34]);
+    /// nes.read_abs_y(&[0x12, 0x00]);
     /// ```
     pub fn read_abs_y(&self, addr: &[u8]) -> u8 {
         self.read_abs_offset(addr, self.cpu.y)

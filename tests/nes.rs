@@ -42,11 +42,16 @@ fn test_nestest() {
         let c = l[90..].parse::<i64>().unwrap();
         assert_eq!(cycles, c, "Cycles should be {}, is {}", c, cycles);
         println!(
-            "Executing {:#X} {:#X} {:#X} at PC = {:#X}",
+            "Executing {:#X} {:#X} {:#X} at PC = {:#X} (A = {:X}, X = {:X}, Y = {:X}, SR = {:X} = {:b})",
             nes.read_byte(nes.cpu.p_c as usize),
             nes.read_byte(nes.cpu.p_c as usize + 1),
             nes.read_byte(nes.cpu.p_c as usize + 2),
-            nes.cpu.p_c
+            nes.cpu.p_c,
+            nes.cpu.a,
+            nes.cpu.x,
+            nes.cpu.y,
+            nes.cpu.s_r.to_byte(),
+            nes.cpu.s_r.to_byte()
         );
         match nes.step() {
             Ok(c) => cycles += c,

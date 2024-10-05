@@ -33,10 +33,10 @@ impl Cartridge {
         let prg_ram_size = 0x00;
         let chr_ram_size = 0x00;
         let mapper = (bytes[6] >> 4) + (bytes[7] & 0xF0);
-        println!(
-            "Reading an NES file with {:#X} KiB PRG ROM, {:#X} KiB CHG ROM, mapper {:}",
-            prg_rom_size, chr_rom_size, mapper
-        );
+        // println!(
+        //     "Reading an NES file with {:#X} KiB PRG ROM, {:#X} KiB CHG ROM, mapper {:}",
+        //     prg_rom_size, chr_rom_size, mapper
+        // );
         // TODO: Check for trainer and offset by 512 bytes if present
         let mut start = 16;
         let mut end = 16 + prg_rom_size;
@@ -51,12 +51,14 @@ impl Cartridge {
             chr_ram: vec![0; chr_ram_size],
         }
     }
+    /// Read a byte from the cartridge given an address in the CPU's memory space
     pub fn read_byte(&self, addr: usize) -> u8 {
         if addr < 0x8000 {
             return self.prg_ram[(addr - 0x6000) % self.prg_ram.len()];
         }
         self.prg_rom[(addr - 0x8000) as usize % self.prg_rom.len()]
     }
+    /// Write a byte from the cartridge given an address in the CPU's memory space
     pub fn write_byte(&mut self, addr: usize, value: u8) {
         self.prg_ram[addr - 0x6000] = value
     }

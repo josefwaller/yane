@@ -34,6 +34,7 @@ impl StatusRegister {
     /// let mut s = yane::StatusRegister::new();
     /// s.z = true;
     /// s.d = true;
+    /// s.i = false;
     /// assert_eq!(s.to_byte(), 0b00101010);
     /// s.n = true;
     /// s.v = true;
@@ -78,7 +79,6 @@ impl StatusRegister {
         self.z = (byte & 0x02) != 0;
         self.i = (byte & 0x04) != 0;
         self.d = (byte & 0x08) != 0;
-        //self.b = (byte & 0x10) != 0;
         self.v = (byte & 0x40) != 0;
         self.n = (byte & 0x80) != 0;
     }

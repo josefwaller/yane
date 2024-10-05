@@ -127,10 +127,13 @@ impl Cpu {
     /// Return how many cycles are needed by the branching operation.
     pub fn branch_if(&mut self, param: bool, value: u8) -> i64 {
         if param {
-            let pc = self.p_c;
-            self.p_c = self.p_c.wrapping_add(value as u16);
-            return 3 + if (pc & 0xFF00) != (self.p_c & 0xFF00) {
-                0
+            // PC if we don't take the branch
+            let pc = self.p_c.wrapping_add(2);
+            // Value is signed here, so we need to convert to signed values first and then convert back to unsigned
+            self.p_c = (self.p_c as i16).wrapping_add((value as i8) as i16) as u16;
+            // Wrapping add here since we will add 2 bytes after the current instruction
+            return 3 + if (pc & 0xFF00) != (self.p_c.wrapping_add(2) & 0xFF00) {
+                1
             } else {
                 0
             };
