@@ -65,9 +65,9 @@ pub const AND_ABS_X: u8 = 0x3D;
 /// And Absolute Y
 pub const AND_ABS_Y: u8 = 0x39;
 /// And Indexed Indirect
-pub const AND_IND_Y: u8 = 0x21;
+pub const AND_IND_X: u8 = 0x21;
 /// And Indirect Indexed
-pub const AND_IND_X: u8 = 0x31;
+pub const AND_IND_Y: u8 = 0x31;
 /// Arithmetic Shift Left Accumulator
 pub const ASL_A: u8 = 0x0A;
 /// Arithmetic Shift Left Zero Page

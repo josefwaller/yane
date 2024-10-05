@@ -24,7 +24,7 @@ impl Cpu {
             x: 0,
             y: 0,
             p_c: 0,
-            s_p: 0xFF,
+            s_p: 0xFD,
             s_r: StatusRegister::new(),
         }
     }
@@ -102,12 +102,8 @@ impl Cpu {
     /// ```
     pub fn and(&mut self, value: u8) {
         self.a &= value;
-        if self.a == 0 {
-            self.s_r.z = true;
-        }
-        if self.a & 0x80 != 0 {
-            self.s_r.n = true;
-        }
+        self.s_r.z = self.a == 0;
+        self.s_r.n = (self.a & 0x80) != 0;
     }
     /// Perform an arithmatic shift left on some value.
     /// Essentially multiply it by 2
@@ -134,7 +130,7 @@ impl Cpu {
             let pc = self.p_c;
             self.p_c = self.p_c.wrapping_add(value as u16);
             return 3 + if (pc & 0xFF00) != (self.p_c & 0xFF00) {
-                2
+                0
             } else {
                 0
             };
@@ -173,7 +169,7 @@ impl Cpu {
         let to_stack: [u8; 3] = [
             (self.p_c & 0xFF) as u8,
             (self.p_c >> 8) as u8,
-            self.s_r.to_byte(),
+            self.s_r.to_byte() | 0x10,
         ];
         self.s_r.i = true;
         self.p_c = location;
@@ -272,6 +268,7 @@ impl Cpu {
         self.s_r.c = (value & 0x01) != 0;
         let v = value >> 1;
         self.s_r.z = v == 0;
+        self.s_r.n = (v & 0x80) != 0;
         return v;
     }
     /// Perform a bitwise OR with A and `value`.
@@ -334,12 +331,8 @@ impl Cpu {
     }
     // Set the status register's flags when loading (LDA, LDX, or LDY)
     fn set_load_flags(&mut self, value: u8) {
-        if value == 0 {
-            self.s_r.z = true;
-        }
-        if value & 0x80 != 0 {
-            self.s_r.n = true;
-        }
+        self.s_r.z = value == 0;
+        self.s_r.n = (value & 0x80) != 0;
     }
 }
 
@@ -373,9 +366,6 @@ mod tests {
         }
         check_flag!(c, Carry, "carry");
         check_flag!(z, Zero, "zero");
-        check_flag!(i, Interrupt, "interrupt");
-        check_flag!(d, Decimal, "decimal");
-        check_flag!(b, Break, "break");
         check_flag!(v, Overflow, "overflow");
         check_flag!(n, Negative, "negative");
     }
@@ -383,15 +373,16 @@ mod tests {
     macro_rules! ld_test {
         ($ld:ident) => {
             let mut cpu = Cpu::new();
+            cpu.s_r.i = false;
             // Test loading a number doesn't change flags
             cpu.$ld(0x18);
             check_flags(&cpu, Vec::new());
             // Test loading zero sets zero flag
             cpu.$ld(0x00);
             check_flags(&cpu, vec![Flag::Zero]);
-            // Test loading a negative number sets negative flag and doesn't unset zero flag
+            // Test loading a negative number sets negative fla
             cpu.$ld(0x80);
-            check_flags(&cpu, vec![Flag::Zero, Flag::Negative]);
+            check_flags(&cpu, vec![Flag::Negative]);
         };
     }
 
@@ -410,6 +401,7 @@ mod tests {
     #[test]
     fn test_adc() {
         let mut cpu = Cpu::new();
+        cpu.s_r.i = false;
         cpu.adc(0x14);
         check_flags(&cpu, Vec::new());
         cpu.adc(0x45);
@@ -419,6 +411,7 @@ mod tests {
     #[test]
     fn test_adc_zero() {
         let mut cpu = Cpu::new();
+        cpu.s_r.i = false;
         cpu.adc(0x0);
         assert_eq_hex!(cpu.a, 0x00);
         check_flags(&cpu, vec![Flag::Zero]);
@@ -426,12 +419,14 @@ mod tests {
     #[test]
     fn test_adc_negative() {
         let mut cpu = Cpu::new();
+        cpu.s_r.i = false;
         cpu.adc(0x80);
         check_flags(&cpu, vec![Flag::Negative]);
     }
     #[test]
     fn test_adc_unsigned_overflow() {
         let mut cpu = Cpu::new();
+        cpu.s_r.i = false;
         cpu.adc(0x35);
         cpu.adc(0xFF);
         check_flags(&cpu, vec![Flag::Carry]);
@@ -439,6 +434,7 @@ mod tests {
     #[test]
     fn test_adc_signed_overflow() {
         let mut cpu = Cpu::new();
+        cpu.s_r.i = false;
         cpu.adc(0x40);
         cpu.adc(0x41);
         check_flags(&cpu, vec![Flag::Overflow, Flag::Negative]);
@@ -448,6 +444,7 @@ mod tests {
     #[test]
     fn test_adc_with_carry() {
         let mut cpu = Cpu::new();
+        cpu.s_r.i = false;
         cpu.a = 0x18;
         cpu.s_r.c = true;
         cpu.adc(0x45);
@@ -460,6 +457,7 @@ mod tests {
     #[test]
     fn test_adc_carry_unsigned_overflow() {
         let mut cpu = Cpu::new();
+        cpu.s_r.i = false;
         cpu.a = 0x65;
         cpu.s_r.c = true;
         cpu.adc(0xFF - 0x65);

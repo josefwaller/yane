@@ -22,7 +22,7 @@ impl StatusRegister {
         StatusRegister {
             c: false,
             z: false,
-            i: false,
+            i: true,
             d: false,
             b: false,
             v: false,
@@ -78,7 +78,7 @@ impl StatusRegister {
         self.z = (byte & 0x02) != 0;
         self.i = (byte & 0x04) != 0;
         self.d = (byte & 0x08) != 0;
-        self.b = (byte & 0x10) != 0;
+        //self.b = (byte & 0x10) != 0;
         self.v = (byte & 0x40) != 0;
         self.n = (byte & 0x80) != 0;
     }
