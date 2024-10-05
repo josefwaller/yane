@@ -132,6 +132,10 @@ impl Nes {
                 self.$write_addr(operands, self.cpu.$reg);
                 Ok(($bytes, $cycles))
             }};
+            ($value: expr, $write_addr: ident, $bytes: expr, $cycles: expr) => {{
+                self.$write_addr(operands, $value);
+                Ok(($bytes, $cycles))
+            }};
         }
         macro_rules! transfer_func {
             ($from_reg: ident, $to_reg: ident) => {{
@@ -378,6 +382,122 @@ impl Nes {
                 Ok((1, 2))
             }
             TYA => transfer_func!(y, a),
+            // Unofficial opcodes
+            unofficial::ALR_I => {
+                self.cpu.and(operands[0]);
+                self.cpu.a = self.cpu.lsr(self.cpu.a);
+                Ok((2, 2))
+            }
+            unofficial::ANC_I => {
+                self.cpu.and(operands[0]);
+                self.cpu.s_r.c = self.cpu.s_r.n;
+                Ok((2, 2))
+            }
+            unofficial::ARR_I => {
+                self.cpu.and(operands[0]);
+                self.cpu.a = self.cpu.ror(self.cpu.a);
+                self.cpu.s_r.c = (self.cpu.a & 0x40) != 0;
+                self.cpu.s_r.n = ((self.cpu.a & 0x40) != 0) ^ ((self.cpu.a & 0x20) != 0);
+                Ok((2, 2))
+            }
+            unofficial::AXS_I => {
+                let v = self.cpu.a & self.cpu.x;
+                self.cpu.x = (self.cpu.a & self.cpu.x).wrapping_sub(operands[0]);
+                self.cpu.s_r.z = self.cpu.x == 0;
+                self.cpu.s_r.n = (self.cpu.x & 0x80) != 0;
+                self.cpu.s_r.c = v > operands[0];
+                Ok((2, 2))
+            }
+            unofficial::LAX_ZP => cpu_func!(lax, read_zp, 2, 3),
+            unofficial::LAX_ZP_Y => cpu_func!(lax, read_zp_y, 2, 4),
+            unofficial::LAX_ABS => cpu_func!(lax, read_abs, 3, 4),
+            unofficial::LAX_ABS_Y => cpu_func!(lax, read_abs_y, 3, 4),
+            unofficial::LAX_IND_X => cpu_func!(lax, read_indexed_indirect, 2, 6),
+            unofficial::LAX_IND_Y => cpu_func!(lax, read_indirect_indexed, 2, 5),
+            unofficial::SAX_ZP => store_func!(self.cpu.a & self.cpu.x, write_zp, 2, 4),
+            unofficial::SAX_ZP_Y => store_func!(self.cpu.a & self.cpu.x, write_zp_y, 2, 4),
+            unofficial::SAX_ABS => store_func!(self.cpu.a & self.cpu.x, write_abs, 3, 4),
+            unofficial::SAX_IND_X => {
+                store_func!(self.cpu.a & self.cpu.x, write_indexed_indirect, 2, 6)
+            }
+            unofficial::DCP_ZP => cpu_write_func!(dcp, read_zp, write_zp, 2, 5),
+            unofficial::DCP_ZP_X => cpu_write_func!(dcp, read_zp_x, write_zp_x, 2, 6),
+            unofficial::DCP_ABS => cpu_write_func!(dcp, read_abs, write_abs, 3, 6),
+            unofficial::DCP_ABS_X => cpu_write_func!(dcp, read_abs_x, write_abs_x, 3, 7),
+            unofficial::DCP_ABS_Y => cpu_write_func!(dcp, read_abs_y, write_abs_y, 3, 7),
+            unofficial::DCP_IND_X => {
+                cpu_write_func!(dcp, read_indexed_indirect, write_indexed_indirect, 2, 6)
+            }
+            unofficial::DCP_IND_Y => {
+                cpu_write_func!(dcp, read_indirect_indexed, write_indirect_indexed, 2, 8)
+            }
+            unofficial::ISC_ZP => cpu_write_func!(isc, read_zp, write_zp, 2, 5),
+            unofficial::ISC_ZP_X => cpu_write_func!(isc, read_zp_x, write_zp_x, 2, 6),
+            unofficial::ISC_ABS => cpu_write_func!(isc, read_abs, write_abs, 3, 6),
+            unofficial::ISC_ABS_X => cpu_write_func!(isc, read_abs_x, write_abs_x, 3, 7),
+            unofficial::ISC_ABS_Y => cpu_write_func!(isc, read_abs_y, write_abs_y, 3, 7),
+            unofficial::ISC_IND_X => {
+                cpu_write_func!(isc, read_indexed_indirect, write_indexed_indirect, 2, 6)
+            }
+            unofficial::ISC_IND_Y => {
+                cpu_write_func!(isc, read_indirect_indexed, write_indirect_indexed, 2, 8)
+            }
+            unofficial::RLA_ZP => cpu_write_func!(rla, read_zp, write_zp, 2, 5),
+            unofficial::RLA_ZP_X => cpu_write_func!(rla, read_zp_x, write_zp_x, 2, 6),
+            unofficial::RLA_ABS => cpu_write_func!(rla, read_abs, write_abs, 3, 6),
+            unofficial::RLA_ABS_X => cpu_write_func!(rla, read_abs_x, write_abs_x, 3, 7),
+            unofficial::RLA_ABS_Y => cpu_write_func!(rla, read_abs_y, write_abs_y, 3, 7),
+            unofficial::RLA_IND_X => {
+                cpu_write_func!(rla, read_indexed_indirect, write_indexed_indirect, 2, 6)
+            }
+            unofficial::RLA_IND_Y => {
+                cpu_write_func!(rla, read_indirect_indexed, write_indirect_indexed, 2, 8)
+            }
+            unofficial::RRA_ZP => cpu_write_func!(rra, read_zp, write_zp, 2, 5),
+            unofficial::RRA_ZP_X => cpu_write_func!(rra, read_zp_x, write_zp_x, 2, 6),
+            unofficial::RRA_ABS => cpu_write_func!(rra, read_abs, write_abs, 3, 6),
+            unofficial::RRA_ABS_X => cpu_write_func!(rra, read_abs_x, write_abs_x, 3, 7),
+            unofficial::RRA_ABS_Y => cpu_write_func!(rra, read_abs_y, write_abs_y, 3, 7),
+            unofficial::RRA_IND_X => {
+                cpu_write_func!(rra, read_indexed_indirect, write_indexed_indirect, 2, 6)
+            }
+            unofficial::RRA_IND_Y => {
+                cpu_write_func!(rra, read_indirect_indexed, write_indirect_indexed, 2, 8)
+            }
+            unofficial::SLO_ZP => cpu_write_func!(slo, read_zp, write_zp, 2, 5),
+            unofficial::SLO_ZP_X => cpu_write_func!(slo, read_zp_x, write_zp_x, 2, 6),
+            unofficial::SLO_ABS => cpu_write_func!(slo, read_abs, write_abs, 3, 6),
+            unofficial::SLO_ABS_X => cpu_write_func!(slo, read_abs_x, write_abs_x, 3, 7),
+            unofficial::SLO_ABS_Y => cpu_write_func!(slo, read_abs_y, write_abs_y, 3, 7),
+            unofficial::SLO_IND_X => {
+                cpu_write_func!(slo, read_indexed_indirect, write_indexed_indirect, 2, 6)
+            }
+            unofficial::SLO_IND_Y => {
+                cpu_write_func!(slo, read_indirect_indexed, write_indirect_indexed, 2, 8)
+            }
+            unofficial::SRE_ZP => cpu_write_func!(sre, read_zp, write_zp, 2, 5),
+            unofficial::SRE_ZP_X => cpu_write_func!(sre, read_zp_x, write_zp_x, 2, 6),
+            unofficial::SRE_ABS => cpu_write_func!(sre, read_abs, write_abs, 3, 6),
+            unofficial::SRE_ABS_X => cpu_write_func!(sre, read_abs_x, write_abs_x, 3, 7),
+            unofficial::SRE_ABS_Y => cpu_write_func!(sre, read_abs_y, write_abs_y, 3, 7),
+            unofficial::SRE_IND_X => {
+                cpu_write_func!(sre, read_indexed_indirect, write_indexed_indirect, 2, 6)
+            }
+            unofficial::SRE_IND_Y => {
+                cpu_write_func!(sre, read_indirect_indexed, write_indirect_indexed, 2, 8)
+            }
+            unofficial::SBC => cpu_func!(sbc, read_immediate, 2, 2),
+            _ if unofficial::NOPS.contains(opcode) => Ok((1, 2)),
+            _ if unofficial::SKBS.contains(opcode) => Ok((2, 2)),
+            _ if unofficial::IGN_ZP.contains(opcode) => Ok((2, 3)),
+            _ if unofficial::IGN_ZP_X.contains(opcode) => Ok((2, 4)),
+            unofficial::IGN_ABS => Ok((3, 4)),
+            _ if unofficial::IGN_ABS_X.contains(opcode) => {
+                if self.pc_x(operands) {
+                    return Ok((3, 5));
+                }
+                Ok((3, 4))
+            }
             _ => {
                 return Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",

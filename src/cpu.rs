@@ -329,6 +329,48 @@ impl Cpu {
         // Two's complement addition
         self.adc(value ^ 0xFF)
     }
+    /// Shorthand for LDA then TAX
+    /// Used only in unofficial opcodes
+    pub fn lax(&mut self, value: u8) {
+        self.lda(value);
+        self.x = self.a;
+    }
+    /// Shorthand for DEC then CMP
+    pub fn dcp(&mut self, value: u8) -> u8 {
+        let v = self.dec(value);
+        self.cmp(v);
+        v
+    }
+    /// Shorthand for INC then SBC
+    pub fn isc(&mut self, value: u8) -> u8 {
+        let v = self.inc(value);
+        self.sbc(v);
+        v
+    }
+    /// Shorthand for ROL then AND
+    pub fn rla(&mut self, value: u8) -> u8 {
+        let v = self.rol(value);
+        self.and(v);
+        v
+    }
+    /// Shorthand for ROR then ADC
+    pub fn rra(&mut self, value: u8) -> u8 {
+        let v = self.ror(value);
+        self.adc(v);
+        v
+    }
+    /// Shorthand for ASL then ORA
+    pub fn slo(&mut self, value: u8) -> u8 {
+        let v = self.asl(value);
+        self.ora(v);
+        v
+    }
+    /// Shorthand for LSR then EOR
+    pub fn sre(&mut self, value: u8) -> u8 {
+        let v = self.lsr(value);
+        self.eor(v);
+        v
+    }
     // Set the status register's flags when loading (LDA, LDX, or LDY)
     fn set_load_flags(&mut self, value: u8) {
         self.s_r.z = value == 0;

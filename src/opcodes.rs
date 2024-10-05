@@ -302,3 +302,133 @@ pub const TXA: u8 = 0x8A;
 pub const TXS: u8 = 0x9A;
 /// Transfer Y to A
 pub const TYA: u8 = 0x98;
+/// Unofficial opcodes
+pub mod unofficial {
+    /// AND and then LSR Immediate
+    pub const ALR_I: u8 = 0x4B;
+    /// AND and then copy N into C
+    pub const ANC_I: u8 = 0x0B;
+    // AND and then ROR, with slightly differnent flags set
+    pub const ARR_I: u8 = 0x6B;
+    /// Sets X to (A AND X) - value
+    pub const AXS_I: u8 = 0xCB;
+    /// Load into A And X Zero Page
+    pub const LAX_ZP: u8 = 0xA7;
+    /// Load into A and X Zero Page Y
+    pub const LAX_ZP_Y: u8 = 0xB7;
+    /// Load into A and X Absolute
+    pub const LAX_ABS: u8 = 0xAF;
+    /// Load into A and X Absolute Y
+    pub const LAX_ABS_Y: u8 = 0xBF;
+    /// Load into A and X Indexed Indirect
+    pub const LAX_IND_X: u8 = 0xA3;
+    /// Load into A and X Indirect Indexed
+    pub const LAX_IND_Y: u8 = 0xB3;
+    /// Store (A AND X) Zero Page
+    pub const SAX_ZP: u8 = 0x87;
+    /// Store (A AND X) Zero Page Y
+    pub const SAX_ZP_Y: u8 = 0x97;
+    /// Store (A AND X) Absolute
+    pub const SAX_ABS: u8 = 0x8F;
+    /// Store (A AND X) Indexed Indirect
+    pub const SAX_IND_X: u8 = 0x83;
+    /// Decrement then compare Zero Page
+    pub const DCP_ZP: u8 = 0xC7;
+    /// Decrement then compare Zero Page X
+    pub const DCP_ZP_X: u8 = 0xD7;
+    /// Decrement then compare Absolute
+    pub const DCP_ABS: u8 = 0xCF;
+    /// Decrement then compare Absolute X
+    pub const DCP_ABS_X: u8 = 0xDF;
+    /// Decrement then compare Absolute Y
+    pub const DCP_ABS_Y: u8 = 0xDB;
+    /// Decrement then compare Indexed Indirect
+    pub const DCP_IND_X: u8 = 0xC3;
+    /// Decrement then compare Indirect Indexed
+    pub const DCP_IND_Y: u8 = 0xD3;
+    /// Increment then subtract with carry Zero Page
+    pub const ISC_ZP: u8 = 0xE7;
+    /// Increment then subtract with carry Zero Page X
+    pub const ISC_ZP_X: u8 = 0xF7;
+    /// Increment then subtract with carry Absolute
+    pub const ISC_ABS: u8 = 0xEF;
+    /// Increment then subtract with carry Absolute X
+    pub const ISC_ABS_X: u8 = 0xFF;
+    /// Increment then subtract with carry Absolute Y
+    pub const ISC_ABS_Y: u8 = 0xFB;
+    /// Increment then subtract with carry Indexed Indirect
+    pub const ISC_IND_X: u8 = 0xE3;
+    /// Increment then subtract with carry Indirect Indexed
+    pub const ISC_IND_Y: u8 = 0xF3;
+    /// Rotate Left then AND Zero Page
+    pub const RLA_ZP: u8 = 0x27;
+    /// Rotate Left then AND Zero Page X
+    pub const RLA_ZP_X: u8 = 0x37;
+    /// Rotate Left then AND Absolute
+    pub const RLA_ABS: u8 = 0x2F;
+    /// Rotate Left then AND Absolute X
+    pub const RLA_ABS_X: u8 = 0x3F;
+    /// Rotate Left then AND Absolute Y
+    pub const RLA_ABS_Y: u8 = 0x3B;
+    /// Rotate Left then AND Indexed Indirect
+    pub const RLA_IND_X: u8 = 0x23;
+    /// Rotate Left then AND Indirect Indexed
+    pub const RLA_IND_Y: u8 = 0x33;
+    /// Rotate Right then add with carry Zero Page
+    pub const RRA_ZP: u8 = 0x67;
+    /// Rotate Right then add with carry Zero Page X
+    pub const RRA_ZP_X: u8 = 0x77;
+    /// Rotate Right then add with carry Absolute
+    pub const RRA_ABS: u8 = 0x6F;
+    /// Rotate Right then add with carry Absolute X
+    pub const RRA_ABS_X: u8 = 0x7F;
+    /// Rotate Right then add with carry Absolute Y
+    pub const RRA_ABS_Y: u8 = 0x7B;
+    /// Rotate Right then add with carry Indexed Indirect
+    pub const RRA_IND_X: u8 = 0x63;
+    /// Rotate Right then add with carry Indirect Indexed
+    pub const RRA_IND_Y: u8 = 0x73;
+    /// Shift left then OR with A Zero Page
+    pub const SLO_ZP: u8 = 0x07;
+    /// Shift left then OR with A Zero Page X
+    pub const SLO_ZP_X: u8 = 0x17;
+    /// Shift left then OR with A Absolute
+    pub const SLO_ABS: u8 = 0x0F;
+    /// Shift left then OR with A Absolute X
+    pub const SLO_ABS_X: u8 = 0x1F;
+    /// Shift left then OR with A Absolute Y
+    pub const SLO_ABS_Y: u8 = 0x1B;
+    /// Shift left then OR with A Indexed Indirect
+    pub const SLO_IND_X: u8 = 0x03;
+    /// Shift left then OR with A Indirect Indexed
+    pub const SLO_IND_Y: u8 = 0x13;
+    /// Shift right then EOR with A Zero Page
+    pub const SRE_ZP: u8 = 0x47;
+    /// Shift right then EOR with A Zero Page X
+    pub const SRE_ZP_X: u8 = 0x57;
+    /// Shift right then EOR with A Absolute
+    pub const SRE_ABS: u8 = 0x4F;
+    /// Shift right then EOR with A Absolute X
+    pub const SRE_ABS_X: u8 = 0x5F;
+    /// Shift right then EOR with A Absolute Y
+    pub const SRE_ABS_Y: u8 = 0x5B;
+    /// Shift right then EOR with A Indexed Indirect
+    pub const SRE_IND_X: u8 = 0x43;
+    /// Shift right then EOR with A Indirect Indexed
+    pub const SRE_IND_Y: u8 = 0x53;
+    /// Unofficial clone of SBC (E9), behaves the same
+    pub const SBC: u8 = 0xEB;
+    /// Unofficial NOPs
+    pub const NOPS: [u8; 6] = [0x1A, 0x3A, 0x5A, 0x7A, 0xDA, 0xFA];
+    /// Read a byte and skip it (essentially a 2-byte NOP)
+    pub const SKBS: [u8; 5] = [0x80, 0x82, 0x89, 0xC2, 0xE2];
+    /// Ignore byte from memory Zero Page
+    pub const IGN_ZP: [u8; 3] = [0x04, 0x44, 0x64];
+    /// Ignore byte from memory Zero Page X
+    pub const IGN_ZP_X: [u8; 6] = [0x14, 0x34, 0x54, 0x74, 0xD4, 0xF4];
+    // TODO: Figure out what this means: The absolute version can be used to increment PPUADDR or reset the PPUSTATUS latch as an alternative to BIT.
+    /// Ignore byte from memory Absolute
+    pub const IGN_ABS: u8 = 0x0C;
+    /// Ignore byte from memory Absolute X
+    pub const IGN_ABS_X: [u8; 6] = [0x1C, 0x3C, 0x5C, 0x7C, 0xDC, 0xFC];
+}
