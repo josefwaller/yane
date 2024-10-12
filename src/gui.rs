@@ -8,18 +8,14 @@ pub struct Gui {
     window: sdl2::video::Window,
     event_loop: sdl2::EventPump,
     program: NativeProgram,
+    texture_program: NativeProgram,
+    tex_vao: NativeVertexArray,
     vao_array: [NativeVertexArray; 64],
 }
 impl Gui {
     pub fn new() -> Gui {
         let window_width = 256;
         let window_height = 240;
-        let gl: glow::Context;
-        let window: sdl2::video::Window;
-        let event_loop: sdl2::EventPump;
-        let gl_context: sdl2::video::GLContext;
-        let program: Program;
-        let vao_array: [NativeVertexArray; 64];
         unsafe {
             // Create SDL2 Window
             let sdl = sdl2::init().unwrap();
@@ -27,19 +23,20 @@ impl Gui {
             let gl_attr = video.gl_attr();
             gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
             gl_attr.set_context_version(3, 3);
-            window = video
+            let window = video
                 .window("Y.A.N.E", window_width, window_height)
                 .opengl()
                 .resizable()
                 .build()
                 .unwrap();
-            gl_context = window.gl_create_context().unwrap();
-            gl = glow::Context::from_loader_function(|s| video.gl_get_proc_address(s) as *const _);
+            let gl_context = window.gl_create_context().unwrap();
+            let gl =
+                glow::Context::from_loader_function(|s| video.gl_get_proc_address(s) as *const _);
             window.gl_make_current(&gl_context).unwrap();
-            event_loop = sdl.event_pump().unwrap();
+            let event_loop = sdl.event_pump().unwrap();
 
             // Create program for rendering sprites to texture
-            program = gl.create_program().expect("Unable to create program");
+            let program = gl.create_program().expect("Unable to create program");
             compile_and_link_shader(
                 &gl,
                 glow::VERTEX_SHADER,
@@ -59,7 +56,7 @@ impl Gui {
                 &program,
             );
 
-            vao_array = core::array::from_fn(|i| {
+            let vao_array = core::array::from_fn(|i| {
                 // Our "vertice" is a 1-D vector with the OAM ID in it
                 let vertices_u8: &[u8] =
                     core::slice::from_raw_parts([i].as_ptr() as *const u8, size_of::<i32>());
@@ -84,18 +81,58 @@ impl Gui {
                     gl.get_program_info_log(program)
                 );
             }
-            gl.use_program(Some(program));
+            let texture_program = gl.create_program().unwrap();
+            compile_and_link_shader(
+                &gl,
+                glow::VERTEX_SHADER,
+                include_str!("./shaders/quad_shader.vert"),
+                &texture_program,
+            );
+            compile_and_link_shader(
+                &gl,
+                glow::FRAGMENT_SHADER,
+                include_str!("./shaders/quad_shader.frag"),
+                &texture_program,
+            );
+            gl.link_program(texture_program);
+            gl.use_program(Some(texture_program));
+            let quad_verts: &[f32] = [
+                [-1.0, -1.0, 0.0],
+                [-1.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0],
+                [-1.0, -1.0, 0.0],
+                [1.0, -1.0, 0.0],
+                [1.0, 1.0, 0.0],
+            ]
+            .as_flattened();
+            let quad_verts_u8 = core::slice::from_raw_parts(
+                quad_verts.as_ptr() as *const u8,
+                quad_verts.len() * size_of::<f32>(),
+            );
+            let tex_buf = gl.create_buffer().unwrap();
+            gl.bind_buffer(glow::VERTEX_ARRAY, Some(tex_buf));
+            gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, &quad_verts_u8, glow::STATIC_DRAW);
+
+            let vao = gl.create_vertex_array().unwrap();
+            gl.bind_vertex_array(Some(vao));
+            gl.enable_vertex_attrib_array(0);
+            gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, 3 * size_of::<f32>() as i32, 0);
+
+            gl.link_program(texture_program);
+            let tex_vao = vao;
+
             gl.clear_color(0.3, 0.0, 0.0, 1.0);
-        }
-        // Create triangles
-        Gui {
-            gl,
-            window,
-            event_loop,
-            // This just needs to stay in scope
-            _gl_context: gl_context,
-            program,
-            vao_array,
+            Gui {
+                gl,
+                window,
+                event_loop,
+                // This just needs to stay in scope
+                _gl_context: gl_context,
+                program,
+                texture_program,
+                vao_array,
+                tex_vao,
+            }
         }
     }
     pub fn render(&mut self, nes: &mut Nes) -> bool {
@@ -156,6 +193,10 @@ impl Gui {
                 self.gl.uniform_1_i32_slice(sprite_uni.as_ref(), &sprite);
                 self.gl.draw_arrays(glow::POINTS, 0, 1);
             }
+            self.gl.clear(glow::COLOR_BUFFER_BIT);
+            self.gl.use_program(Some(self.texture_program));
+            self.gl.bind_vertex_array(Some(self.tex_vao));
+            self.gl.draw_arrays(glow::TRIANGLES, 0, 6);
         }
         self.window.gl_swap_window();
         for event in self.event_loop.poll_iter() {
