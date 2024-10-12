@@ -14,7 +14,7 @@ void main() {
     // outColor = outColor;
     for (int y = 0; y < 8; y++) {
         for (int x = 0; x < 8; x++) {
-            gl_Position = gl_in[0].gl_Position + vec4(float(x) / 128.0, float(y) / 120.0, 0, 0);
+            gl_Position = gl_in[0].gl_Position + vec4(float(x) / 128.0, -float(y) / 120.0, 0, 0);
             pixelIndex = 8 * y + x;
             EmitVertex();
         }

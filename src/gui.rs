@@ -4,7 +4,7 @@ use std::mem::size_of;
 
 pub struct Gui {
     gl: glow::Context,
-    gl_context: sdl2::video::GLContext,
+    _gl_context: sdl2::video::GLContext,
     window: sdl2::video::Window,
     event_loop: sdl2::EventPump,
     program: NativeProgram,
@@ -38,23 +38,24 @@ impl Gui {
             window.gl_make_current(&gl_context).unwrap();
             event_loop = sdl.event_pump().unwrap();
 
+            // Create program for rendering sprites to texture
             program = gl.create_program().expect("Unable to create program");
             compile_and_link_shader(
                 &gl,
                 glow::VERTEX_SHADER,
-                include_str!("./vertex_shader.vert"),
+                include_str!("./shaders/vertex_shader.vert"),
                 &program,
             );
             compile_and_link_shader(
                 &gl,
                 glow::GEOMETRY_SHADER,
-                include_str!("./geometry_shader.geom"),
+                include_str!("./shaders/geometry_shader.geom"),
                 &program,
             );
             compile_and_link_shader(
                 &gl,
                 glow::FRAGMENT_SHADER,
-                include_str!("./fragment_shader.frag"),
+                include_str!("./shaders/fragment_shader.frag"),
                 &program,
             );
 
@@ -91,7 +92,8 @@ impl Gui {
             gl,
             window,
             event_loop,
-            gl_context,
+            // This just needs to stay in scope
+            _gl_context: gl_context,
             program,
             vao_array,
         }
@@ -105,22 +107,24 @@ impl Gui {
                 core::array::from_fn(|j| {
                     let row = (j / 3) % 3;
                     let col = j % 3;
+                    // Keep identity matrix
                     if row as i32 == col as i32 {
                         return 1.0;
                     }
                     if col == 2 {
                         // X position
                         if row == 0 {
-                            return (-128.0 + nes.ppu.oam[i + 3] as f32) / 128.0;
+                            return (-128.0 + nes.ppu.oam[4 * i + 3] as f32) / 128.0;
                         }
                         // Y Coord
                         if row == 1 {
-                            return (-120.0 + nes.ppu.oam[i] as f32) / 120.0;
+                            return (120.0 - nes.ppu.oam[4 * i] as f32) / 120.0;
                         }
                     }
                     0.0
                 })
             });
+            // Set position matrices
             let pos_uni = self
                 .gl
                 .get_uniform_location(self.program, "positionMatrices");
@@ -136,6 +140,7 @@ impl Gui {
                 [1.0, 0.0, 0.0],
             ]
             .as_flattened();
+            // Set colors matrix
             let color_uni = self.gl.get_uniform_location(self.program, "colors");
             self.gl.uniform_3_f32_slice(color_uni.as_ref(), &colors);
             for (i, vao) in self.vao_array.iter().enumerate() {
