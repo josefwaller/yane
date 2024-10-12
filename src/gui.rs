@@ -1,6 +1,9 @@
 use crate::Nes;
 use glow::*;
-use sdl2::render;
+use sdl2::event::{
+    Event::{Quit, Window},
+    WindowEvent::Resized,
+};
 use std::mem::size_of;
 
 pub struct Gui {
@@ -16,8 +19,8 @@ pub struct Gui {
 }
 impl Gui {
     pub fn new() -> Gui {
-        let window_width = 256;
-        let window_height = 240;
+        let window_width = 800;
+        let window_height = 600;
         unsafe {
             // Create SDL2 Window
             let sdl = sdl2::init().unwrap();
@@ -179,6 +182,7 @@ impl Gui {
             self.gl.use_program(Some(self.program));
             self.gl
                 .bind_framebuffer(glow::FRAMEBUFFER, Some(self.texture_buffer));
+            self.gl.viewport(0, 0, 256, 240);
             self.gl.clear(glow::COLOR_BUFFER_BIT);
             // 3x3 Matrix per each 64 sprites
             let position_matrices: [[f32; 3 * 3]; 64] = core::array::from_fn(|i| {
@@ -236,13 +240,19 @@ impl Gui {
             }
             self.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
             self.gl.use_program(Some(self.texture_program));
+            self.gl.viewport(
+                0,
+                0,
+                self.window.size().0 as i32,
+                self.window.size().1 as i32,
+            );
             self.gl.bind_vertex_array(Some(self.tex_vao));
             self.gl.draw_arrays(glow::TRIANGLES, 0, 6);
         }
         self.window.gl_swap_window();
         for event in self.event_loop.poll_iter() {
             match event {
-                sdl2::event::Event::Quit { .. } => return true,
+                Quit { .. } => return true,
                 _ => {}
             }
         }
