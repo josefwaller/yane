@@ -5,5 +5,11 @@ edition = "2021"
 
 [dependencies]
 assert_hex = "0.4.1"
+glow = "0.14.1"
 rand = "0.8.5"
+sdl2 = "0.37.0"
 test-case = "3.3.1"
+
+[features]
+default = ["gui"]
+gui = []

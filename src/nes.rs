@@ -1,14 +1,16 @@
-use crate::{opcodes::*, Cartridge, Cpu};
+use crate::{opcodes::*, Cartridge, Cpu, Ppu};
 use std::ops::Range;
 
 /// The NES.
 pub struct Nes {
     /// CPU of the NES
     pub cpu: Cpu,
+    /// PPU of the NES
+    pub ppu: Ppu,
     /// Memory of the NES
     pub mem: [u8; 0x800],
     // Cartridge inserted in the NES
-    cartridge: Cartridge,
+    pub cartridge: Cartridge,
 }
 
 impl Nes {
@@ -20,6 +22,7 @@ impl Nes {
         .concat();
         Nes {
             cpu: Cpu::new(),
+            ppu: Ppu::new(),
             mem: [0x00; 0x800],
             cartridge: Cartridge::new(c.as_slice()),
         }
@@ -27,6 +30,7 @@ impl Nes {
     pub fn from_cartridge(bytes: &[u8]) -> Nes {
         let mut nes = Nes {
             cpu: Cpu::new(),
+            ppu: Ppu::new(),
             mem: [0x00; 0x800],
             cartridge: Cartridge::new(bytes),
         };
@@ -37,16 +41,52 @@ impl Nes {
     }
 
     pub fn read_byte(&self, addr: usize) -> u8 {
-        if addr < 0x0800 {
-            return self.mem[addr];
-        }
-        return self.cartridge.read_byte(addr);
+        return match addr {
+            0..0x2000 => self.mem[addr % 0x0800],
+            0x2000..0x4000 => match addr % 8 {
+                0 => self.ppu.ctrl,
+                1 => self.ppu.mask,
+                2 => self.ppu.status,
+                3 => self.ppu.oam_addr,
+                4 => self.ppu.oam_data,
+                5 => self.ppu.scroll,
+                6 => self.ppu.addr,
+                7 => self.ppu.data,
+                _ => panic!("This should never happen. Addr is {:#X}", addr),
+            },
+            // TBA
+            0x4000..0x4020 => 0,
+            0x4020..0x10000 => self.cartridge.read_byte(addr),
+            _ => panic!("Invalid read address provided: {:#X}", addr),
+        };
     }
     fn write_byte(&mut self, addr: usize, value: u8) {
-        if addr < 0x800 {
-            self.mem[addr] = value;
-        }
-        // Todo: Should have cartridge.write_byte here
+        match addr {
+            0..0x2000 => self.mem[addr % 0x0800] = value,
+            0x2000..0x4000 => match addr % 8 {
+                0 => self.ppu.ctrl = value,
+                1 => self.ppu.mask = value,
+                2 => self.ppu.status = value,
+                3 => self.ppu.oam_addr = value,
+                4 => self.ppu.oam_data = value,
+                5 => self.ppu.scroll = value,
+                6 => self.ppu.addr = value,
+                7 => self.ppu.oam_data = value,
+                _ => panic!("This should never happen. Addr is {:#X}", addr),
+            },
+            0x4014 => {
+                // Perform DMA
+                // TODO: Make this better
+                let addr = (value as usize) << 8;
+                for i in 0..0x100 {
+                    self.ppu.oam[i] = self.read_byte(addr + i);
+                }
+            }
+            // TBA
+            0x4000..0x4020 => {}
+            0x4020..0x10000 => self.cartridge.write_byte(addr, value),
+            _ => panic!("Invalid write address provided: {:#X}", addr),
+        };
     }
 
     pub fn step(&mut self) -> Result<i64, String> {
@@ -64,6 +104,13 @@ impl Nes {
             }
             Err(s) => return Err(s),
         }
+    }
+
+    pub fn on_nmi(&mut self) {
+        self.push_to_stack_u16(self.cpu.p_c);
+        self.push_to_stack(self.cpu.s_r.to_byte());
+        // Go to NMI vector
+        self.cpu.p_c = ((self.read_byte(0xFFFB) as u16) << 8) + self.read_byte(0xFFFA) as u16;
     }
 
     /// Decode and then execute first byte of `opcode` as an NES opcode.

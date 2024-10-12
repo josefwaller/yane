@@ -16,7 +16,7 @@
 pub struct Cartridge {
     prg_ram: Vec<u8>,
     prg_rom: Vec<u8>,
-    chr_rom: Vec<u8>,
+    pub chr_rom: Vec<u8>,
     chr_ram: Vec<u8>,
 }
 
@@ -28,21 +28,20 @@ impl Cartridge {
             assert_eq!(bytes[2], 'S' as u8);
             assert_eq!(bytes[3], 0x1A);
         }
-        let prg_rom_size = 0x10 * 0x400 * bytes[4] as usize;
+        let prg_rom_size = 0x4000 * bytes[4] as usize;
         let chr_rom_size = 0x2000 * bytes[5] as usize;
         let prg_ram_size = 0x00;
         let chr_ram_size = 0x00;
         let mapper = (bytes[6] >> 4) + (bytes[7] & 0xF0);
-        // println!(
-        //     "Reading an NES file with {:#X} KiB PRG ROM, {:#X} KiB CHG ROM, mapper {:}",
-        //     prg_rom_size, chr_rom_size, mapper
-        // );
+        assert_eq!(mapper, 0);
         // TODO: Check for trainer and offset by 512 bytes if present
+        // TODO: Add CHR_RAM
         let mut start = 16;
         let mut end = 16 + prg_rom_size;
         let prg_rom = bytes[start..end].to_vec();
-        start = end;
-        end += chr_ram_size;
+        start = end; //0x44b1; //0x4376; //end;
+        end += chr_rom_size;
+        println!("Reading CHRROM at {:#X}", start);
         let chr_rom = bytes[start..end].to_vec();
         Cartridge {
             prg_rom,
