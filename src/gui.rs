@@ -1,5 +1,6 @@
 use crate::Nes;
 use glow::*;
+use sdl2::render;
 use std::mem::size_of;
 
 pub struct Gui {
@@ -11,6 +12,7 @@ pub struct Gui {
     texture_program: NativeProgram,
     tex_vao: NativeVertexArray,
     vao_array: [NativeVertexArray; 64],
+    texture_buffer: NativeFramebuffer,
 }
 impl Gui {
     pub fn new() -> Gui {
@@ -122,6 +124,42 @@ impl Gui {
             let tex_vao = vao;
 
             gl.clear_color(0.3, 0.0, 0.0, 1.0);
+
+            let texture_buffer = gl.create_framebuffer().unwrap();
+            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(texture_buffer));
+            let render_texture = gl.create_texture().unwrap();
+            gl.bind_texture(glow::TEXTURE_2D, Some(render_texture));
+            gl.tex_image_2d(
+                glow::TEXTURE_2D,
+                0,
+                glow::RGB as i32,
+                256,
+                240,
+                0,
+                glow::RGB,
+                glow::UNSIGNED_BYTE,
+                None,
+            );
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MAG_FILTER,
+                glow::NEAREST as i32,
+            );
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MIN_FILTER,
+                glow::NEAREST as i32,
+            );
+            gl.framebuffer_texture(
+                glow::FRAMEBUFFER,
+                glow::COLOR_ATTACHMENT0,
+                Some(render_texture),
+                0,
+            );
+            gl.draw_buffers(&[glow::COLOR_ATTACHMENT0]);
+            if gl.check_framebuffer_status(glow::FRAMEBUFFER) != glow::FRAMEBUFFER_COMPLETE {
+                panic!("Error creating frame buffer");
+            }
             Gui {
                 gl,
                 window,
@@ -132,12 +170,15 @@ impl Gui {
                 texture_program,
                 vao_array,
                 tex_vao,
+                texture_buffer,
             }
         }
     }
     pub fn render(&mut self, nes: &mut Nes) -> bool {
         unsafe {
             self.gl.use_program(Some(self.program));
+            self.gl
+                .bind_framebuffer(glow::FRAMEBUFFER, Some(self.texture_buffer));
             self.gl.clear(glow::COLOR_BUFFER_BIT);
             // 3x3 Matrix per each 64 sprites
             let position_matrices: [[f32; 3 * 3]; 64] = core::array::from_fn(|i| {
@@ -193,7 +234,7 @@ impl Gui {
                 self.gl.uniform_1_i32_slice(sprite_uni.as_ref(), &sprite);
                 self.gl.draw_arrays(glow::POINTS, 0, 1);
             }
-            self.gl.clear(glow::COLOR_BUFFER_BIT);
+            self.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
             self.gl.use_program(Some(self.texture_program));
             self.gl.bind_vertex_array(Some(self.tex_vao));
             self.gl.draw_arrays(glow::TRIANGLES, 0, 6);

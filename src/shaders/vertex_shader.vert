@@ -1,6 +1,5 @@
 #version 330 core
-//in int id;
-//layout (location = 0) in ivec2 aPos;
+
 layout (location = 0) in int oamIndex;
 
 uniform mat3 positionMatrices[64];
