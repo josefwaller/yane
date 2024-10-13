@@ -16,6 +16,7 @@ pub struct Gui {
     tex_vao: NativeVertexArray,
     vao_array: [NativeVertexArray; 64],
     texture_buffer: NativeFramebuffer,
+    palette: [[f32; 3]; 64],
 }
 impl Gui {
     pub fn new() -> Gui {
@@ -40,6 +41,8 @@ impl Gui {
             window.gl_make_current(&gl_context).unwrap();
             let event_loop = sdl.event_pump().unwrap();
 
+            gl.enable(glow::BLEND);
+            gl.blend_func(glow::BLEND_SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
             // Create program for rendering sprites to texture
             let program = gl.create_program().expect("Unable to create program");
             compile_and_link_shader(
@@ -135,11 +138,11 @@ impl Gui {
             gl.tex_image_2d(
                 glow::TEXTURE_2D,
                 0,
-                glow::RGB as i32,
+                glow::RGBA as i32,
                 256,
                 240,
                 0,
-                glow::RGB,
+                glow::RGBA,
                 glow::UNSIGNED_BYTE,
                 None,
             );
@@ -163,6 +166,11 @@ impl Gui {
             if gl.check_framebuffer_status(glow::FRAMEBUFFER) != glow::FRAMEBUFFER_COMPLETE {
                 panic!("Error creating frame buffer");
             }
+            // Load pallete
+            let palette_data: &[u8] = include_bytes!("./2C02G_wiki.pal");
+            let palette: [[f32; 3]; 64] = core::array::from_fn(|i| {
+                core::array::from_fn(|j| palette_data[3 * i + j] as f32 / 255.0)
+            });
             Gui {
                 gl,
                 window,
@@ -174,6 +182,7 @@ impl Gui {
                 vao_array,
                 tex_vao,
                 texture_buffer,
+                palette,
             }
         }
     }
@@ -206,6 +215,10 @@ impl Gui {
                     0.0
                 })
             });
+            let oam_uni = self.gl.get_uniform_location(self.program, "oamData");
+            // let oam_data = [1, 1, 1, 1];
+            let oam_data: [u32; 4 * 64] = core::array::from_fn(|i| nes.ppu.oam[i] as u32);
+            self.gl.uniform_1_u32_slice(oam_uni.as_ref(), &oam_data);
             // Set position matrices
             let pos_uni = self
                 .gl
@@ -216,15 +229,21 @@ impl Gui {
                 &position_matrices.as_flattened(),
             );
             let colors = [
-                [0.0, 0.0, 0.0],
                 [0.0, 1.0, 0.0],
                 [0.0, 0.0, 1.0],
+                [1.0, 0.0, 0.0],
+                [1.0, 1.0, 0.0],
+                [1.0, 0.0, 1.0],
+                [0.0, 1.0, 1.0],
+                [1.0, 1.0, 1.0],
+                [0.0, 0.0, 0.0],
                 [1.0, 0.0, 0.0],
             ]
             .as_flattened();
             // Set colors matrix
-            let color_uni = self.gl.get_uniform_location(self.program, "colors");
-            self.gl.uniform_3_f32_slice(color_uni.as_ref(), &colors);
+            let color_uni = self.gl.get_uniform_location(self.program, "palettes");
+            self.gl
+                .uniform_3_f32_slice(color_uni.as_ref(), &self.palette.as_flattened());
             for (i, vao) in self.vao_array.iter().enumerate() {
                 self.gl.bind_vertex_array(Some(*vao));
                 let sprite_addr = (((nes.ppu.status & 0x08) as usize) << 12)

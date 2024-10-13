@@ -3,11 +3,18 @@
 layout (location = 0) in int oamIndex;
 
 uniform mat3 positionMatrices[64];
+uniform uint oamData[4 * 64];
 uniform mat3 colors;
 
-// out int oamIndex;
+out int vertOamIndex;
 
 void main() {
-    // oamIndex = oamIndex;
-   gl_Position = vec4(vec3(0, 0, 1.0) * positionMatrices[oamIndex], 1.0);
+    vertOamIndex = oamIndex;
+    gl_Position = vec4(
+        vec3(
+            (float(oamData[4 * oamIndex + 3]) - 128.0) / 128.0,
+            (120 - float(oamData[4 * oamIndex])) / 120.0,
+            1.0
+        ),
+    1.0);
 }
