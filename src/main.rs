@@ -27,7 +27,7 @@ fn main() {
                 nes.step().unwrap();
             });
             nes.on_nmi();
-            sleep(Duration::from_millis(50));
+            // sleep(Duration::from_millis(50));
             if gui.render(&mut nes) {
                 break;
             }

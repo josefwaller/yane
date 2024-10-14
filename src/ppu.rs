@@ -48,4 +48,13 @@ impl Ppu {
             .addr
             .wrapping_add(if self.status & 0x04 == 0 { 1 } else { 32 });
     }
+
+    /// Return true if sprite endering is enabled
+    pub fn is_sprite_enabled(&self) -> bool {
+        (self.mask & 0x10) != 0
+    }
+    /// Return true if background rendering is enabledf
+    pub fn is_background_enabled(&self) -> bool {
+        (self.mask & 0x08) != 0
+    }
 }

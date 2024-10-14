@@ -184,7 +184,7 @@ impl Gui {
             }
         }
     }
-    pub fn render(&mut self, nes: &mut Nes) -> bool {
+    pub fn render(&mut self, nes: &Nes) -> bool {
         unsafe {
             self.gl.use_program(Some(self.program));
             self.gl
@@ -195,36 +195,11 @@ impl Gui {
                 .clear_color(clear_color[0], clear_color[1], clear_color[2], 1.0);
             self.gl.viewport(0, 0, 256, 240);
             self.gl.clear(glow::COLOR_BUFFER_BIT);
-            // Pipe OAM data to GLSL
-            let oam_uni = self.gl.get_uniform_location(self.program, "oamData");
-            let oam_data: [u32; 4 * 64] = core::array::from_fn(|i| nes.ppu.oam[i] as u32);
-            self.gl.uniform_1_u32_slice(oam_uni.as_ref(), &oam_data);
-            // Map VV HHHH colors to RGB colors
-            let palette_colors: Vec<[f32; 3]> = nes.ppu.vram[0..0x100]
-                .iter()
-                .map(|b| self.palette[(b & 0x3F) as usize])
-                .collect();
-            // Set colors matrix
-            let color_uni = self.gl.get_uniform_location(self.program, "palettes");
-            self.gl.uniform_3_f32_slice(
-                color_uni.as_ref(),
-                &palette_colors.as_slice().as_flattened(),
-            );
-            // Draw sprites at points
-            // GLSL Shaders add pixels
-            for (i, vao) in self.vao_array.iter().enumerate() {
-                self.gl.bind_vertex_array(Some(*vao));
-                let sprite_addr = (((nes.ppu.status & 0x08) as usize) << 12)
-                    + (nes.ppu.oam[4 * i + 1] as usize) * 16;
-                let sprite: [i32; 128] = core::array::from_fn(|i| {
-                    let byte = i / 8;
-                    let bit = i % 8;
-                    ((nes.cartridge.chr_rom[sprite_addr + byte] >> (7 - bit)) & 0x01) as i32
-                });
-                let sprite_uni = self.gl.get_uniform_location(self.program, "sprite");
-                self.gl.uniform_1_i32_slice(sprite_uni.as_ref(), &sprite);
-                self.gl.draw_arrays(glow::POINTS, 0, 1);
+
+            if nes.ppu.is_sprite_enabled() {
+                self.render_sprites(nes);
             }
+
             self.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
             self.gl.use_program(Some(self.texture_program));
             self.gl.viewport(
@@ -244,6 +219,39 @@ impl Gui {
             }
         }
         false
+    }
+
+    unsafe fn render_sprites(&mut self, nes: &Nes) {
+        // Pipe OAM data to GLSL
+        let oam_uni = self.gl.get_uniform_location(self.program, "oamData");
+        let oam_data: [u32; 4 * 64] = core::array::from_fn(|i| nes.ppu.oam[i] as u32);
+        self.gl.uniform_1_u32_slice(oam_uni.as_ref(), &oam_data);
+        // Map VV HHHH colors to RGB colors
+        let palette_colors: Vec<[f32; 3]> = nes.ppu.vram[0..0x100]
+            .iter()
+            .map(|b| self.palette[(b & 0x3F) as usize])
+            .collect();
+        // Set colors matrix
+        let color_uni = self.gl.get_uniform_location(self.program, "palettes");
+        self.gl.uniform_3_f32_slice(
+            color_uni.as_ref(),
+            &palette_colors.as_slice().as_flattened(),
+        );
+        // Draw sprites as points
+        // GLSL Shaders add pixels to form the full 8x8 sprite
+        for (i, vao) in self.vao_array.iter().enumerate() {
+            self.gl.bind_vertex_array(Some(*vao));
+            let sprite_addr =
+                (((nes.ppu.status & 0x08) as usize) << 12) + (nes.ppu.oam[4 * i + 1] as usize) * 16;
+            let sprite: [i32; 128] = core::array::from_fn(|i| {
+                let byte = i / 8;
+                let bit = i % 8;
+                ((nes.cartridge.chr_rom[sprite_addr + byte] >> (7 - bit)) & 0x01) as i32
+            });
+            let sprite_uni = self.gl.get_uniform_location(self.program, "sprite");
+            self.gl.uniform_1_i32_slice(sprite_uni.as_ref(), &sprite);
+            self.gl.draw_arrays(glow::POINTS, 0, 1);
+        }
     }
 }
 

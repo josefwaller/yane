@@ -728,7 +728,6 @@ impl Nes {
         let second_addr = (self.read_byte(first_addr as usize) as u16
             + ((self.read_byte(first_addr.wrapping_add(1) as usize) as u16) << 8))
             .wrapping_add(self.cpu.y as u16);
-        println!("Final address is {:X}", second_addr);
         return self.read_byte(second_addr as usize);
     }
     /// Write a single byte to memory using indirect indexed addressing.
