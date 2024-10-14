@@ -19,6 +19,8 @@ pub struct Ppu {
     pub data: u8,
     /// The OAMDMA register
     pub oam_dma: u8,
+    /// VRAM
+    pub vram: [u8; 0x100],
 }
 
 impl Ppu {
@@ -34,6 +36,16 @@ impl Ppu {
             addr: 0,
             data: 0,
             oam_dma: 0,
+            vram: [0; 0x100],
         }
+    }
+
+    /// Write a single byte to VRAM at `PPUADDR`
+    /// Increments `PPUADDR` by 1 or by 32 depending `PPUSTATUS`
+    pub fn write_to_vram(&mut self, value: u8) {
+        self.vram[self.addr as usize] = value;
+        self.addr = self
+            .addr
+            .wrapping_add(if self.status & 0x04 == 0 { 1 } else { 32 });
     }
 }

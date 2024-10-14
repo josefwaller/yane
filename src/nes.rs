@@ -71,7 +71,9 @@ impl Nes {
                 4 => self.ppu.oam_data = value,
                 5 => self.ppu.scroll = value,
                 6 => self.ppu.addr = value,
-                7 => self.ppu.oam_data = value,
+                7 => {
+                    self.ppu.write_to_vram(value);
+                }
                 _ => panic!("This should never happen. Addr is {:#X}", addr),
             },
             0x4014 => {

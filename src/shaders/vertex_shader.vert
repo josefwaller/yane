@@ -2,7 +2,6 @@
 
 layout (location = 0) in int oamIndex;
 
-uniform mat3 positionMatrices[64];
 uniform uint oamData[4 * 64];
 uniform mat3 colors;
 

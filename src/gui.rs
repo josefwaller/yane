@@ -16,7 +16,7 @@ pub struct Gui {
     tex_vao: NativeVertexArray,
     vao_array: [NativeVertexArray; 64],
     texture_buffer: NativeFramebuffer,
-    palette: [[f32; 3]; 64],
+    palette: [[f32; 3]; 0x40],
 }
 impl Gui {
     pub fn new() -> Gui {
@@ -193,57 +193,23 @@ impl Gui {
                 .bind_framebuffer(glow::FRAMEBUFFER, Some(self.texture_buffer));
             self.gl.viewport(0, 0, 256, 240);
             self.gl.clear(glow::COLOR_BUFFER_BIT);
-            // 3x3 Matrix per each 64 sprites
-            let position_matrices: [[f32; 3 * 3]; 64] = core::array::from_fn(|i| {
-                core::array::from_fn(|j| {
-                    let row = (j / 3) % 3;
-                    let col = j % 3;
-                    // Keep identity matrix
-                    if row as i32 == col as i32 {
-                        return 1.0;
-                    }
-                    if col == 2 {
-                        // X position
-                        if row == 0 {
-                            return (-128.0 + nes.ppu.oam[4 * i + 3] as f32) / 128.0;
-                        }
-                        // Y Coord
-                        if row == 1 {
-                            return (120.0 - nes.ppu.oam[4 * i] as f32) / 120.0;
-                        }
-                    }
-                    0.0
-                })
-            });
+            // Pipe OAM data to GLSL
             let oam_uni = self.gl.get_uniform_location(self.program, "oamData");
-            // let oam_data = [1, 1, 1, 1];
             let oam_data: [u32; 4 * 64] = core::array::from_fn(|i| nes.ppu.oam[i] as u32);
             self.gl.uniform_1_u32_slice(oam_uni.as_ref(), &oam_data);
-            // Set position matrices
-            let pos_uni = self
-                .gl
-                .get_uniform_location(self.program, "positionMatrices");
-            self.gl.uniform_matrix_3_f32_slice(
-                pos_uni.as_ref(),
-                false,
-                &position_matrices.as_flattened(),
-            );
-            let colors = [
-                [0.0, 1.0, 0.0],
-                [0.0, 0.0, 1.0],
-                [1.0, 0.0, 0.0],
-                [1.0, 1.0, 0.0],
-                [1.0, 0.0, 1.0],
-                [0.0, 1.0, 1.0],
-                [1.0, 1.0, 1.0],
-                [0.0, 0.0, 0.0],
-                [1.0, 0.0, 0.0],
-            ]
-            .as_flattened();
+            // Map VV HHHH colors to RGB colors
+            let palette_colors: Vec<[f32; 3]> = nes.ppu.vram[0..0x100]
+                .iter()
+                .map(|b| self.palette[(b & 0x3F) as usize])
+                .collect();
             // Set colors matrix
             let color_uni = self.gl.get_uniform_location(self.program, "palettes");
-            self.gl
-                .uniform_3_f32_slice(color_uni.as_ref(), &self.palette.as_flattened());
+            self.gl.uniform_3_f32_slice(
+                color_uni.as_ref(),
+                &palette_colors.as_slice().as_flattened(),
+            );
+            // Draw sprites at points
+            // GLSL Shaders add pixels
             for (i, vao) in self.vao_array.iter().enumerate() {
                 self.gl.bind_vertex_array(Some(*vao));
                 let sprite_addr = (((nes.ppu.status & 0x08) as usize) << 12)
