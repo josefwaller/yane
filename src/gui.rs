@@ -237,6 +237,18 @@ impl Gui {
             color_uni.as_ref(),
             &palette_colors.as_slice().as_flattened(),
         );
+        // Set various flags
+        let hide_left_sprites_uni = self
+            .gl
+            .get_uniform_location(self.program, "hide_left_sprites");
+        self.gl.uniform_1_u32(
+            hide_left_sprites_uni.as_ref(),
+            if nes.ppu.should_hide_leftmost_sprites() {
+                1
+            } else {
+                0
+            },
+        );
         // Draw sprites as points
         // GLSL Shaders add pixels to form the full 8x8 sprite
         for (i, vao) in self.vao_array.iter().enumerate() {

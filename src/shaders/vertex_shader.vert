@@ -11,8 +11,8 @@ void main() {
     vertOamIndex = oamIndex;
     gl_Position = vec4(
         vec3(
-            (float(oamData[4 * oamIndex + 3]) - 128.0) / 128.0,
-            (120 - float(oamData[4 * oamIndex])) / 120.0,
+            0,
+            0,
             1.0
         ),
     1.0);

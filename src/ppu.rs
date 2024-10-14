@@ -57,4 +57,8 @@ impl Ppu {
     pub fn is_background_enabled(&self) -> bool {
         (self.mask & 0x08) != 0
     }
+    /// Return whether to hide the left 8 pixels when drawing sprites
+    pub fn should_hide_leftmost_sprites(&self) -> bool {
+        (self.mask & 0x04) != 0
+    }
 }
