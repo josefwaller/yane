@@ -129,8 +129,6 @@ impl Gui {
             gl.link_program(texture_program);
             let tex_vao = vao;
 
-            gl.clear_color(0.3, 0.0, 0.0, 1.0);
-
             let texture_buffer = gl.create_framebuffer().unwrap();
             gl.bind_framebuffer(glow::FRAMEBUFFER, Some(texture_buffer));
             let render_texture = gl.create_texture().unwrap();
@@ -191,6 +189,10 @@ impl Gui {
             self.gl.use_program(Some(self.program));
             self.gl
                 .bind_framebuffer(glow::FRAMEBUFFER, Some(self.texture_buffer));
+            // Set clear color
+            let clear_color = self.palette[(nes.ppu.vram[0] & 0x3F) as usize];
+            self.gl
+                .clear_color(clear_color[0], clear_color[1], clear_color[2], 1.0);
             self.gl.viewport(0, 0, 256, 240);
             self.gl.clear(glow::COLOR_BUFFER_BIT);
             // Pipe OAM data to GLSL
