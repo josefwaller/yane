@@ -59,6 +59,6 @@ impl Ppu {
     }
     /// Return whether to hide the left 8 pixels when drawing sprites
     pub fn should_hide_leftmost_sprites(&self) -> bool {
-        (self.mask & 0x04) != 0
+        (self.mask & 0x04) == 0
     }
 }

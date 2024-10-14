@@ -12,9 +12,6 @@ layout (location = 0) out vec4 color;
 void main() {
     int index = sprite[pixelIndex] + 2 * sprite[pixelIndex + 64];
     if (index == 0) {
-        //discard;
-    }
-    if (index > 3) {
         discard;
     }
     int paletteIndex = int(oamData[4 * oamIndex + 2]) % 4;
