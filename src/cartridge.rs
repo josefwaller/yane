@@ -39,7 +39,7 @@ impl Cartridge {
         let mut start = 16;
         let mut end = 16 + prg_rom_size;
         let prg_rom = bytes[start..end].to_vec();
-        start = end; //0x44b1; //0x4376; //end;
+        start = end;
         end += chr_rom_size;
         println!("Reading CHRROM at {:#X}", start);
         let chr_rom = bytes[start..end].to_vec();

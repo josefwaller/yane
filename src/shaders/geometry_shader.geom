@@ -1,6 +1,6 @@
 #version 330
 layout (points) in;
-layout (points, max_vertices = 64) out;
+layout (points, max_vertices = 128) out;
 
 in int vertOamIndex[];
 
@@ -8,6 +8,9 @@ uniform mat3 colors;
 uniform uint oamData[4 * 64];
 // Whether to hide the pixels in the leftmost 8 pixel columns
 uniform uint hide_left_sprites;
+// Whether to render 8x8 or 8x16 sprites
+// True (i.e. not 0) for 8x16
+uniform uint tall_sprites;
 
 flat out int pixelIndex;
 flat out int oamIndex;
@@ -20,11 +23,12 @@ bool vertical_flip(uint attr_byte) {
 }
 
 void main() {
-    for (int y = 0; y < 8; y++) {
+    int yMax = tall_sprites != 0u ? 16 : 8;
+    int i = vertOamIndex[0];
+    uint attr_byte = oamData[4 * i + 2];
+    for (int y = 0; y < 16; y++) {
+        int yPos = int(oamData[4 * i]) + (vertical_flip(attr_byte) ? 7 - y : y);
         for (int x = 0; x < 8; x++) {
-            int i = vertOamIndex[0];
-            uint attr_byte = oamData[4 * i + 2];
-            int yPos = int(oamData[4 * i]) + (vertical_flip(attr_byte) ? 7 - y : y);
             int xPos = int(oamData[4 * i + 3]) + int(horizontal_flip(attr_byte) ? 7 - x : x);
             if (hide_left_sprites != 0u && xPos < 8) {
                 continue;
@@ -37,7 +41,7 @@ void main() {
                 1
             );
             pixelIndex = 8 * y + x;
-            oamIndex = vertOamIndex[0];
+            oamIndex = i;
             EmitVertex();
         }
     }

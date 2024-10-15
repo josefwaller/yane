@@ -4,7 +4,11 @@ use sdl2::event::{
     Event::{Quit, Window},
     WindowEvent::Resized,
 };
-use std::mem::size_of;
+use std::{
+    mem::size_of,
+    thread::{sleep, sleep_ms},
+    time::Duration,
+};
 
 pub struct Gui {
     gl: glow::Context,
@@ -211,13 +215,13 @@ impl Gui {
             self.gl.bind_vertex_array(Some(self.tex_vao));
             self.gl.draw_arrays(glow::TRIANGLES, 0, 6);
         }
-        self.window.gl_swap_window();
         for event in self.event_loop.poll_iter() {
             match event {
                 Quit { .. } => return true,
                 _ => {}
             }
         }
+        self.window.gl_swap_window();
         false
     }
 
@@ -227,7 +231,9 @@ impl Gui {
         let oam_data: [u32; 4 * 64] = core::array::from_fn(|i| nes.ppu.oam[i] as u32);
         self.gl.uniform_1_u32_slice(oam_uni.as_ref(), &oam_data);
         // Map VV HHHH colors to RGB colors
-        let palette_colors: Vec<[f32; 3]> = nes.ppu.vram[0..0x100]
+        let palette_colors: Vec<[f32; 3]> = nes
+            .ppu
+            .vram
             .iter()
             .map(|b| self.palette[(b & 0x3F) as usize])
             .collect();
@@ -238,27 +244,46 @@ impl Gui {
             &palette_colors.as_slice().as_flattened(),
         );
         // Set various flags
-        let hide_left_sprites_uni = self
-            .gl
-            .get_uniform_location(self.program, "hide_left_sprites");
-        self.gl.uniform_1_u32(
-            hide_left_sprites_uni.as_ref(),
-            if nes.ppu.should_hide_leftmost_sprites() {
-                1
-            } else {
-                0
-            },
+        set_bool_uniform(
+            &self.gl,
+            &self.program,
+            "hide_left_sprites",
+            nes.ppu.should_hide_leftmost_sprites(),
         );
+        set_bool_uniform(
+            &self.gl,
+            &self.program,
+            "tall_sprites",
+            nes.ppu.is_8x16_sprites(),
+        );
+
+        let chr_uni = self.gl.get_uniform_location(self.program, "chrRom");
+        self.gl.uniform_1_i32_slice(
+            chr_uni.as_ref(),
+            &nes.cartridge
+                .chr_rom
+                .to_vec()
+                .iter()
+                .map(|x| *x as i32)
+                .collect::<Vec<i32>>()
+                .as_slice(),
+        );
+
         // Draw sprites as points
         // GLSL Shaders add pixels to form the full 8x8 sprite
         for (i, vao) in self.vao_array.iter().enumerate() {
             self.gl.bind_vertex_array(Some(*vao));
-            let sprite_addr =
-                (((nes.ppu.status & 0x08) as usize) << 12) + (nes.ppu.oam[4 * i + 1] as usize) * 16;
-            let sprite: [i32; 128] = core::array::from_fn(|i| {
-                let byte = i / 8;
-                let bit = i % 8;
-                ((nes.cartridge.chr_rom[sprite_addr + byte] >> (7 - bit)) & 0x01) as i32
+            let sprite_addr = nes.ppu.oam[4 * i + 1];
+            let sprite: [i32; 256] = core::array::from_fn(|j| {
+                let byte = j / 8;
+                let bit = j % 8;
+                let final_addr = if nes.ppu.is_8x16_sprites() {
+                    (sprite_addr & 0x01) as usize * 0x1000
+                        + (((sprite_addr & 0xFE) as usize) * 0x10 % 0x1000)
+                } else {
+                    nes.ppu.get_spr_pattern_table_addr() + (sprite_addr as usize) * 0x10
+                };
+                ((nes.cartridge.chr_rom[final_addr + byte] >> (7 - bit)) & 0x01) as i32
             });
             let sprite_uni = self.gl.get_uniform_location(self.program, "sprite");
             self.gl.uniform_1_i32_slice(sprite_uni.as_ref(), &sprite);
@@ -285,4 +310,9 @@ unsafe fn compile_and_link_shader(
     }
     gl.attach_shader(*program, shader);
     gl.delete_shader(shader);
+}
+
+unsafe fn set_bool_uniform(gl: &glow::Context, program: &glow::Program, name: &str, value: bool) {
+    let location = gl.get_uniform_location(*program, name);
+    gl.uniform_1_u32(location.as_ref(), if value { 1 } else { 0 });
 }

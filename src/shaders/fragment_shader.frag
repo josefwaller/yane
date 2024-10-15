@@ -3,14 +3,16 @@
 flat in int pixelIndex;
 flat in int oamIndex;
 
-uniform vec3 palettes[2 * 4 * 4];
-uniform int sprite[128];
+uniform vec3 palettes[2 * 4 * 4 * 3];
+uniform int sprite[256];
 uniform uint oamData[4 * 64];
+uniform uint tall_sprites;
 
 layout (location = 0) out vec4 color;
 
 void main() {
-    int index = sprite[pixelIndex] + 2 * sprite[pixelIndex + 64];
+    int offset = (tall_sprites == 0u || pixelIndex < 64) ? 0 : 64;
+    int index = sprite[offset + pixelIndex] + 2 * sprite[offset + pixelIndex + 64];
     if (index == 0) {
         discard;
     }

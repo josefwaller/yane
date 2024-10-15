@@ -1,5 +1,5 @@
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 #[cfg(feature = "gui")]
 use yane::{Gui, Nes};
 
@@ -12,6 +12,7 @@ fn main() {
         let data = std::fs::read(args[1].clone()).unwrap();
         let mut nes = Nes::from_cartridge(data.as_slice());
         let mut gui = Gui::new();
+        let mut last_render = Instant::now();
         loop {
             // println!(
             //     "{:#X}: {:#X}, {:2X}{:2X}, A: {:#X}, X: {:#X}, Y: {:#X}",
@@ -23,13 +24,13 @@ fn main() {
             //     nes.cpu.x,
             //     nes.cpu.y
             // );
-            (0..200).for_each(|_| {
-                nes.step().unwrap();
-            });
-            nes.on_nmi();
-            // sleep(Duration::from_millis(50));
-            if gui.render(&mut nes) {
-                break;
+            nes.step().unwrap();
+            if Instant::now().duration_since(last_render) >= Duration::from_millis(1000 / 60) {
+                if gui.render(&mut nes) {
+                    break;
+                }
+                last_render = Instant::now();
+                nes.on_nmi();
             }
         }
     }

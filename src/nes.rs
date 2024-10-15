@@ -50,7 +50,8 @@ impl Nes {
                 3 => self.ppu.oam_addr,
                 4 => self.ppu.oam_data,
                 5 => self.ppu.scroll,
-                6 => self.ppu.addr,
+                // TODO
+                6 => self.ppu.addr as u8,
                 7 => self.ppu.data,
                 _ => panic!("This should never happen. Addr is {:#X}", addr),
             },
@@ -70,10 +71,8 @@ impl Nes {
                 3 => self.ppu.oam_addr = value,
                 4 => self.ppu.oam_data = value,
                 5 => self.ppu.scroll = value,
-                6 => self.ppu.addr = value,
-                7 => {
-                    self.ppu.write_to_vram(value);
-                }
+                6 => self.ppu.write_to_addr(value),
+                7 => self.ppu.write_to_vram(value),
                 _ => panic!("This should never happen. Addr is {:#X}", addr),
             },
             0x4014 => {
