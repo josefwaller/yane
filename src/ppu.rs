@@ -93,4 +93,7 @@ impl Ppu {
         }
         0x000
     }
+    pub fn get_nametable_addr(&self) -> usize {
+        return 0x2000 + (self.status & 0x03) as usize * 0x400;
+    }
 }

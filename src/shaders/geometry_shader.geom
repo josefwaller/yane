@@ -14,6 +14,7 @@ uniform uint tall_sprites;
 
 flat out int pixelIndex;
 flat out int oamIndex;
+flat out int tileAddr;
 
 bool horizontal_flip(uint attr_byte) {
     return (attr_byte & 0x40u) != 0u;
@@ -23,27 +24,30 @@ bool vertical_flip(uint attr_byte) {
 }
 
 void main() {
-    int yMax = tall_sprites != 0u ? 16 : 8;
-    int i = vertOamIndex[0];
-    uint attr_byte = oamData[4 * i + 2];
-    for (int y = 0; y < 16; y++) {
-        int yPos = int(oamData[4 * i]) + (vertical_flip(attr_byte) ? 7 - y : y);
-        for (int x = 0; x < 8; x++) {
-            int xPos = int(oamData[4 * i + 3]) + int(horizontal_flip(attr_byte) ? 7 - x : x);
-            if (hide_left_sprites != 0u && xPos < 8) {
-                continue;
+    for (int j = 0; j < vertOamIndex.length(); j++) {
+        int yMax = tall_sprites != 0u ? 16 : 8;
+        int i = vertOamIndex[j];
+        uint attr_byte = oamData[4 * i + 2];
+        for (int y = 0; y < yMax; y++) {
+            int yPos = int(oamData[4 * i]) + (vertical_flip(attr_byte) ? 7 - y : y);
+            for (int x = 0; x < 8; x++) {
+                int xPos = int(oamData[4 * i + 3]) + int(horizontal_flip(attr_byte) ? 7 - x : x);
+                if (hide_left_sprites != 0u && xPos < 8) {
+                    continue;
+                }
+                // Screen coords are inbetween [-1.0, 1.0], sprite coords (xPos, yPos) are inbetween [0, 255]
+                gl_Position = vec4(
+                    float(xPos) / 128.0 - 1.0,
+                    1.0 - float(yPos) / 120.0,
+                    1,
+                    1
+                );
+                pixelIndex = 8 * y + x;
+                oamIndex = i;
+                tileAddr = int(oamData[4 * i + 1]);
+                EmitVertex();
             }
-            // Screen coords are inbetween [-1.0, 1.0], sprite coords (xPos, yPos) are inbetween [0, 255]
-            gl_Position = vec4(
-                float(xPos) / 128.0 - 1.0,
-                1.0 - float(yPos) / 120.0,
-                1,
-                1
-            );
-            pixelIndex = 8 * y + x;
-            oamIndex = i;
-            EmitVertex();
         }
+        EndPrimitive();
     }
-    EndPrimitive();
 }

@@ -2,6 +2,7 @@
 
 flat in int pixelIndex;
 flat in int oamIndex;
+flat in int tileAddr;
 
 uniform vec3 palettes[2 * 4 * 4 * 3];
 uniform int sprite[256];
