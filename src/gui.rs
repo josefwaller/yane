@@ -70,8 +70,9 @@ impl Gui {
 
             let vao_array = core::array::from_fn(|i| {
                 // Our "vertice" is a 1-D vector with the OAM ID in it
+                let vertices = [i];
                 let vertices_u8: &[u8] =
-                    core::slice::from_raw_parts([i].as_ptr() as *const u8, size_of::<i32>());
+                    core::slice::from_raw_parts(vertices.as_ptr() as *const u8, size_of::<i32>());
                 let vbo = gl.create_buffer().unwrap();
                 gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
                 gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, &vertices_u8, glow::STATIC_DRAW);
