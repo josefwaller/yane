@@ -21,11 +21,12 @@ pub struct Gui {
     vao_array: [NativeVertexArray; 64],
     texture_buffer: NativeFramebuffer,
     palette: [[f32; 3]; 0x40],
+    chr_rom_buffer: NativeBuffer,
 }
 impl Gui {
     pub fn new() -> Gui {
-        let window_width = 800;
-        let window_height = 600;
+        let window_width = 256 * 3;
+        let window_height = 240 * 3;
         unsafe {
             // Create SDL2 Window
             let sdl = sdl2::init().unwrap();
@@ -174,6 +175,8 @@ impl Gui {
             let palette: [[f32; 3]; 64] = core::array::from_fn(|i| {
                 core::array::from_fn(|j| palette_data[3 * i + j] as f32 / 255.0)
             });
+            // Load CHR ROM buffer
+            let chr_rom_buffer = gl.create_buffer().unwrap();
             Gui {
                 gl,
                 window,
@@ -186,6 +189,7 @@ impl Gui {
                 tex_vao,
                 texture_buffer,
                 palette,
+                chr_rom_buffer,
             }
         }
     }
@@ -269,7 +273,25 @@ impl Gui {
                 .collect::<Vec<i32>>()
                 .as_slice(),
         );
-
+        // Send CHR ROM data
+        self.gl.use_program(Some(self.program));
+        const SIZE: usize = 8192;
+        let x: [u8; 8192] = core::array::from_fn(|i| nes.cartridge.chr_rom[i]);
+        // Items IN UBO are always 16 bytes long
+        // So pad each byte with a bunch of 0s
+        let y: [u8; SIZE * 16] =
+            core::array::from_fn(|i| if i % 16 == 0 { x[i / 16] } else { 0x00 });
+        let l = self
+            .gl
+            .get_uniform_block_index(self.program, "ChrRomUBO")
+            .unwrap();
+        self.gl
+            .bind_buffer(glow::UNIFORM_BUFFER, Some(self.chr_rom_buffer));
+        self.gl
+            .bind_buffer_base(glow::UNIFORM_BUFFER, l, Some(self.chr_rom_buffer));
+        self.gl
+            .buffer_data_u8_slice(glow::UNIFORM_BUFFER, &y, glow::STATIC_DRAW);
+        self.gl.bind_buffer(glow::UNIFORM_BUFFER, None);
         // Draw sprites as points
         // GLSL Shaders add pixels to form the full 8x8 sprite
         for (i, vao) in self.vao_array.iter().enumerate() {
