@@ -15,7 +15,7 @@ pub struct Gui {
     _gl_context: sdl2::video::GLContext,
     window: sdl2::video::Window,
     event_loop: sdl2::EventPump,
-    program: NativeProgram,
+    sprite_program: NativeProgram,
     texture_program: NativeProgram,
     tex_vao: NativeVertexArray,
     vao_array: [NativeVertexArray; 64],
@@ -49,24 +49,24 @@ impl Gui {
             gl.enable(glow::BLEND);
             gl.blend_func(glow::BLEND_SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
             // Create program for rendering sprites to texture
-            let program = gl.create_program().expect("Unable to create program");
+            let sprite_program = gl.create_program().expect("Unable to create program");
             compile_and_link_shader(
                 &gl,
                 glow::VERTEX_SHADER,
-                include_str!("./shaders/vertex_shader.vert"),
-                &program,
+                include_str!("./shaders/pass_through.vert"),
+                &sprite_program,
             );
             compile_and_link_shader(
                 &gl,
                 glow::GEOMETRY_SHADER,
-                include_str!("./shaders/geometry_shader.geom"),
-                &program,
+                include_str!("./shaders/oam.geom"),
+                &sprite_program,
             );
             compile_and_link_shader(
                 &gl,
                 glow::FRAGMENT_SHADER,
-                include_str!("./shaders/fragment_shader.frag"),
-                &program,
+                include_str!("./shaders/tile.frag"),
+                &sprite_program,
             );
 
             let vao_array = core::array::from_fn(|i| {
@@ -88,11 +88,11 @@ impl Gui {
                 vao
             });
 
-            gl.link_program(program);
-            if !gl.get_program_link_status(program) {
+            gl.link_program(sprite_program);
+            if !gl.get_program_link_status(sprite_program) {
                 panic!(
                     "Couldn't link program: {}",
-                    gl.get_program_info_log(program)
+                    gl.get_program_info_log(sprite_program)
                 );
             }
             let texture_program = gl.create_program().unwrap();
@@ -183,7 +183,7 @@ impl Gui {
                 event_loop,
                 // This just needs to stay in scope
                 _gl_context: gl_context,
-                program,
+                sprite_program,
                 texture_program,
                 vao_array,
                 tex_vao,
@@ -195,7 +195,7 @@ impl Gui {
     }
     pub fn render(&mut self, nes: &Nes) -> bool {
         unsafe {
-            self.gl.use_program(Some(self.program));
+            self.gl.use_program(Some(self.sprite_program));
             self.gl
                 .bind_framebuffer(glow::FRAMEBUFFER, Some(self.texture_buffer));
             // Set clear color
@@ -232,7 +232,7 @@ impl Gui {
 
     unsafe fn render_sprites(&mut self, nes: &Nes) {
         // Pipe OAM data to GLSL
-        let oam_uni = self.gl.get_uniform_location(self.program, "oamData");
+        let oam_uni = self.gl.get_uniform_location(self.sprite_program, "oamData");
         let oam_data: [u32; 4 * 64] = core::array::from_fn(|i| nes.ppu.oam[i] as u32);
         self.gl.uniform_1_u32_slice(oam_uni.as_ref(), &oam_data);
         // Map VV HHHH colors to RGB colors
@@ -243,7 +243,9 @@ impl Gui {
             .map(|b| self.palette[(b & 0x3F) as usize])
             .collect();
         // Set colors matrix
-        let color_uni = self.gl.get_uniform_location(self.program, "palettes");
+        let color_uni = self
+            .gl
+            .get_uniform_location(self.sprite_program, "palettes");
         self.gl.uniform_3_f32_slice(
             color_uni.as_ref(),
             &palette_colors.as_slice().as_flattened(),
@@ -251,18 +253,18 @@ impl Gui {
         // Set various flags
         set_bool_uniform(
             &self.gl,
-            &self.program,
+            &self.sprite_program,
             "hide_left_sprites",
             nes.ppu.should_hide_leftmost_sprites(),
         );
         set_bool_uniform(
             &self.gl,
-            &self.program,
+            &self.sprite_program,
             "tall_sprites",
             nes.ppu.is_8x16_sprites(),
         );
 
-        let chr_uni = self.gl.get_uniform_location(self.program, "chrRom");
+        let chr_uni = self.gl.get_uniform_location(self.sprite_program, "chrRom");
         self.gl.uniform_1_i32_slice(
             chr_uni.as_ref(),
             &nes.cartridge
@@ -274,7 +276,7 @@ impl Gui {
                 .as_slice(),
         );
         // Send CHR ROM data
-        self.gl.use_program(Some(self.program));
+        self.gl.use_program(Some(self.sprite_program));
 
         let data: &[u8] = nes.cartridge.chr_rom.as_slice();
         self.gl.active_texture(glow::TEXTURE0);
@@ -312,7 +314,7 @@ impl Gui {
         // self.gl.texture_parameter_i32(chr_rom_tex, glow::LINEAR_MIPMAP_NEAREST, glow::);
         self.gl.uniform_1_i32(
             self.gl
-                .get_uniform_location(self.program, "chrRomTex")
+                .get_uniform_location(self.sprite_program, "chrRomTex")
                 .as_ref(),
             0,
         );

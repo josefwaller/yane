@@ -5,10 +5,10 @@ layout (location = 0) in int oamIndex;
 uniform uint oamData[4 * 64];
 uniform mat3 colors;
 
-out int vertOamIndex;
+out int index;
 
 void main() {
-    vertOamIndex = oamIndex;
+    index = oamIndex;
     gl_Position = vec4(
         vec3(
             0,

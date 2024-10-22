@@ -1,10 +1,12 @@
 #version 330
+// Geometry shader that interprets `index` as the index of an object in OAM
+// Spawns points accordingly
+
 layout (points) in;
 layout (points, max_vertices = 128) out;
 
-in int vertOamIndex[];
+in int index[];
 
-uniform mat3 colors;
 uniform uint oamData[4 * 64];
 // Whether to hide the pixels in the leftmost 8 pixel columns
 uniform uint hide_left_sprites;
@@ -14,7 +16,6 @@ uniform uint tall_sprites;
 
 flat out int pixelIndex;
 flat out int paletteIndex;
-flat out int oamIndex;
 flat out int tileAddr;
 
 bool horizontal_flip(uint attr_byte) {
@@ -25,9 +26,9 @@ bool vertical_flip(uint attr_byte) {
 }
 
 void main() {
-    for (int j = 0; j < vertOamIndex.length(); j++) {
+    for (int j = 0; j < index.length(); j++) {
         int yMax = tall_sprites != 0u ? 16 : 8;
-        int i = vertOamIndex[j];
+        int i = index[j];
         uint attr_byte = oamData[4 * i + 2];
         for (int y = 0; y < yMax; y++) {
             int yPos = int(oamData[4 * i]) + (vertical_flip(attr_byte) ? 7 - y : y);
@@ -44,9 +45,8 @@ void main() {
                     1
                 );
                 pixelIndex = 8 * y + x;
-                oamIndex = i;
                 tileAddr = int(oamData[4 * i + 1]);
-                paletteIndex = int(oamData[4 * oamIndex + 2]) % 4;
+                paletteIndex = int(oamData[4 * i + 2]) % 4;
                 EmitVertex();
             }
         }
