@@ -275,41 +275,51 @@ impl Gui {
         );
         // Send CHR ROM data
         self.gl.use_program(Some(self.program));
-        const SIZE: usize = 8192;
-        let x: [u8; 8192] = core::array::from_fn(|i| nes.cartridge.chr_rom[i]);
-        // Items IN UBO are always 16 bytes long
-        // So pad each byte with a bunch of 0s
-        let y: [u8; SIZE * 16] =
-            core::array::from_fn(|i| if i % 16 == 0 { x[i / 16] } else { 0x00 });
-        let l = self
+
+        let data: &[u8] = nes.cartridge.chr_rom.as_slice();
+        self.gl.active_texture(glow::TEXTURE0);
+        let chr_rom_tex = self
             .gl
-            .get_uniform_block_index(self.program, "ChrRomUBO")
-            .unwrap();
-        self.gl
-            .bind_buffer(glow::UNIFORM_BUFFER, Some(self.chr_rom_buffer));
-        self.gl
-            .bind_buffer_base(glow::UNIFORM_BUFFER, l, Some(self.chr_rom_buffer));
-        self.gl
-            .buffer_data_u8_slice(glow::UNIFORM_BUFFER, &y, glow::STATIC_DRAW);
-        self.gl.bind_buffer(glow::UNIFORM_BUFFER, None);
+            .create_texture()
+            .expect("Unable to create a Texture");
+        self.gl.bind_texture(glow::TEXTURE_1D, Some(chr_rom_tex));
+        self.gl.tex_storage_1d(glow::TEXTURE_1D, 0, glow::R8, 256);
+        self.gl.tex_image_1d(
+            glow::TEXTURE_1D,
+            0,
+            glow::R8 as i32,
+            nes.cartridge.chr_rom.len() as i32,
+            0,
+            glow::RED,
+            glow::UNSIGNED_BYTE,
+            Some(&data),
+        );
+        self.gl.tex_parameter_i32(
+            glow::TEXTURE1,
+            glow::TEXTURE_MIN_FILTER,
+            glow::NEAREST as i32,
+        );
+        self.gl.tex_parameter_i32(
+            glow::TEXTURE_1D,
+            glow::TEXTURE_MAG_FILTER,
+            glow::NEAREST as i32,
+        );
+        self.gl.tex_parameter_i32(
+            glow::TEXTURE_1D,
+            glow::TEXTURE_MIN_FILTER,
+            glow::NEAREST as i32,
+        );
+        // self.gl.texture_parameter_i32(chr_rom_tex, glow::LINEAR_MIPMAP_NEAREST, glow::);
+        self.gl.uniform_1_i32(
+            self.gl
+                .get_uniform_location(self.program, "chrRomTex")
+                .as_ref(),
+            0,
+        );
         // Draw sprites as points
         // GLSL Shaders add pixels to form the full 8x8 sprite
         for (i, vao) in self.vao_array.iter().enumerate() {
             self.gl.bind_vertex_array(Some(*vao));
-            let sprite_addr = nes.ppu.oam[4 * i + 1];
-            let sprite: [i32; 256] = core::array::from_fn(|j| {
-                let byte = j / 8;
-                let bit = j % 8;
-                let final_addr = if nes.ppu.is_8x16_sprites() {
-                    (sprite_addr & 0x01) as usize * 0x1000
-                        + (((sprite_addr & 0xFE) as usize) * 0x10 % 0x1000)
-                } else {
-                    nes.ppu.get_spr_pattern_table_addr() + (sprite_addr as usize) * 0x10
-                };
-                ((nes.cartridge.chr_rom[final_addr + byte] >> (7 - bit)) & 0x01) as i32
-            });
-            let sprite_uni = self.gl.get_uniform_location(self.program, "sprite");
-            self.gl.uniform_1_i32_slice(sprite_uni.as_ref(), &sprite);
             self.gl.draw_arrays(glow::POINTS, 0, 1);
         }
     }

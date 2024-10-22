@@ -13,6 +13,7 @@ uniform uint hide_left_sprites;
 uniform uint tall_sprites;
 
 flat out int pixelIndex;
+flat out int paletteIndex;
 flat out int oamIndex;
 flat out int tileAddr;
 
@@ -45,6 +46,7 @@ void main() {
                 pixelIndex = 8 * y + x;
                 oamIndex = i;
                 tileAddr = int(oamData[4 * i + 1]);
+                paletteIndex = int(oamData[4 * oamIndex + 2]) % 4;
                 EmitVertex();
             }
         }
