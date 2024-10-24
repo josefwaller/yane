@@ -20,7 +20,8 @@ pub struct Ppu {
     /// The OAMDMA register
     pub oam_dma: u8,
     /// VRAM
-    pub vram: [u8; 0x100],
+    pub palette_ram: [u8; 0x100],
+    pub nametable_ram: [u8; 0x400],
     // W register
     w: bool,
 }
@@ -38,14 +39,16 @@ impl Ppu {
             addr: 0,
             data: 0,
             oam_dma: 0,
-            vram: [0; 0x100],
+            palette_ram: [0; 0x100],
+            nametable_ram: [0; 0x400],
             w: true,
         }
     }
 
     pub fn write_to_addr(&mut self, value: u8) {
+        println!("Writing {:X} to addr", value);
         if self.w {
-            self.addr = (self.addr & 0x00FF) + (value as u16) << 8;
+            self.addr = (self.addr & 0x00FF) + ((value as u16) << 8);
         } else {
             self.addr = (self.addr & 0x3F00) + value as u16;
         }
@@ -59,17 +62,19 @@ impl Ppu {
     /// Write a single byte to VRAM at `PPUADDR`
     /// Increments `PPUADDR` by 1 or by 32 depending `PPUSTATUS`
     pub fn write_to_vram(&mut self, value: u8) {
-        if self.addr > 0x3F1F {
-            return;
+        println!("Writing {:X?} to {:X}", value, self.addr);
+        if self.addr >= 0x3F00 {
+            self.palette_ram[(self.addr - 0x3F00) as usize % 0x100] = value;
+        } else if self.addr >= 0x2000 {
+            self.nametable_ram[(self.addr - 0x2000) as usize % 0x400] = value
         }
-        // println!("Writing VRAM {:X} = {:X}", self.addr, value);
-        if self.addr > 0x3EFF {
-            self.vram[(self.addr - 0x3F00) as usize % 0x100] = value;
-            self.addr = self
-                .addr
-                .wrapping_add(if self.ctrl & 0x04 == 0 { 1 } else { 32 });
-        } else {
-        }
+        self.addr = self
+            .addr
+            .wrapping_add(if self.ctrl & 0x04 == 0 { 1 } else { 32 });
+    }
+
+    pub fn read_byte(&self, addr: usize) -> u8 {
+        0
     }
 
     pub fn is_8x16_sprites(&self) -> bool {

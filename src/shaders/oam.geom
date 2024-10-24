@@ -12,7 +12,7 @@ uniform uint oamData[4 * 64];
 uniform uint hide_left_sprites;
 // Whether to render 8x8 or 8x16 sprites
 // True (i.e. not 0) for 8x16
-uniform uint tall_sprites;
+uniform uint tallSprites;
 
 flat out int pixelIndex;
 flat out int paletteIndex;
@@ -27,7 +27,7 @@ bool vertical_flip(uint attr_byte) {
 
 void main() {
     for (int j = 0; j < index.length(); j++) {
-        int yMax = tall_sprites != 0u ? 16 : 8;
+        int yMax = tallSprites != 0u ? 16 : 8;
         int i = index[j];
         uint attr_byte = oamData[4 * i + 2];
         for (int y = 0; y < yMax; y++) {
@@ -41,7 +41,7 @@ void main() {
                 gl_Position = vec4(
                     float(xPos) / 128.0 - 1.0,
                     1.0 - float(yPos) / 120.0,
-                    1,
+                    0,
                     1
                 );
                 pixelIndex = 8 * y + x;

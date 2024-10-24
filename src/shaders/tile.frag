@@ -5,12 +5,13 @@ flat in int pixelIndex;
 flat in int tileAddr;
 // Indes of the palette to use
 flat in int paletteIndex;
+
 // Texture holding the CHR_ROM values
 uniform isampler1D chrRomTex;
 // Uniform holding the palettes
 uniform vec3 palettes[2 * 4 * 4 * 3];
 // 1 if 8x16 is on, 0 otherwise
-uniform uint tall_sprites;
+uniform uint tallSprites;
 
 layout (location = 0) out vec4 color;
 
@@ -20,7 +21,7 @@ int getBitAt(int i) {
 }
 
 void main() {
-    int offset = (1 - int(tall_sprites == 0u || pixelIndex < 64)) * 64;
+    int offset = (1 - int(tallSprites == 0u || pixelIndex < 64)) * 64;
     int index = getBitAt(offset + pixelIndex) + 2 * getBitAt(offset + pixelIndex + 64);
     if (index == 0) {
         discard;

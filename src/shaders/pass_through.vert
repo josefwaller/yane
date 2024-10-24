@@ -2,9 +2,6 @@
 
 layout (location = 0) in int oamIndex;
 
-uniform uint oamData[4 * 64];
-uniform mat3 colors;
-
 out int index;
 
 void main() {

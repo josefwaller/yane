@@ -21,10 +21,12 @@ pub struct Gui {
     vao_array: [NativeVertexArray; 64],
     texture_buffer: NativeFramebuffer,
     palette: [[f32; 3]; 0x40],
-    chr_rom_buffer: NativeBuffer,
+    background_program: NativeProgram,
+    background_vao: NativeVertexArray,
 }
 impl Gui {
-    pub fn new() -> Gui {
+    // TODO: Rename
+    pub fn new(nes: &Nes) -> Gui {
         let window_width = 256 * 3;
         let window_height = 240 * 3;
         unsafe {
@@ -43,11 +45,42 @@ impl Gui {
             let gl_context = window.gl_create_context().unwrap();
             let gl =
                 glow::Context::from_loader_function(|s| video.gl_get_proc_address(s) as *const _);
+
             window.gl_make_current(&gl_context).unwrap();
             let event_loop = sdl.event_pump().unwrap();
 
-            gl.enable(glow::BLEND);
-            gl.blend_func(glow::BLEND_SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+            // Send CHR ROM data
+            let data: &[u8] = nes.cartridge.chr_rom.as_slice();
+            let chr_rom_tex = gl.create_texture().expect("Unable to create a Texture");
+            gl.bind_texture(glow::TEXTURE_1D, Some(chr_rom_tex));
+            // gl.tex_storage_1d(glow::TEXTURE_1D, 1, glow::R8, 256);
+            gl.tex_image_1d(
+                glow::TEXTURE_1D,
+                0,
+                glow::R8 as i32,
+                nes.cartridge.chr_rom.len() as i32,
+                0,
+                glow::RED,
+                glow::UNSIGNED_BYTE,
+                Some(&data),
+            );
+            gl.tex_parameter_i32(
+                glow::TEXTURE_1D,
+                glow::TEXTURE_MIN_FILTER,
+                glow::NEAREST as i32,
+            );
+
+            gl.tex_parameter_i32(
+                glow::TEXTURE_1D,
+                glow::TEXTURE_MAG_FILTER,
+                glow::NEAREST as i32,
+            );
+            gl.tex_parameter_i32(
+                glow::TEXTURE_1D,
+                glow::TEXTURE_MIN_FILTER,
+                glow::NEAREST as i32,
+            );
+
             // Create program for rendering sprites to texture
             let sprite_program = gl.create_program().expect("Unable to create program");
             compile_and_link_shader(
@@ -69,25 +102,6 @@ impl Gui {
                 &sprite_program,
             );
 
-            let vao_array = core::array::from_fn(|i| {
-                // Our "vertice" is a 1-D vector with the OAM ID in it
-                let vertices = [i];
-                let vertices_u8: &[u8] =
-                    core::slice::from_raw_parts(vertices.as_ptr() as *const u8, size_of::<i32>());
-                let vbo = gl.create_buffer().unwrap();
-                gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
-                gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, &vertices_u8, glow::STATIC_DRAW);
-
-                let vao = gl
-                    .create_vertex_array()
-                    .expect("Could not create VertexArray");
-                gl.bind_vertex_array(Some(vao));
-                gl.enable_vertex_attrib_array(0);
-                // Describe the data as a single int
-                gl.vertex_attrib_pointer_i32(0, 1, glow::INT, size_of::<i32>() as i32, 0);
-                vao
-            });
-
             gl.link_program(sprite_program);
             if !gl.get_program_link_status(sprite_program) {
                 panic!(
@@ -95,7 +109,47 @@ impl Gui {
                     gl.get_program_info_log(sprite_program)
                 );
             }
+
+            let vao_array = core::array::from_fn(|i| {
+                // Our "vertice" is a 1-D vector with the OAM ID in it
+                let vertices = [i as i32];
+                buffer_data_slice(&gl, &sprite_program, &vertices, 1)
+            });
+
+            let background_program = gl.create_program().expect("Unable to create program!");
+            compile_and_link_shader(
+                &gl,
+                glow::VERTEX_SHADER,
+                include_str!("./shaders/pass_through.vert"),
+                &background_program,
+            );
+            compile_and_link_shader(
+                &gl,
+                glow::GEOMETRY_SHADER,
+                include_str!("./shaders/background.geom"),
+                &background_program,
+            );
+            compile_and_link_shader(
+                &gl,
+                glow::FRAGMENT_SHADER,
+                include_str!("./shaders/tile.frag"),
+                &background_program,
+            );
+
+            gl.link_program(background_program);
+            if !gl.get_program_link_status(background_program) {
+                panic!(
+                    "Couldn't link program: {}",
+                    gl.get_program_info_log(background_program)
+                );
+            }
+            let verts: [i32; 32 * 60] = core::array::from_fn(|i| i as i32);
+            let background_vao = buffer_data_slice(&gl, &background_program, &verts, 1);
+
             let texture_program = gl.create_program().unwrap();
+
+            gl.link_program(texture_program);
+            gl.use_program(Some(texture_program));
             compile_and_link_shader(
                 &gl,
                 glow::VERTEX_SHADER,
@@ -108,8 +162,7 @@ impl Gui {
                 include_str!("./shaders/quad_shader.frag"),
                 &texture_program,
             );
-            gl.link_program(texture_program);
-            gl.use_program(Some(texture_program));
+
             let quad_verts: &[f32] = [
                 [-1.0, -1.0, 0.0],
                 [-1.0, 1.0, 0.0],
@@ -124,7 +177,7 @@ impl Gui {
                 quad_verts.len() * size_of::<f32>(),
             );
             let tex_buf = gl.create_buffer().unwrap();
-            gl.bind_buffer(glow::VERTEX_ARRAY, Some(tex_buf));
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(tex_buf));
             gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, &quad_verts_u8, glow::STATIC_DRAW);
 
             let vao = gl.create_vertex_array().unwrap();
@@ -175,8 +228,11 @@ impl Gui {
             let palette: [[f32; 3]; 64] = core::array::from_fn(|i| {
                 core::array::from_fn(|j| palette_data[3 * i + j] as f32 / 255.0)
             });
-            // Load CHR ROM buffer
-            let chr_rom_buffer = gl.create_buffer().unwrap();
+
+            let e = gl.get_error();
+            if e != glow::NO_ERROR {
+                panic!("Error generated sometime during initialization: {:X?}", e);
+            }
             Gui {
                 gl,
                 window,
@@ -189,7 +245,8 @@ impl Gui {
                 tex_vao,
                 texture_buffer,
                 palette,
-                chr_rom_buffer,
+                background_program,
+                background_vao,
             }
         }
     }
@@ -199,12 +256,13 @@ impl Gui {
             self.gl
                 .bind_framebuffer(glow::FRAMEBUFFER, Some(self.texture_buffer));
             // Set clear color
-            let clear_color = self.palette[(nes.ppu.vram[0] & 0x3F) as usize];
+            let clear_color = self.palette[(nes.ppu.palette_ram[0] & 0x3F) as usize];
             self.gl
                 .clear_color(clear_color[0], clear_color[1], clear_color[2], 1.0);
             self.gl.viewport(0, 0, 256, 240);
             self.gl.clear(glow::COLOR_BUFFER_BIT);
 
+            self.render_background(nes);
             if nes.ppu.is_sprite_enabled() {
                 self.render_sprites(nes);
             }
@@ -227,10 +285,42 @@ impl Gui {
             }
         }
         self.window.gl_swap_window();
+
         false
     }
 
+    // TODO: Dedup btwn this and render sprites
+    unsafe fn render_background(&mut self, nes: &Nes) {
+        self.gl.use_program(Some(self.background_program));
+        self.gl.bind_vertex_array(Some(self.background_vao));
+        // Map VV HHHH colors to RGB colors
+        let palette_colors: Vec<[f32; 3]> = nes
+            .ppu
+            .palette_ram
+            .iter()
+            .map(|b| self.palette[(b & 0x3F) as usize])
+            .collect();
+        // Set colors matrix
+        let color_uni = self
+            .gl
+            .get_uniform_location(self.background_program, "palettes");
+        self.gl.uniform_3_f32_slice(
+            color_uni.as_ref(),
+            &palette_colors.as_slice().as_flattened(),
+        );
+        // Set nametable
+        let nametable_uni = self
+            .gl
+            .get_uniform_location(self.background_program, "nametable");
+        self.gl.uniform_1_i32_slice(
+            nametable_uni.as_ref(),
+            &nes.ppu.nametable_ram.map(|b| b as i32),
+        );
+        self.gl.draw_arrays(glow::POINTS, 0, 30 * 32);
+    }
+
     unsafe fn render_sprites(&mut self, nes: &Nes) {
+        self.gl.use_program(Some(self.sprite_program));
         // Pipe OAM data to GLSL
         let oam_uni = self.gl.get_uniform_location(self.sprite_program, "oamData");
         let oam_data: [u32; 4 * 64] = core::array::from_fn(|i| nes.ppu.oam[i] as u32);
@@ -238,7 +328,7 @@ impl Gui {
         // Map VV HHHH colors to RGB colors
         let palette_colors: Vec<[f32; 3]> = nes
             .ppu
-            .vram
+            .palette_ram
             .iter()
             .map(|b| self.palette[(b & 0x3F) as usize])
             .collect();
@@ -260,70 +350,15 @@ impl Gui {
         set_bool_uniform(
             &self.gl,
             &self.sprite_program,
-            "tall_sprites",
+            "tallSprites",
             nes.ppu.is_8x16_sprites(),
-        );
-
-        let chr_uni = self.gl.get_uniform_location(self.sprite_program, "chrRom");
-        self.gl.uniform_1_i32_slice(
-            chr_uni.as_ref(),
-            &nes.cartridge
-                .chr_rom
-                .to_vec()
-                .iter()
-                .map(|x| *x as i32)
-                .collect::<Vec<i32>>()
-                .as_slice(),
-        );
-        // Send CHR ROM data
-        self.gl.use_program(Some(self.sprite_program));
-
-        let data: &[u8] = nes.cartridge.chr_rom.as_slice();
-        self.gl.active_texture(glow::TEXTURE0);
-        let chr_rom_tex = self
-            .gl
-            .create_texture()
-            .expect("Unable to create a Texture");
-        self.gl.bind_texture(glow::TEXTURE_1D, Some(chr_rom_tex));
-        self.gl.tex_storage_1d(glow::TEXTURE_1D, 0, glow::R8, 256);
-        self.gl.tex_image_1d(
-            glow::TEXTURE_1D,
-            0,
-            glow::R8 as i32,
-            nes.cartridge.chr_rom.len() as i32,
-            0,
-            glow::RED,
-            glow::UNSIGNED_BYTE,
-            Some(&data),
-        );
-        self.gl.tex_parameter_i32(
-            glow::TEXTURE1,
-            glow::TEXTURE_MIN_FILTER,
-            glow::NEAREST as i32,
-        );
-        self.gl.tex_parameter_i32(
-            glow::TEXTURE_1D,
-            glow::TEXTURE_MAG_FILTER,
-            glow::NEAREST as i32,
-        );
-        self.gl.tex_parameter_i32(
-            glow::TEXTURE_1D,
-            glow::TEXTURE_MIN_FILTER,
-            glow::NEAREST as i32,
-        );
-        // self.gl.texture_parameter_i32(chr_rom_tex, glow::LINEAR_MIPMAP_NEAREST, glow::);
-        self.gl.uniform_1_i32(
-            self.gl
-                .get_uniform_location(self.sprite_program, "chrRomTex")
-                .as_ref(),
-            0,
         );
         // Draw sprites as points
         // GLSL Shaders add pixels to form the full 8x8 sprite
-        for (i, vao) in self.vao_array.iter().enumerate() {
+        self.vao_array.iter().for_each(|vao| {
             self.gl.bind_vertex_array(Some(*vao));
             self.gl.draw_arrays(glow::POINTS, 0, 1);
-        }
+        });
     }
 }
 
@@ -350,4 +385,29 @@ unsafe fn compile_and_link_shader(
 unsafe fn set_bool_uniform(gl: &glow::Context, program: &glow::Program, name: &str, value: bool) {
     let location = gl.get_uniform_location(*program, name);
     gl.uniform_1_u32(location.as_ref(), if value { 1 } else { 0 });
+}
+unsafe fn buffer_data_slice(
+    gl: &Context,
+    program: &Program,
+    data: &[i32],
+    count: i32,
+) -> VertexArray {
+    gl.use_program(Some(*program));
+    let vao = gl
+        .create_vertex_array()
+        .expect("Could not create VertexArray");
+    gl.bind_vertex_array(Some(vao));
+    // Pipe data
+    let data_u8: &[u8] =
+        core::slice::from_raw_parts(data.as_ptr() as *const u8, data.len() * size_of::<i32>());
+    let vbo = gl.create_buffer().unwrap();
+    gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
+    gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, data_u8, glow::STATIC_DRAW);
+    // Describe the format of the data
+    gl.enable_vertex_attrib_array(0);
+    gl.vertex_attrib_pointer_i32(0, 1 as i32, glow::INT, 4, 0);
+    // Unbind
+    gl.bind_vertex_array(None);
+
+    vao
 }

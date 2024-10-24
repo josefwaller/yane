@@ -11,7 +11,7 @@ fn main() {
         let args: Vec<String> = std::env::args().collect();
         let data = std::fs::read(args[1].clone()).unwrap();
         let mut nes = Nes::from_cartridge(data.as_slice());
-        let mut gui = Gui::new();
+        let mut gui = Gui::new(&nes);
         let mut last_render = Instant::now();
         loop {
             // println!(
