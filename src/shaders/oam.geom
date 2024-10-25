@@ -13,6 +13,8 @@ uniform uint hide_left_sprites;
 // Whether to render 8x8 or 8x16 sprites
 // True (i.e. not 0) for 8x16
 uniform uint tallSprites;
+// location of sprite pattern table in CHR ROM
+uniform int spritePatternLocation;
 
 flat out int pixelIndex;
 flat out int paletteIndex;
@@ -45,7 +47,7 @@ void main() {
                     1
                 );
                 pixelIndex = 8 * y + x;
-                tileAddr = int(oamData[4 * i + 1]);
+                tileAddr = spritePatternLocation + int(oamData[4 * i + 1]);
                 paletteIndex = int(oamData[4 * i + 2]) % 4;
                 EmitVertex();
             }

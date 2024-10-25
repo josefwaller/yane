@@ -87,10 +87,19 @@ impl Ppu {
         (self.mask & 0x04) == 0
     }
     pub fn get_spr_pattern_table_addr(&self) -> usize {
-        if self.status & 0x08 != 0 {
+        if self.ctrl & 0x08 != 0 {
             return 0x1000;
         }
-        0x000
+        0x0000
+    }
+    pub fn get_background_pattern_table_addr(&self) -> usize {
+        if self.ctrl & 0x10 != 0 {
+            return 0x1000;
+        }
+        0x0000
+    }
+    pub fn get_nmi_enabled(&self) -> bool {
+        return self.ctrl & 0x80 != 0;
     }
     // TODO: maybe remove, just do this in nes
     pub fn on_vblank(&mut self) {

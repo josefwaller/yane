@@ -318,29 +318,19 @@ impl Gui {
     unsafe fn render_background(&mut self, nes: &Nes) {
         self.gl.use_program(Some(self.background_program));
         self.gl.bind_vertex_array(Some(self.background_vao));
-        // Map VV HHHH colors to RGB colors
-        let palette_colors: Vec<[f32; 3]> = nes
-            .ppu
-            .palette_ram
-            .iter()
-            .map(|b| self.palette[(b & 0x3F) as usize])
-            .collect();
-        // Set colors matrix
-        let color_uni = self
-            .gl
-            .get_uniform_location(self.background_program, "palettes");
-        self.gl.uniform_3_f32_slice(
-            color_uni.as_ref(),
-            &palette_colors.as_slice().as_flattened(),
-        );
+        self.setup_render_uniforms(&self.background_program, nes);
         // Set nametable
         let nametable_uni = self
             .gl
             .get_uniform_location(self.background_program, "nametable");
-        self.gl.uniform_1_i32_slice(
-            nametable_uni.as_ref(),
-            &nes.ppu.nametable_ram.map(|b| b as i32),
+        let n = nes.ppu.nametable_ram.map(|b| b as i32);
+        set_int_uniform(
+            &self.gl,
+            &self.background_program,
+            "backgroundPatternLocation",
+            nes.ppu.get_background_pattern_table_addr() as i32,
         );
+        self.gl.uniform_1_i32_slice(nametable_uni.as_ref(), &n);
         self.gl.draw_arrays(glow::POINTS, 0, 30 * 32);
     }
 
@@ -350,21 +340,7 @@ impl Gui {
         let oam_uni = self.gl.get_uniform_location(self.sprite_program, "oamData");
         let oam_data: [u32; 4 * 64] = core::array::from_fn(|i| nes.ppu.oam[i] as u32);
         self.gl.uniform_1_u32_slice(oam_uni.as_ref(), &oam_data);
-        // Map VV HHHH colors to RGB colors
-        let palette_colors: Vec<[f32; 3]> = nes
-            .ppu
-            .palette_ram
-            .iter()
-            .map(|b| self.palette[(b & 0x3F) as usize])
-            .collect();
-        // Set colors matrix
-        let color_uni = self
-            .gl
-            .get_uniform_location(self.sprite_program, "palettes");
-        self.gl.uniform_3_f32_slice(
-            color_uni.as_ref(),
-            &palette_colors.as_slice().as_flattened(),
-        );
+        self.setup_render_uniforms(&self.sprite_program, nes);
         // Set various flags
         set_bool_uniform(
             &self.gl,
@@ -378,12 +354,33 @@ impl Gui {
             "tallSprites",
             nes.ppu.is_8x16_sprites(),
         );
+        set_int_uniform(
+            &self.gl,
+            &self.sprite_program,
+            "spritePatternLocation",
+            nes.ppu.get_spr_pattern_table_addr() as i32,
+        );
         // Draw sprites as points
         // GLSL Shaders add pixels to form the full 8x8 sprite
         self.vao_array.iter().for_each(|vao| {
             self.gl.bind_vertex_array(Some(*vao));
             self.gl.draw_arrays(glow::POINTS, 0, 1);
         });
+    }
+
+    unsafe fn setup_render_uniforms(&self, program: &NativeProgram, nes: &Nes) {
+        let palette_colors: Vec<[f32; 3]> = nes
+            .ppu
+            .palette_ram
+            .iter()
+            .map(|b| self.palette[(b & 0x3F) as usize])
+            .collect();
+        // Set colors matrix
+        let color_uni = self.gl.get_uniform_location(*program, "palettes");
+        self.gl.uniform_3_f32_slice(
+            color_uni.as_ref(),
+            &palette_colors.as_slice().as_flattened(),
+        );
     }
 }
 
@@ -410,6 +407,10 @@ unsafe fn compile_and_link_shader(
 unsafe fn set_bool_uniform(gl: &glow::Context, program: &glow::Program, name: &str, value: bool) {
     let location = gl.get_uniform_location(*program, name);
     gl.uniform_1_u32(location.as_ref(), if value { 1 } else { 0 });
+}
+unsafe fn set_int_uniform(gl: &glow::Context, program: &glow::Program, name: &str, value: i32) {
+    let location = gl.get_uniform_location(*program, name);
+    gl.uniform_1_i32(location.as_ref(), value);
 }
 unsafe fn buffer_data_slice(
     gl: &Context,

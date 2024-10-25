@@ -15,19 +15,23 @@ fn main() {
         let mut last_render = Instant::now();
         loop {
             nes.step().unwrap();
+            // println!(
+            //     "{:X} {:X} {:X} status = {:X}",
+            //     nes.read_byte(nes.cpu.p_c as usize),
+            //     nes.read_byte(nes.cpu.p_c as usize + 1),
+            //     nes.read_byte(nes.cpu.p_c as usize + 2),
+            //     nes.ppu.status
+            // );
             if Instant::now().duration_since(last_render) >= Duration::from_millis(1000 / 60) {
                 gui.set_input(&mut nes);
-                if gui.render(&mut nes) {
-                    break;
+                nes.ppu.on_vblank();
+                if nes.ppu.get_nmi_enabled() {
+                    if gui.render(&mut nes) {
+                        break;
+                    }
+                    last_render = Instant::now();
+                    nes.on_nmi();
                 }
-                last_render = Instant::now();
-                // println!(
-                //     "{:X} {:X} {:X}",
-                //     nes.read_byte(nes.cpu.p_c as usize),
-                //     nes.read_byte(nes.cpu.p_c as usize + 1),
-                //     nes.read_byte(nes.cpu.p_c as usize + 2)
-                // );
-                nes.on_nmi();
             }
         }
     }

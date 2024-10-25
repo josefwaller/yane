@@ -72,10 +72,7 @@ impl Nes {
         return match addr {
             0..0x2000 => self.mem[addr % 0x0800],
             0x2000..0x4000 => match addr % 8 {
-                0 => {
-                    println!("CTRL is {:X}", self.ppu.ctrl);
-                    self.ppu.ctrl
-                }
+                0 => self.ppu.ctrl,
                 1 => self.ppu.mask,
                 2 => {
                     // VBLANK is cleared on read
@@ -160,8 +157,6 @@ impl Nes {
     }
 
     pub fn on_nmi(&mut self) {
-        // Update PPU (sets VBLANK flag)
-        self.ppu.on_vblank();
         self.push_to_stack_u16(self.cpu.p_c);
         self.push_to_stack(self.cpu.s_r.to_byte());
         // Go to NMI vector

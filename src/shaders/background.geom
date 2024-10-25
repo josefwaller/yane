@@ -4,7 +4,8 @@ layout (points, max_vertices=64) out;
 
 in int index[];
 
-uniform int nametable[0x400];
+uniform int nametable[0x3C0];
+uniform int backgroundPatternLocation;
 
 flat out int pixelIndex;
 flat out int tileAddr;
@@ -23,9 +24,8 @@ void main() {
                     -1,
                     1);
                 pixelIndex = 8 * y + x;
-                // 0x100 instead of 0x1000 since this is multiplied by 10
-                // TODO: Switch depending on bit 3 of PPU CTRL
-                tileAddr = 0x100 + nametable[j];
+                // Divide by 0x10 since each tile is 16 bytes long
+                tileAddr = backgroundPatternLocation / 0x10 + nametable[j];
                 paletteIndex = 0;
                 EmitVertex();
             }
