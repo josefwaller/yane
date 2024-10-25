@@ -9,6 +9,8 @@ pub mod opcodes;
 pub use cartridge::Cartridge;
 mod ppu;
 pub use ppu::Ppu;
+mod controller;
+pub use controller::Controller;
 #[cfg(feature = "gui")]
 mod gui;
 #[cfg(feature = "gui")]

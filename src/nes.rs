@@ -1,4 +1,4 @@
-use crate::{opcodes::*, Cartridge, Cpu, Ppu};
+use crate::{opcodes::*, Cartridge, Controller, Cpu, Ppu};
 use std::ops::Range;
 
 /// The NES.
@@ -11,6 +11,12 @@ pub struct Nes {
     pub mem: [u8; 0x800],
     // Cartridge inserted in the NES
     pub cartridge: Cartridge,
+    // Play 1 and 2 controller states
+    controllers: [Controller; 2],
+    // Cached controller states, the ROM will need to poll to keep these up to date
+    cached_controllers: [Controller; 2],
+    // Current bit being read from the controller
+    controller_bit: usize,
 }
 
 impl Nes {
@@ -25,6 +31,9 @@ impl Nes {
             ppu: Ppu::new(),
             mem: [0x00; 0x800],
             cartridge: Cartridge::new(c.as_slice()),
+            controllers: [Controller::new(); 2],
+            cached_controllers: [Controller::new(); 2],
+            controller_bit: 0,
         }
     }
     pub fn from_cartridge(bytes: &[u8]) -> Nes {
@@ -33,6 +42,9 @@ impl Nes {
             ppu: Ppu::new(),
             mem: [0x00; 0x800],
             cartridge: Cartridge::new(bytes),
+            controllers: [Controller::new(); 2],
+            cached_controllers: [Controller::new(); 2],
+            controller_bit: 0,
         };
         nes.cpu.p_c = ((nes.cartridge.read_byte(0xFFFD) as u16) << 8)
             + (nes.cartridge.read_byte(0xFFFC) as u16);
@@ -40,13 +52,37 @@ impl Nes {
         nes
     }
 
-    pub fn read_byte(&self, addr: usize) -> u8 {
+    fn read_controller_bit(&mut self, num: usize) -> u8 {
+        let pressed = match self.controller_bit {
+            0 => self.controllers[num].a,
+            1 => self.controllers[num].b,
+            2 => self.controllers[num].select,
+            3 => self.controllers[num].start,
+            4 => self.controllers[num].up,
+            5 => self.controllers[num].down,
+            6 => self.controllers[num].left,
+            7 => self.controllers[num].right,
+            _ => true,
+        };
+        self.controller_bit += 1;
+        return if pressed { 1 } else { 0 };
+    }
+
+    pub fn read_byte(&mut self, addr: usize) -> u8 {
         return match addr {
             0..0x2000 => self.mem[addr % 0x0800],
             0x2000..0x4000 => match addr % 8 {
-                0 => self.ppu.ctrl,
+                0 => {
+                    println!("CTRL is {:X}", self.ppu.ctrl);
+                    self.ppu.ctrl
+                }
                 1 => self.ppu.mask,
-                2 => self.ppu.status,
+                2 => {
+                    // VBLANK is cleared on read
+                    let v = self.ppu.status;
+                    self.ppu.status &= 0x7F;
+                    v
+                }
                 3 => self.ppu.oam_addr,
                 4 => self.ppu.oam_data,
                 5 => self.ppu.scroll,
@@ -55,6 +91,8 @@ impl Nes {
                 7 => self.ppu.data,
                 _ => panic!("This should never happen. Addr is {:#X}", addr),
             },
+            0x4016 => self.read_controller_bit(0),
+            0x4017 => self.read_controller_bit(1),
             // TBA
             0x4000..0x4020 => 0,
             0x4020..0x10000 => self.cartridge.read_byte(addr),
@@ -83,11 +121,25 @@ impl Nes {
                     self.ppu.oam[i] = self.read_byte(addr + i);
                 }
             }
+            // Input byte
+            // Sets whether to poll or not
+            0x4016 => {
+                // TODO: Delay this until 0 is written
+                self.cached_controllers = self.controllers;
+                self.controller_bit = 0;
+            }
             // TBA
             0x4000..0x4020 => {}
             0x4020..0x10000 => self.cartridge.write_byte(addr, value),
             _ => panic!("Invalid write address provided: {:#X}", addr),
         };
+    }
+
+    /// Update the internal controller state in thte NES.
+    /// The ROM will still have to poll for the controller state.
+    /// `num`` should either be 0 or 1, depending on whose controller state is being updated
+    pub fn set_input(&mut self, num: usize, state: Controller) {
+        self.controllers[num] = state;
     }
 
     pub fn step(&mut self) -> Result<i64, String> {
@@ -108,6 +160,8 @@ impl Nes {
     }
 
     pub fn on_nmi(&mut self) {
+        // Update PPU (sets VBLANK flag)
+        self.ppu.on_vblank();
         self.push_to_stack_u16(self.cpu.p_c);
         self.push_to_stack(self.cpu.s_r.to_byte());
         // Go to NMI vector
@@ -142,11 +196,13 @@ impl Nes {
          */
         macro_rules! cpu_func {
             ($func: ident, $read_addr: ident, $bytes: expr, $cycles: expr) => {{
-                self.cpu.$func(self.$read_addr(operands));
+                let v = self.$read_addr(operands);
+                self.cpu.$func(v);
                 Ok(($bytes, $cycles))
             }};
             ($func: ident, $read_addr: ident, $pc: ident, $bytes: expr, $cycles_no_pc: expr, $cycles_pc: expr) => {{
-                self.cpu.$func(self.$read_addr(operands));
+                let v = self.$read_addr(operands);
+                self.cpu.$func(v);
                 Ok((
                     $bytes,
                     if self.$pc(operands) {
@@ -162,7 +218,8 @@ impl Nes {
          */
         macro_rules! cpu_write_func {
             ($func: ident, $read_addr: ident, $write_addr: ident, $bytes: expr, $cycles: expr) => {{
-                let value = self.cpu.$func(self.$read_addr(operands));
+                let v = self.$read_addr(operands);
+                let value = self.cpu.$func(v);
                 self.$write_addr(operands, value);
                 Ok(($bytes, $cycles))
             }};
@@ -568,10 +625,10 @@ impl Nes {
     }
     /// Read a single byte from a zero page address.
     /// ```
-    /// let nes = yane::Nes::new();
+    /// let mut nes = yane::Nes::new();
     /// nes.read_zp(&[0x18]);
     /// ```
-    pub fn read_zp(&self, addr: &[u8]) -> u8 {
+    pub fn read_zp(&mut self, addr: &[u8]) -> u8 {
         self.read_byte(addr[0] as usize)
     }
     /// Write a single byte to memory using zero page addressing.
@@ -590,7 +647,7 @@ impl Nes {
     /// nes.cpu.ldx(0x08);
     /// assert_eq!(nes.read_zp_x(&[0x10]), 0x45);
     /// ```
-    pub fn read_zp_x(&self, addr: &[u8]) -> u8 {
+    pub fn read_zp_x(&mut self, addr: &[u8]) -> u8 {
         self.read_zp_offset(addr[0], self.cpu.x)
     }
     /// Read a single byte using zero page addressing with Y register offset.
@@ -600,11 +657,11 @@ impl Nes {
     /// nes.cpu.ldy(0x08);
     /// assert_eq!(nes.read_zp_y(&[0x10]), 0x45);
     /// ```
-    pub fn read_zp_y(&self, addr: &[u8]) -> u8 {
+    pub fn read_zp_y(&mut self, addr: &[u8]) -> u8 {
         self.read_zp_offset(addr[0], self.cpu.y)
     }
     // Read a single byte using zero page offset addressing
-    fn read_zp_offset(&self, addr: u8, offset: u8) -> u8 {
+    fn read_zp_offset(&mut self, addr: u8, offset: u8) -> u8 {
         self.read_byte(addr.wrapping_add(offset) as usize)
     }
     /// Write a single byte using zero page addressing with X register offset
@@ -639,7 +696,7 @@ impl Nes {
     /// nes.mem[0x0034] = 0x56;
     /// assert_eq!(nes.read_abs(&[0x34, 0x00]), 0x56);
     /// ```
-    pub fn read_abs(&self, addr: &[u8]) -> u8 {
+    pub fn read_abs(&mut self, addr: &[u8]) -> u8 {
         self.read_byte(Nes::get_absolute_addr(addr))
     }
     /// Write a single byte to memory using absolute addressing
@@ -653,7 +710,7 @@ impl Nes {
         self.write_byte(Nes::get_absolute_addr(addr), value)
     }
     // Read using absolute addressing with an offset
-    fn read_abs_offset(&self, addr: &[u8], offset: u8) -> u8 {
+    fn read_abs_offset(&mut self, addr: &[u8], offset: u8) -> u8 {
         self.read_byte(Nes::get_absolute_addr_offset(addr, offset))
     }
     fn write_abs_offset(&mut self, addr: &[u8], offset: u8, value: u8) {
@@ -661,18 +718,18 @@ impl Nes {
     }
     /// Read a byte from memory using absolute addressing with X register offset.
     /// ```
-    /// let nes = yane::Nes::new();
+    /// let mut nes = yane::Nes::new();
     /// nes.read_abs_x(&[0x12, 0x00]);
     /// ```
-    pub fn read_abs_x(&self, addr: &[u8]) -> u8 {
+    pub fn read_abs_x(&mut self, addr: &[u8]) -> u8 {
         self.read_abs_offset(addr, self.cpu.x)
     }
     /// Read a byte from memory using absolute addressing with Y register offset.
     /// ```
-    /// let nes = yane::Nes::new();
+    /// let mut nes = yane::Nes::new();
     /// nes.read_abs_y(&[0x12, 0x00]);
     /// ```
-    pub fn read_abs_y(&self, addr: &[u8]) -> u8 {
+    pub fn read_abs_y(&mut self, addr: &[u8]) -> u8 {
         self.read_abs_offset(addr, self.cpu.y)
     }
     /// Write a byte to memory using absolute addressing with X register offset.
@@ -698,7 +755,7 @@ impl Nes {
     /// let mut nes = yane::Nes::new();
     /// nes.read_indexed_indirect(&[0x12]);
     /// ```
-    pub fn read_indexed_indirect(&self, addr: &[u8]) -> u8 {
+    pub fn read_indexed_indirect(&mut self, addr: &[u8]) -> u8 {
         let first_addr = addr[0].wrapping_add(self.cpu.x);
         let second_addr = [
             self.read_byte(first_addr as usize),
@@ -722,7 +779,7 @@ impl Nes {
     /// let mut nes = yane::Nes::new();
     /// nes.read_indirect_indexed(&[0x18]);
     /// ```
-    pub fn read_indirect_indexed(&self, addr: &[u8]) -> u8 {
+    pub fn read_indirect_indexed(&mut self, addr: &[u8]) -> u8 {
         let first_addr = addr[0];
         let second_addr = (self.read_byte(first_addr as usize) as u16
             + ((self.read_byte(first_addr.wrapping_add(1) as usize) as u16) << 8))
@@ -757,11 +814,11 @@ impl Nes {
         Nes::page_crossed_abs(addr, self.cpu.y)
     }
     // Return true if a page is crossed by the indirect indexed address and offset given
-    fn page_crossed_ind_idx(&self, addr: &[u8], offset: u8) -> bool {
+    fn page_crossed_ind_idx(&mut self, addr: &[u8], offset: u8) -> bool {
         255 - self.read_zp(addr) < offset
     }
     // Returns true if a page cross occurs when reading the indirect indexed address given with the Y register offset
-    fn pc_ind(&self, addr: &[u8]) -> bool {
+    fn pc_ind(&mut self, addr: &[u8]) -> bool {
         self.page_crossed_ind_idx(addr, self.cpu.y)
     }
     fn push_to_stack(&mut self, v: u8) {

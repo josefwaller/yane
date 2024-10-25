@@ -1,23 +1,17 @@
-// pub struct Cartridge {
-//     read_fn: fn(u16) -> u8,
-//     write_fn: fn(u16),
-// }
+pub enum NametableArrangement {
+    Horizontal,
+    Vertical,
+}
 
-// impl Cartridge {
-//     pub fn new(bytes: &[u8]) -> Cartridge {
-//         Cartridge { read_fn: read_0 }
-//     }
-// }
-
-// fn read_0(addr: u16, mem: &[u8]) -> u8 {
-//     return mem[addr as usize];
-// }
-
+/// An NES cartridge, or perhaps more accurately, an iNES file.
+/// Contains all the ROM and information encoded in the header.
 pub struct Cartridge {
     prg_ram: Vec<u8>,
     prg_rom: Vec<u8>,
     pub chr_rom: Vec<u8>,
     chr_ram: Vec<u8>,
+    /// Nametable mirroring arrangement
+    nametable_arrangement: NametableArrangement,
 }
 
 impl Cartridge {
@@ -33,6 +27,11 @@ impl Cartridge {
         let prg_ram_size = 0x00;
         let chr_ram_size = 0x00;
         let mapper = (bytes[6] >> 4) + (bytes[7] & 0xF0);
+        let nametable_arrangement = if (bytes[6] & 0x01) != 0 {
+            NametableArrangement::Horizontal
+        } else {
+            NametableArrangement::Vertical
+        };
         assert_eq!(mapper, 0);
         // TODO: Check for trainer and offset by 512 bytes if present
         // TODO: Add CHR_RAM
@@ -48,6 +47,7 @@ impl Cartridge {
             chr_rom,
             prg_ram: vec![0; prg_ram_size],
             chr_ram: vec![0; chr_ram_size],
+            nametable_arrangement,
         }
     }
     /// Read a byte from the cartridge given an address in the CPU's memory space

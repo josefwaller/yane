@@ -30,7 +30,7 @@ impl Ppu {
     pub fn new() -> Ppu {
         Ppu {
             oam: [0; 0x100],
-            ctrl: 0,
+            ctrl: 0x00,
             mask: 0,
             status: 0xA0,
             oam_addr: 0,
@@ -46,23 +46,17 @@ impl Ppu {
     }
 
     pub fn write_to_addr(&mut self, value: u8) {
-        println!("Writing {:X} to addr", value);
         if self.w {
             self.addr = (self.addr & 0x00FF) + ((value as u16) << 8);
         } else {
             self.addr = (self.addr & 0x3F00) + value as u16;
         }
         self.w = !self.w;
-        println!("{:X}", self.addr);
     }
-
-    /// Get the tile at a certain address
-    pub fn get_tile_at(&self, addr: usize) {}
 
     /// Write a single byte to VRAM at `PPUADDR`
     /// Increments `PPUADDR` by 1 or by 32 depending `PPUSTATUS`
     pub fn write_to_vram(&mut self, value: u8) {
-        println!("Writing {:X?} to {:X}", value, self.addr);
         if self.addr >= 0x3F00 {
             self.palette_ram[(self.addr - 0x3F00) as usize % 0x100] = value;
         } else if self.addr >= 0x2000 {
@@ -97,6 +91,10 @@ impl Ppu {
             return 0x1000;
         }
         0x000
+    }
+    // TODO: maybe remove, just do this in nes
+    pub fn on_vblank(&mut self) {
+        self.status |= 0x80;
     }
     pub fn get_nametable_addr(&self) -> usize {
         return 0x2000 + (self.status & 0x03) as usize * 0x400;

@@ -1,6 +1,6 @@
 #version 400
 layout (points) in;
-layout (points, max_vertices=150) out;
+layout (points, max_vertices=64) out;
 
 in int index[];
 
@@ -23,7 +23,9 @@ void main() {
                     -1,
                     1);
                 pixelIndex = 8 * y + x;
-                tileAddr = nametable[j];
+                // 0x100 instead of 0x1000 since this is multiplied by 10
+                // TODO: Switch depending on bit 3 of PPU CTRL
+                tileAddr = 0x100 + nametable[j];
                 paletteIndex = 0;
                 EmitVertex();
             }

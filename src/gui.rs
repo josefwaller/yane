@@ -1,14 +1,8 @@
-use crate::Nes;
+use crate::{Controller, Nes};
 use glow::*;
-use sdl2::event::{
-    Event::{Quit, Window},
-    WindowEvent::Resized,
-};
-use std::{
-    mem::size_of,
-    thread::{sleep, sleep_ms},
-    time::Duration,
-};
+use sdl2::{event::Event::Quit, keyboard::Keycode};
+
+use std::mem::size_of;
 
 pub struct Gui {
     gl: glow::Context,
@@ -53,7 +47,6 @@ impl Gui {
             let data: &[u8] = nes.cartridge.chr_rom.as_slice();
             let chr_rom_tex = gl.create_texture().expect("Unable to create a Texture");
             gl.bind_texture(glow::TEXTURE_1D, Some(chr_rom_tex));
-            // gl.tex_storage_1d(glow::TEXTURE_1D, 1, glow::R8, 256);
             gl.tex_image_1d(
                 glow::TEXTURE_1D,
                 0,
@@ -250,6 +243,39 @@ impl Gui {
             }
         }
     }
+    pub fn set_input(&self, nes: &mut Nes) {
+        // Update inputs
+        let keys: Vec<Keycode> = self
+            .event_loop
+            .keyboard_state()
+            .pressed_scancodes()
+            .filter_map(Keycode::from_scancode)
+            .collect();
+        // P1
+        let controller = Controller {
+            up: keys.contains(&Keycode::W),
+            left: keys.contains(&Keycode::A),
+            right: keys.contains(&Keycode::D),
+            down: keys.contains(&Keycode::S),
+            a: keys.contains(&Keycode::Q),
+            b: keys.contains(&Keycode::E),
+            start: keys.contains(&Keycode::R),
+            select: keys.contains(&Keycode::F),
+        };
+        nes.set_input(0, controller);
+        // P2
+        let controller = Controller {
+            up: keys.contains(&Keycode::I),
+            left: keys.contains(&Keycode::J),
+            right: keys.contains(&Keycode::L),
+            down: keys.contains(&Keycode::K),
+            a: keys.contains(&Keycode::U),
+            b: keys.contains(&Keycode::O),
+            start: keys.contains(&Keycode::Y),
+            select: keys.contains(&Keycode::H),
+        };
+        nes.set_input(1, controller);
+    }
     pub fn render(&mut self, nes: &Nes) -> bool {
         unsafe {
             self.gl.use_program(Some(self.sprite_program));
@@ -288,7 +314,6 @@ impl Gui {
 
         false
     }
-
     // TODO: Dedup btwn this and render sprites
     unsafe fn render_background(&mut self, nes: &Nes) {
         self.gl.use_program(Some(self.background_program));
