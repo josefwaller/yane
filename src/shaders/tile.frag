@@ -9,9 +9,17 @@ flat in int paletteIndex;
 // Texture holding the CHR_ROM values
 uniform isampler1D chrRomTex;
 // Uniform holding the palettes
-uniform vec3 palettes[2 * 4 * 4 * 3];
+uniform int palettes[2 * 4 * 4];
+// Colors to actually render
+uniform vec3 colors[0x40];
 // 1 if 8x16 is on, 0 otherwise
-uniform uint tallSprites;
+uniform int tallSprites;
+// Greyscale mode
+uniform int greyscaleMode;
+// Various tints
+uniform int redTint;
+uniform int blueTint;
+uniform int greenTint;
 
 layout (location = 0) out vec4 color;
 
@@ -21,10 +29,19 @@ int getBitAt(int i) {
 }
 
 void main() {
-    int offset = (1 - int(tallSprites == 0u || pixelIndex < 64)) * 64;
+    int offset = (1 - int(tallSprites == 0 || pixelIndex < 64)) * 64;
     int index = getBitAt(offset + pixelIndex) + 2 * getBitAt(offset + pixelIndex + 64);
     if (index == 0) {
         discard;
     }
-    color = vec4(palettes[0x10 + 4 * paletteIndex + index], 1.0);
+    int colorIndex = palettes[0x10 + 4 * paletteIndex + index];
+    // Turn greyscale if greyscale mode is on
+    if (greyscaleMode != 0) {
+        colorIndex &= 0x30;
+    }
+    color = vec4(
+        colors[colorIndex].r / (1 + greenTint + blueTint),
+        colors[colorIndex].g / (1 + redTint + blueTint),
+        colors[colorIndex].b / (1 + redTint + greenTint),
+        1.0);
 }

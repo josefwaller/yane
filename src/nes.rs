@@ -72,7 +72,7 @@ impl Nes {
         return match addr {
             0..0x2000 => self.mem[addr % 0x0800],
             0x2000..0x4000 => match addr % 8 {
-                0 => self.ppu.ctrl,
+                0 => self.ppu.ctrl & 0xBF,
                 1 => self.ppu.mask,
                 2 => {
                     // VBLANK is cleared on read

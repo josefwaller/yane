@@ -314,7 +314,6 @@ impl Gui {
 
         false
     }
-    // TODO: Dedup btwn this and render sprites
     unsafe fn render_background(&mut self, nes: &Nes) {
         self.gl.use_program(Some(self.background_program));
         self.gl.bind_vertex_array(Some(self.background_vao));
@@ -329,6 +328,12 @@ impl Gui {
             &self.background_program,
             "backgroundPatternLocation",
             nes.ppu.get_background_pattern_table_addr() as i32,
+        );
+        set_bool_uniform(
+            &self.gl,
+            &self.background_program,
+            "hideLeftmostBackground",
+            nes.ppu.should_hide_leftmost_background(),
         );
         self.gl.uniform_1_i32_slice(nametable_uni.as_ref(), &n);
         self.gl.draw_arrays(glow::POINTS, 0, 30 * 32);
@@ -369,17 +374,25 @@ impl Gui {
     }
 
     unsafe fn setup_render_uniforms(&self, program: &NativeProgram, nes: &Nes) {
-        let palette_colors: Vec<[f32; 3]> = nes
-            .ppu
-            .palette_ram
-            .iter()
-            .map(|b| self.palette[(b & 0x3F) as usize])
-            .collect();
-        // Set colors matrix
-        let color_uni = self.gl.get_uniform_location(*program, "palettes");
-        self.gl.uniform_3_f32_slice(
-            color_uni.as_ref(),
-            &palette_colors.as_slice().as_flattened(),
+        // Set pallete
+        let palette: Vec<i32> = nes.ppu.palette_ram.iter().map(|p| *p as i32).collect();
+        let palette_uni = self.gl.get_uniform_location(*program, "palettes");
+        self.gl
+            .uniform_1_i32_slice(palette_uni.as_ref(), palette.as_slice());
+        // Set colors
+        let colors = self.palette.as_flattened();
+        let color_uni = self.gl.get_uniform_location(*program, "colors");
+        self.gl.uniform_3_f32_slice(color_uni.as_ref(), colors);
+        // Set tint uniforms
+        set_bool_uniform(&self.gl, program, "redTint", nes.ppu.is_red_tint_on());
+        set_bool_uniform(&self.gl, program, "blueTint", nes.ppu.is_blue_tint_on());
+        set_bool_uniform(&self.gl, program, "greenTint", nes.ppu.is_green_tint_on());
+        // Set greyscale mode
+        set_bool_uniform(
+            &self.gl,
+            program,
+            "greyscaleMode",
+            nes.ppu.is_greyscale_mode_on(),
         );
     }
 }
@@ -406,7 +419,7 @@ unsafe fn compile_and_link_shader(
 
 unsafe fn set_bool_uniform(gl: &glow::Context, program: &glow::Program, name: &str, value: bool) {
     let location = gl.get_uniform_location(*program, name);
-    gl.uniform_1_u32(location.as_ref(), if value { 1 } else { 0 });
+    gl.uniform_1_i32(location.as_ref(), if value { 1 } else { 0 });
 }
 unsafe fn set_int_uniform(gl: &glow::Context, program: &glow::Program, name: &str, value: i32) {
     let location = gl.get_uniform_location(*program, name);

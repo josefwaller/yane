@@ -86,18 +86,42 @@ impl Ppu {
     pub fn should_hide_leftmost_sprites(&self) -> bool {
         (self.mask & 0x04) == 0
     }
+    /// Return whether to hide the left 8 pixels when drwaing background
+    pub fn should_hide_leftmost_background(&self) -> bool {
+        (self.mask & 0x08) == 0
+    }
+    /// Return whether greyscale mode is on
+    pub fn is_greyscale_mode_on(&self) -> bool {
+        (self.mask & 0x01) != 0
+    }
+    /// Return where to read the sprite patterns from
     pub fn get_spr_pattern_table_addr(&self) -> usize {
         if self.ctrl & 0x08 != 0 {
             return 0x1000;
         }
         0x0000
     }
+    /// Return where to read the backgronud patterns from
     pub fn get_background_pattern_table_addr(&self) -> usize {
         if self.ctrl & 0x10 != 0 {
             return 0x1000;
         }
         0x0000
     }
+    // Return whether the red tint is active
+    pub fn is_red_tint_on(&self) -> bool {
+        (self.mask & 0x20) != 0
+    }
+    // Return whether the blue tint is active
+    pub fn is_blue_tint_on(&self) -> bool {
+        (self.mask & 0x40) != 0
+    }
+    // Return whether the green tint is active
+    pub fn is_green_tint_on(&self) -> bool {
+        // (self.mask & 0x80) != 0
+        true
+    }
+    /// Return whether the NMI is enabled
     pub fn get_nmi_enabled(&self) -> bool {
         return self.ctrl & 0x80 != 0;
     }

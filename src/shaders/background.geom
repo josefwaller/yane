@@ -6,6 +6,7 @@ in int index[];
 
 uniform int nametable[0x3C0];
 uniform int backgroundPatternLocation;
+uniform int hideLeftmostBackground;
 
 flat out int pixelIndex;
 flat out int tileAddr;
@@ -17,6 +18,9 @@ void main() {
         int xPos = j % 32;
         int yPos = j / 32;
         for (int x = 0; x < 8; x++) {
+            if (8 * xPos + x < 8 && hideLeftmostBackground != 0) {
+                continue;
+            }
             for (int y = 0; y < 8; y++) {
                 gl_Position = vec4(
                     (8.0 * xPos + x) / 128.0 - 1.0,

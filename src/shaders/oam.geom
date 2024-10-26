@@ -9,10 +9,10 @@ in int index[];
 
 uniform uint oamData[4 * 64];
 // Whether to hide the pixels in the leftmost 8 pixel columns
-uniform uint hide_left_sprites;
+uniform int hide_left_sprites;
 // Whether to render 8x8 or 8x16 sprites
 // True (i.e. not 0) for 8x16
-uniform uint tallSprites;
+uniform int tallSprites;
 // location of sprite pattern table in CHR ROM
 uniform int spritePatternLocation;
 
@@ -29,14 +29,14 @@ bool vertical_flip(uint attr_byte) {
 
 void main() {
     for (int j = 0; j < index.length(); j++) {
-        int yMax = tallSprites != 0u ? 16 : 8;
+        int yMax = tallSprites != 0 ? 16 : 8;
         int i = index[j];
         uint attr_byte = oamData[4 * i + 2];
         for (int y = 0; y < yMax; y++) {
             int yPos = int(oamData[4 * i]) + (vertical_flip(attr_byte) ? 7 - y : y);
             for (int x = 0; x < 8; x++) {
                 int xPos = int(oamData[4 * i + 3]) + int(horizontal_flip(attr_byte) ? 7 - x : x);
-                if (hide_left_sprites != 0u && xPos < 8) {
+                if (hide_left_sprites != 0 && xPos < 8) {
                     continue;
                 }
                 // Screen coords are inbetween [-1.0, 1.0], sprite coords (xPos, yPos) are inbetween [0, 255]
