@@ -11,8 +11,9 @@ pub struct Ppu {
     pub oam_addr: u8,
     /// The OAMDATA register
     pub oam_data: u8,
-    /// The PPUSCROLL register
-    pub scroll: u8,
+    /// The PPUSCROLL register, split into its X/Y components
+    pub scroll_x: u8,
+    pub scroll_y: u8,
     /// The PPUADDR register
     pub addr: u16,
     /// The PPUDATA register
@@ -35,13 +36,58 @@ impl Ppu {
             status: 0xA0,
             oam_addr: 0,
             oam_data: 0,
-            scroll: 0,
+            scroll_x: 0,
+            scroll_y: 0,
             addr: 0,
             data: 0,
             oam_dma: 0,
             palette_ram: [0; 0x100],
             nametable_ram: [0; 0x400],
             w: true,
+        }
+    }
+
+    /// Read a byte from the PPU register given an address in CPU space
+    pub fn read_byte(&mut self, addr: usize) -> u8 {
+        match addr % 8 {
+            // Zero out some bits in control
+            0 => self.ctrl & 0xBF,
+            1 => self.mask,
+            2 => {
+                // VBLANK is cleared on read
+                let status = self.status;
+                self.status &= 0x7F;
+                status
+            }
+            3 => self.oam_addr,
+            4 => self.oam_data,
+            // SCROLL and ADDR shouldn't be read from
+            5 => self.scroll_x,
+            6 => self.addr as u8,
+            7 => self.data,
+            _ => panic!("This should never happen. Addr is {:#X}", addr),
+        }
+    }
+
+    /// Write a byte to the PPU registers given an address in CPU space
+    pub fn write_byte(&mut self, addr: usize, value: u8) {
+        match addr % 8 {
+            0 => self.ctrl = value,
+            1 => self.mask = value,
+            2 => self.status = value,
+            3 => self.oam_addr = value,
+            4 => self.oam_data = value,
+            5 => {
+                if self.w {
+                    self.scroll_y = value;
+                } else {
+                    self.scroll_x = value
+                }
+                self.w = !self.w;
+            }
+            6 => self.write_to_addr(value),
+            7 => self.write_to_vram(value),
+            _ => panic!("This should never happen. Addr is {:#X}", addr),
         }
     }
 
@@ -65,10 +111,6 @@ impl Ppu {
         self.addr = self
             .addr
             .wrapping_add(if self.ctrl & 0x04 == 0 { 1 } else { 32 });
-    }
-
-    pub fn read_byte(&self, addr: usize) -> u8 {
-        0
     }
 
     pub fn is_8x16_sprites(&self) -> bool {
@@ -118,8 +160,7 @@ impl Ppu {
     }
     // Return whether the green tint is active
     pub fn is_green_tint_on(&self) -> bool {
-        // (self.mask & 0x80) != 0
-        true
+        (self.mask & 0x80) != 0
     }
     /// Return whether the NMI is enabled
     pub fn get_nmi_enabled(&self) -> bool {

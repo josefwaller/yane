@@ -71,23 +71,7 @@ impl Nes {
     pub fn read_byte(&mut self, addr: usize) -> u8 {
         return match addr {
             0..0x2000 => self.mem[addr % 0x0800],
-            0x2000..0x4000 => match addr % 8 {
-                0 => self.ppu.ctrl & 0xBF,
-                1 => self.ppu.mask,
-                2 => {
-                    // VBLANK is cleared on read
-                    let v = self.ppu.status;
-                    self.ppu.status &= 0x7F;
-                    v
-                }
-                3 => self.ppu.oam_addr,
-                4 => self.ppu.oam_data,
-                5 => self.ppu.scroll,
-                // TODO
-                6 => self.ppu.addr as u8,
-                7 => self.ppu.data,
-                _ => panic!("This should never happen. Addr is {:#X}", addr),
-            },
+            0x2000..0x4000 => self.ppu.read_byte(addr),
             0x4016 => self.read_controller_bit(0),
             0x4017 => self.read_controller_bit(1),
             // TBA
@@ -99,17 +83,7 @@ impl Nes {
     fn write_byte(&mut self, addr: usize, value: u8) {
         match addr {
             0..0x2000 => self.mem[addr % 0x0800] = value,
-            0x2000..0x4000 => match addr % 8 {
-                0 => self.ppu.ctrl = value,
-                1 => self.ppu.mask = value,
-                2 => self.ppu.status = value,
-                3 => self.ppu.oam_addr = value,
-                4 => self.ppu.oam_data = value,
-                5 => self.ppu.scroll = value,
-                6 => self.ppu.write_to_addr(value),
-                7 => self.ppu.write_to_vram(value),
-                _ => panic!("This should never happen. Addr is {:#X}", addr),
-            },
+            0x2000..0x4000 => self.ppu.write_byte(addr, value),
             0x4014 => {
                 // Perform DMA
                 // TODO: Make this better

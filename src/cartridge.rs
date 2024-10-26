@@ -32,7 +32,9 @@ impl Cartridge {
         } else {
             NametableArrangement::Vertical
         };
-        assert_eq!(mapper, 0);
+        if (mapper != 0) {
+            panic!("Unsupported mapper {}", mapper);
+        }
         // TODO: Check for trainer and offset by 512 bytes if present
         // TODO: Add CHR_RAM
         let mut start = 16;

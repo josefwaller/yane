@@ -22,8 +22,8 @@ fn main() {
             //     nes.read_byte(nes.cpu.p_c as usize + 2),
             //     nes.ppu.status
             // );
+            gui.set_input(&mut nes);
             if Instant::now().duration_since(last_render) >= Duration::from_millis(1000 / 60) {
-                gui.set_input(&mut nes);
                 nes.ppu.on_vblank();
                 if nes.ppu.get_nmi_enabled() {
                     if gui.render(&mut nes) {
