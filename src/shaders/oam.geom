@@ -16,6 +16,9 @@ uniform int tallSprites;
 // location of sprite pattern table in CHR ROM
 uniform int spritePatternLocation;
 
+uniform int scrollX;
+uniform int scrollY;
+
 flat out int pixelIndex;
 flat out int paletteIndex;
 flat out int tileAddr;
@@ -41,8 +44,8 @@ void main() {
                 }
                 // Screen coords are inbetween [-1.0, 1.0], sprite coords (xPos, yPos) are inbetween [0, 255]
                 gl_Position = vec4(
-                    float(xPos) / 128.0 - 1.0,
-                    1.0 - float(yPos) / 120.0,
+                    float(xPos + scrollX) / 128.0 - 1.0,
+                    1.0 - float(yPos + scrollY) / 120.0,
                     0,
                     1
                 );

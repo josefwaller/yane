@@ -24,7 +24,8 @@ impl Cartridge {
         }
         let prg_rom_size = 0x4000 * bytes[4] as usize;
         let chr_rom_size = 0x2000 * bytes[5] as usize;
-        let prg_ram_size = 0x00;
+        // Todo
+        let prg_ram_size = 8000;
         let chr_ram_size = 0x00;
         let mapper = (bytes[6] >> 4) + (bytes[7] & 0xF0);
         let nametable_arrangement = if (bytes[6] & 0x01) != 0 {
@@ -32,7 +33,7 @@ impl Cartridge {
         } else {
             NametableArrangement::Vertical
         };
-        if (mapper != 0) {
+        if mapper != 0 {
             panic!("Unsupported mapper {}", mapper);
         }
         // TODO: Check for trainer and offset by 512 bytes if present

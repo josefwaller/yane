@@ -11,6 +11,8 @@ mod ppu;
 pub use ppu::Ppu;
 mod controller;
 pub use controller::Controller;
+mod apu;
+pub use apu::Apu;
 #[cfg(feature = "gui")]
 mod gui;
 #[cfg(feature = "gui")]

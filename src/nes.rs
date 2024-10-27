@@ -1,4 +1,4 @@
-use crate::{opcodes::*, Cartridge, Controller, Cpu, Ppu};
+use crate::{opcodes::*, Apu, Cartridge, Controller, Cpu, Ppu};
 use std::ops::Range;
 
 /// The NES.
@@ -7,6 +7,8 @@ pub struct Nes {
     pub cpu: Cpu,
     /// PPU of the NES
     pub ppu: Ppu,
+    /// APU of the NES
+    pub apu: Apu,
     /// Memory of the NES
     pub mem: [u8; 0x800],
     // Cartridge inserted in the NES
@@ -29,6 +31,7 @@ impl Nes {
         Nes {
             cpu: Cpu::new(),
             ppu: Ppu::new(),
+            apu: Apu::new(),
             mem: [0x00; 0x800],
             cartridge: Cartridge::new(c.as_slice()),
             controllers: [Controller::new(); 2],
@@ -40,6 +43,7 @@ impl Nes {
         let mut nes = Nes {
             cpu: Cpu::new(),
             ppu: Ppu::new(),
+            apu: Apu::new(),
             mem: [0x00; 0x800],
             cartridge: Cartridge::new(bytes),
             controllers: [Controller::new(); 2],
@@ -54,14 +58,14 @@ impl Nes {
 
     fn read_controller_bit(&mut self, num: usize) -> u8 {
         let pressed = match self.controller_bit {
-            0 => self.controllers[num].a,
-            1 => self.controllers[num].b,
-            2 => self.controllers[num].select,
-            3 => self.controllers[num].start,
-            4 => self.controllers[num].up,
-            5 => self.controllers[num].down,
-            6 => self.controllers[num].left,
-            7 => self.controllers[num].right,
+            0 => self.cached_controllers[num].a,
+            1 => self.cached_controllers[num].b,
+            2 => self.cached_controllers[num].select,
+            3 => self.cached_controllers[num].start,
+            4 => self.cached_controllers[num].up,
+            5 => self.cached_controllers[num].down,
+            6 => self.cached_controllers[num].left,
+            7 => self.cached_controllers[num].right,
             _ => true,
         };
         self.controller_bit += 1;
@@ -96,11 +100,13 @@ impl Nes {
             // Sets whether to poll or not
             0x4016 => {
                 // TODO: Delay this until 0 is written
-                self.cached_controllers = self.controllers;
-                self.controller_bit = 0;
+                if value == 0 {
+                    self.cached_controllers = self.controllers;
+                    self.controller_bit = 0;
+                }
             }
-            // TBA
-            0x4000..0x4020 => {}
+            // APU Registers
+            0x4000..0x4020 => self.apu.write_byte(addr, value),
             0x4020..0x10000 => self.cartridge.write_byte(addr, value),
             _ => panic!("Invalid write address provided: {:#X}", addr),
         };

@@ -1,9 +1,78 @@
-use crate::{Controller, Nes};
+use crate::{apu::PulseRegister, Controller, Nes};
 use glow::*;
-use sdl2::{event::Event::Quit, keyboard::Keycode};
+use sdl2::{
+    audio::{AudioCallback, AudioDevice, AudioSpecDesired},
+    event::Event::Quit,
+    keyboard::Keycode,
+};
 
 use std::mem::size_of;
 
+const DUTY_CYCLES: [[f32; 8]; 4] = [
+    [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    [0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    [0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+    [1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+];
+#[derive(Clone, Copy)]
+struct PulseWave {
+    // The pulse register this device is attached to
+    register: PulseRegister,
+    // How many sampels are taken every second, i.e. how many times callback is called per second
+    samples_per_second: i32,
+    phase: f32,
+}
+
+impl AudioCallback for PulseWave {
+    type Channel = f32;
+
+    // Ouputs the amplitude
+    fn callback(&mut self, out: &mut [f32]) {
+        for x in out.iter_mut() {
+            // *x = 0.0;
+            // if self.register.timer < 8 || self.register.volume == 0 {
+            //     *x = -0.25;
+            // } else {
+            // Percent through the current phase
+            // let percent = self.register.internal_timer as f32 / self.register.timer as f32;
+            // let output =
+            //     -1.0 + 2.0 * DUTY_CYCLES[self.register.duty as usize][(percent * 8.0) as usize % 8];
+            // * DUTY_CYCLES[2][(percent * 240.0) as usize % 8];
+            // println!("{}", percent);
+            // *x = 0.25 * output;
+            // }
+            // *x = if self.phase <= 0.5 { 0.25 } else { -0.25 };
+            // // println!("X would be {}", *x);
+            // *x = 0.0;
+            // self.phase = (self.phase
+            //     + self.register.timer as f32
+            //         / (1_789_000 as f32 / 2.0)
+            //         / self.samples_per_second as f32)
+            //     % 1.0;
+            const MAX_VOLUME: f32 = 0.25;
+            if self.register.timer < 8 {
+                *x = 0.00;
+                continue;
+            } else {
+                let duty_cycle = DUTY_CYCLES[self.register.duty as usize];
+                // Should be between 0 and 1
+                let volume = self.register.volume as f32 / 0xF as f32;
+                *x = MAX_VOLUME
+                    * duty_cycle[(self.phase * duty_cycle.len() as f32).floor() as usize
+                        % duty_cycle.len()]
+                    * volume;
+            }
+            // println!("Timer is {:X}", self.register.timer);
+            // let freq = (1_789_000 / 2) as f32 / (self.register.timer * 16) as f32;
+            let freq = 1_789_000.0 / (16.0 * (self.register.timer + 1) as f32);
+            // // let freq = 109.0;
+            println!("Freq should be {}", freq);
+            self.phase = (self.phase + (freq / self.samples_per_second as f32)) % 1.0;
+            // println!("Phase is {}", self.phase);
+            // self.phase = (self.phase + self.phase_inc) % 1.0;
+        }
+    }
+}
 pub struct Gui {
     gl: glow::Context,
     _gl_context: sdl2::video::GLContext,
@@ -17,6 +86,7 @@ pub struct Gui {
     palette: [[f32; 3]; 0x40],
     background_program: NativeProgram,
     background_vao: NativeVertexArray,
+    pulse_devices: [AudioDevice<PulseWave>; 2],
 }
 impl Gui {
     // TODO: Rename
@@ -26,6 +96,7 @@ impl Gui {
         unsafe {
             // Create SDL2 Window
             let sdl = sdl2::init().unwrap();
+            // Setup video
             let video = sdl.video().unwrap();
             let gl_attr = video.gl_attr();
             gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
@@ -42,6 +113,29 @@ impl Gui {
 
             window.gl_make_current(&gl_context).unwrap();
             let event_loop = sdl.event_pump().unwrap();
+
+            // Setup audio
+            let audio = sdl.audio().unwrap();
+            let spec = AudioSpecDesired {
+                freq: Some(44_100),
+                channels: Some(1),
+                samples: None,
+            };
+
+            let pulse_devices: [AudioDevice<PulseWave>; 2] = core::array::from_fn(|i| {
+                let device = audio
+                    .open_playback(None, &spec, |spec| {
+                        println!("{:?}", spec);
+                        PulseWave {
+                            register: nes.apu.pulse_registers[i],
+                            samples_per_second: spec.freq,
+                            phase: 0.0,
+                        }
+                    })
+                    .unwrap();
+                device.resume();
+                device
+            });
 
             // Send CHR ROM data
             let data: &[u8] = nes.cartridge.chr_rom.as_slice();
@@ -240,6 +334,7 @@ impl Gui {
                 palette,
                 background_program,
                 background_vao,
+                pulse_devices,
             }
         }
     }
@@ -275,6 +370,12 @@ impl Gui {
             select: keys.contains(&Keycode::H),
         };
         nes.set_input(1, controller);
+    }
+    pub fn update_audio(&mut self, nes: &Nes) {
+        self.pulse_devices
+            .iter_mut()
+            .enumerate()
+            .for_each(|(i, d)| d.lock().register = nes.apu.pulse_registers[i]);
     }
     pub fn render(&mut self, nes: &Nes) -> bool {
         unsafe {
@@ -323,6 +424,7 @@ impl Gui {
             .gl
             .get_uniform_location(self.background_program, "nametable");
         let n = nes.ppu.nametable_ram.map(|b| b as i32);
+        self.gl.uniform_1_i32_slice(nametable_uni.as_ref(), &n);
         set_int_uniform(
             &self.gl,
             &self.background_program,
@@ -335,7 +437,6 @@ impl Gui {
             "hideLeftmostBackground",
             nes.ppu.should_hide_leftmost_background(),
         );
-        self.gl.uniform_1_i32_slice(nametable_uni.as_ref(), &n);
         self.gl.draw_arrays(glow::POINTS, 0, 30 * 32);
     }
 
@@ -393,6 +494,19 @@ impl Gui {
             program,
             "greyscaleMode",
             nes.ppu.is_greyscale_mode_on(),
+        );
+        // Set scroll
+        set_int_uniform(
+            &self.gl,
+            &self.background_program,
+            "scrollX",
+            0, //nes.ppu.scroll_x as i32,
+        );
+        set_int_uniform(
+            &self.gl,
+            &self.background_program,
+            "scrollY",
+            0, //nes.ppu.scroll_y as i32,
         );
     }
 }

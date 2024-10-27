@@ -79,9 +79,9 @@ impl Ppu {
             4 => self.oam_data = value,
             5 => {
                 if self.w {
-                    self.scroll_y = value;
-                } else {
                     self.scroll_x = value
+                } else {
+                    self.scroll_y = value;
                 }
                 self.w = !self.w;
             }

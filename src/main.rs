@@ -13,8 +13,12 @@ fn main() {
         let mut nes = Nes::from_cartridge(data.as_slice());
         let mut gui = Gui::new(&nes);
         let mut last_render = Instant::now();
+        let wait_time_per_cycle_millis = 1000.0 / 1_789_000.0;
         loop {
-            nes.step().unwrap();
+            let c1 = nes.step().unwrap();
+            let c2 = nes.step().unwrap();
+            (0..((c1 + c2) / 2)).for_each(|_| nes.apu.step());
+            gui.update_audio(&nes);
             // println!(
             //     "{:X} {:X} {:X} status = {:X}",
             //     nes.read_byte(nes.cpu.p_c as usize),
@@ -22,17 +26,20 @@ fn main() {
             //     nes.read_byte(nes.cpu.p_c as usize + 2),
             //     nes.ppu.status
             // );
-            gui.set_input(&mut nes);
             if Instant::now().duration_since(last_render) >= Duration::from_millis(1000 / 60) {
+                gui.set_input(&mut nes);
                 nes.ppu.on_vblank();
+                last_render = Instant::now();
+                if gui.render(&mut nes) {
+                    break;
+                }
                 if nes.ppu.get_nmi_enabled() {
-                    if gui.render(&mut nes) {
-                        break;
-                    }
-                    last_render = Instant::now();
                     nes.on_nmi();
                 }
             }
+            sleep(Duration::from_millis(
+                (1.0 * (c1 + c2) as f64 * wait_time_per_cycle_millis) as u64,
+            ));
         }
     }
 }
