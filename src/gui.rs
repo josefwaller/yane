@@ -6,7 +6,7 @@ use sdl2::{
     keyboard::Keycode,
 };
 
-use std::mem::size_of;
+use std::{cmp::max, mem::size_of};
 
 const DUTY_CYCLES: [[f32; 8]; 4] = [
     [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -20,7 +20,10 @@ struct PulseWave {
     register: PulseRegister,
     // How many sampels are taken every second, i.e. how many times callback is called per second
     samples_per_second: i32,
+    // The phase of the wave, i.e. the progress through a single wave
     phase: f32,
+    // The volume when the constant volume flag is false
+    variable_volume: f32,
 }
 
 impl AudioCallback for PulseWave {
@@ -49,27 +52,55 @@ impl AudioCallback for PulseWave {
             //         / (1_789_000 as f32 / 2.0)
             //         / self.samples_per_second as f32)
             //     % 1.0;
-            const MAX_VOLUME: f32 = 0.25;
-            if self.register.timer < 8 {
+            let sweep_period: i32 = (self.register.timer >> self.register.sweep_shift) as i32;
+            let target_period = max(
+                self.register.timer as i32
+                    + if self.register.sweep_negate {
+                        -sweep_period
+                    } else {
+                        sweep_period
+                    },
+                0,
+            );
+            if !self.register.enabled
+                || self.register.timer < 8
+                || self.register.length == 0
+                || target_period >= 0x7FF
+            {
                 *x = 0.00;
-                continue;
             } else {
+                const MAX_VOLUME: f32 = 0.05;
                 let duty_cycle = DUTY_CYCLES[self.register.duty as usize];
                 // Should be between 0 and 1
-                let volume = self.register.volume as f32 / 0xF as f32;
+                let volume = if self.register.constant_volume {
+                    self.register.volume as f32 / 0xF as f32
+                } else {
+                    self.register.actual_volume as f32 / 0xF as f32
+                };
+
                 *x = MAX_VOLUME
-                    * duty_cycle[(self.phase * duty_cycle.len() as f32).floor() as usize
-                        % duty_cycle.len()]
+                    * (1.0
+                        - 2.0
+                            * duty_cycle[(self.phase * duty_cycle.len() as f32).floor() as usize
+                                % duty_cycle.len()])
                     * volume;
             }
             // println!("Timer is {:X}", self.register.timer);
             // let freq = (1_789_000 / 2) as f32 / (self.register.timer * 16) as f32;
-            let freq = 1_789_000.0 / (16.0 * (self.register.timer + 1) as f32);
+            let clock = 1_789_000.0;
+            let period = if self.register.sweep_enabled {
+                target_period as usize
+            } else {
+                self.register.timer
+            };
+            let freq = clock / (16.0 * (period + 1) as f32);
             // // let freq = 109.0;
-            println!("Freq should be {}", freq);
+            // println!("Freq is {}", freq);
             self.phase = (self.phase + (freq / self.samples_per_second as f32)) % 1.0;
-            // println!("Phase is {}", self.phase);
-            // self.phase = (self.phase + self.phase_inc) % 1.0;
+            self.variable_volume = self.variable_volume - (clock / self.samples_per_second as f32);
+            if self.variable_volume < 0.0 {
+                self.variable_volume = 1.0;
+            }
         }
     }
 }
@@ -130,6 +161,7 @@ impl Gui {
                             register: nes.apu.pulse_registers[i],
                             samples_per_second: spec.freq,
                             phase: 0.0,
+                            variable_volume: 1.0,
                         }
                     })
                     .unwrap();
