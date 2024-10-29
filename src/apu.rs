@@ -44,8 +44,29 @@ const LENGTH_TABLE: [usize; 0x20] = [
     0x0C, 0x10, 0x18, 0x12, 0x30, 0x14, 0x60, 0x16, 0xC0, 0x18, 0x48, 0x1A, 0x10, 0x1C, 0x20, 0x1E,
 ];
 
+#[derive(Clone, Copy)]
+pub struct TriangleRegister {
+    pub length_halt: bool,
+    pub length: usize,
+    pub linear_load: usize,
+    pub timer: usize,
+    pub enabled: bool,
+}
+impl TriangleRegister {
+    pub fn new() -> TriangleRegister {
+        TriangleRegister {
+            length_halt: false,
+            length: 0,
+            linear_load: 0,
+            timer: 0,
+            enabled: false,
+        }
+    }
+}
+
 pub struct Apu {
     pub pulse_registers: [PulseRegister; 2],
+    pub triangle_register: TriangleRegister,
     step: usize,
 }
 
@@ -53,6 +74,7 @@ impl Apu {
     pub fn new() -> Apu {
         Apu {
             pulse_registers: [PulseRegister::new(); 2],
+            triangle_register: TriangleRegister::new(),
             step: 0,
         }
     }
@@ -61,9 +83,26 @@ impl Apu {
         match addr {
             0x4000..0x4004 => self.set_pulse_byte(0, addr, value),
             0x4004..0x4008 => self.set_pulse_byte(1, addr, value),
+            0x4008 => {
+                self.triangle_register.length_halt = (value & 0x80) != 0;
+                self.triangle_register.linear_load = (value & 0x7F) as usize;
+            }
+            0x4009 => {}
+            0x400A => {
+                self.triangle_register.timer =
+                    (self.triangle_register.timer & 0x700) + value as usize;
+                println!("Wrote timer high to {}", self.triangle_register.timer);
+            }
+            0x400B => {
+                self.triangle_register.timer =
+                    (self.triangle_register.timer & 0x0FF) + ((value as usize & 0x07) << 8);
+                self.triangle_register.length = (value as usize & 0xF8) >> 3;
+                println!("Wrote timer low to {}", self.triangle_register.timer);
+            }
             0x4015 => {
                 self.pulse_registers[0].enabled = (value & 0x01) != 0;
                 self.pulse_registers[1].enabled = (value & 0x02) != 0;
+                self.triangle_register.enabled = (value & 0x04) != 0;
             }
             _ => {} // _ => panic!("Invalid address given to APU"),
         }
@@ -77,15 +116,7 @@ impl Apu {
                 reg.constant_volume = (value & 0x10) != 0;
                 reg.volume = (value & 0x0F) as u32;
                 reg.actual_volume = 0xF;
-                // println!(
-                //     "Actual volume set to {:X}, volume is {:X}",
-                //     reg.actual_volume, reg.volume
-                // );
                 reg.volume_step = reg.volume as usize;
-                // println!(
-                //     "Reg {} constant volume is {}",
-                //     pulse_index, reg.constant_volume
-                // );
             }
             1 => {
                 reg.sweep_enabled = (value & 0x80) != 0;
@@ -97,7 +128,7 @@ impl Apu {
                 reg.timer = (reg.timer & 0x0300) | value as usize;
             }
             3 => {
-                reg.timer = (reg.timer & 0x00FF) | ((value as usize & 0x03) << 8);
+                reg.timer = (reg.timer & 0x00FF) | ((value as usize & 0x07) << 8);
                 // let length = (((value & 0xF0) as usize) >> 4) + ((value as usize & 0x08) << 1);
                 let length = (value & 0xF8) as usize >> 3;
                 reg.length = LENGTH_TABLE[length];
@@ -112,8 +143,6 @@ impl Apu {
             if self.step % (2 * 3728) == 0 {
                 self.on_half_frame();
             }
-            // self.update_pulse_register(0);
-            // self.update_pulse_register(1);
         }
         self.step = (self.step + 1) % 141915;
     }

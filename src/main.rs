@@ -19,7 +19,7 @@ fn main() {
         let wait_time_per_cycle_nanos = 1_000_000.0 / 1_789_000.0;
         loop {
             let mut cycles = 0;
-            (0..100).for_each(|_| cycles += nes.step().unwrap());
+            (0..50).for_each(|_| cycles += nes.step().unwrap());
             // (0..(cycles / 2)).for_each(|_| nes.apu.step());
             if Instant::now().duration_since(s1) > Duration::from_millis(1000 / 240) {
                 nes.apu.on_quater_frame();

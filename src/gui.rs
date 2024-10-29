@@ -1,4 +1,7 @@
-use crate::{apu::PulseRegister, Controller, Nes};
+use crate::{
+    apu::{PulseRegister, TriangleRegister},
+    Controller, Nes,
+};
 use glow::*;
 use sdl2::{
     audio::{AudioCallback, AudioDevice, AudioSpecDesired},
@@ -22,51 +25,15 @@ struct PulseWave {
     samples_per_second: i32,
     // The phase of the wave, i.e. the progress through a single wave
     phase: f32,
-    // The volume when the constant volume flag is false
-    variable_volume: f32,
 }
-
 impl AudioCallback for PulseWave {
     type Channel = f32;
 
     // Ouputs the amplitude
     fn callback(&mut self, out: &mut [f32]) {
         for x in out.iter_mut() {
-            // *x = 0.0;
-            // if self.register.timer < 8 || self.register.volume == 0 {
-            //     *x = -0.25;
-            // } else {
-            // Percent through the current phase
-            // let percent = self.register.internal_timer as f32 / self.register.timer as f32;
-            // let output =
-            //     -1.0 + 2.0 * DUTY_CYCLES[self.register.duty as usize][(percent * 8.0) as usize % 8];
-            // * DUTY_CYCLES[2][(percent * 240.0) as usize % 8];
-            // println!("{}", percent);
-            // *x = 0.25 * output;
-            // }
-            // *x = if self.phase <= 0.5 { 0.25 } else { -0.25 };
-            // // println!("X would be {}", *x);
-            // *x = 0.0;
-            // self.phase = (self.phase
-            //     + self.register.timer as f32
-            //         / (1_789_000 as f32 / 2.0)
-            //         / self.samples_per_second as f32)
-            //     % 1.0;
-            let sweep_period: i32 = (self.register.timer >> self.register.sweep_shift) as i32;
-            let target_period = max(
-                self.register.timer as i32
-                    + if self.register.sweep_negate {
-                        -sweep_period
-                    } else {
-                        sweep_period
-                    },
-                0,
-            );
-            if !self.register.enabled
-                || self.register.timer < 8
-                || self.register.length == 0
-                || target_period >= 0x7FF
-            {
+            // Conditions for register being disabled
+            if !self.register.enabled || self.register.timer < 8 || self.register.length == 0 {
                 *x = 0.00;
             } else {
                 const MAX_VOLUME: f32 = 0.05;
@@ -85,25 +52,44 @@ impl AudioCallback for PulseWave {
                                 % duty_cycle.len()])
                     * volume;
             }
-            // println!("Timer is {:X}", self.register.timer);
-            // let freq = (1_789_000 / 2) as f32 / (self.register.timer * 16) as f32;
             let clock = 1_789_000.0;
-            let period = if self.register.sweep_enabled {
-                target_period as usize
-            } else {
-                self.register.timer
-            };
-            let freq = clock / (16.0 * (period + 1) as f32);
-            // // let freq = 109.0;
-            // println!("Freq is {}", freq);
+            let freq = clock / (16.0 * (self.register.timer + 1) as f32);
             self.phase = (self.phase + (freq / self.samples_per_second as f32)) % 1.0;
-            self.variable_volume = self.variable_volume - (clock / self.samples_per_second as f32);
-            if self.variable_volume < 0.0 {
-                self.variable_volume = 1.0;
-            }
         }
     }
 }
+
+#[derive(Clone, Copy)]
+struct TriangleWave {
+    register: TriangleRegister,
+    phase: f32,
+    sample_rate: i32,
+}
+impl AudioCallback for TriangleWave {
+    type Channel = f32;
+    fn callback(&mut self, out: &mut [f32]) {
+        for x in out.iter_mut() {
+            if !self.register.enabled || self.register.length == 0 {
+                *x = 0.0;
+                println!(
+                    "No triangle - enabled={}, length={}",
+                    self.register.enabled, self.register.length
+                );
+                continue;
+            }
+            let amp = if self.phase < 0.5 {
+                self.phase * 2.0
+            } else {
+                1.0 - (self.phase - 0.5) * 2.0
+            };
+            *x = 0.05 * (2.0 * amp - 1.0);
+            let freq = 1_789_000.0 / (32.0 * (self.register.timer + 1) as f32);
+            // println!("Freq is {} and timer is {}", freq, self.register.timer);
+            self.phase = (self.phase + (freq / self.sample_rate as f32)) % 1.0;
+        }
+    }
+}
+
 pub struct Gui {
     gl: glow::Context,
     _gl_context: sdl2::video::GLContext,
@@ -118,6 +104,7 @@ pub struct Gui {
     background_program: NativeProgram,
     background_vao: NativeVertexArray,
     pulse_devices: [AudioDevice<PulseWave>; 2],
+    triangle_device: AudioDevice<TriangleWave>,
 }
 impl Gui {
     // TODO: Rename
@@ -155,19 +142,23 @@ impl Gui {
 
             let pulse_devices: [AudioDevice<PulseWave>; 2] = core::array::from_fn(|i| {
                 let device = audio
-                    .open_playback(None, &spec, |spec| {
-                        println!("{:?}", spec);
-                        PulseWave {
-                            register: nes.apu.pulse_registers[i],
-                            samples_per_second: spec.freq,
-                            phase: 0.0,
-                            variable_volume: 1.0,
-                        }
+                    .open_playback(None, &spec, |spec| PulseWave {
+                        register: nes.apu.pulse_registers[i],
+                        samples_per_second: spec.freq,
+                        phase: 0.0,
                     })
                     .unwrap();
                 device.resume();
                 device
             });
+            let triangle_device = audio
+                .open_playback(None, &spec, |spec| TriangleWave {
+                    register: nes.apu.triangle_register,
+                    sample_rate: spec.freq,
+                    phase: 0.0,
+                })
+                .unwrap();
+            triangle_device.resume();
 
             // Send CHR ROM data
             let data: &[u8] = nes.cartridge.chr_rom.as_slice();
@@ -367,6 +358,7 @@ impl Gui {
                 background_program,
                 background_vao,
                 pulse_devices,
+                triangle_device,
             }
         }
     }
@@ -408,6 +400,7 @@ impl Gui {
             .iter_mut()
             .enumerate()
             .for_each(|(i, d)| d.lock().register = nes.apu.pulse_registers[i]);
+        self.triangle_device.lock().register = nes.apu.triangle_register;
     }
     pub fn render(&mut self, nes: &Nes) -> bool {
         unsafe {
