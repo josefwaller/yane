@@ -19,6 +19,7 @@ fn main() {
         let wait_time_per_cycle_nanos = 1_000_000.0 / 1_789_000.0;
         loop {
             let mut cycles = 0;
+            gui.set_input(&mut nes);
             (0..50).for_each(|_| cycles += nes.step().unwrap());
             // (0..(cycles / 2)).for_each(|_| nes.apu.step());
             if Instant::now().duration_since(s1) > Duration::from_millis(1000 / 240) {
@@ -38,7 +39,6 @@ fn main() {
             // );
             if Instant::now().duration_since(last_render) >= Duration::from_millis(1000 / 60) {
                 gui.update_audio(&nes);
-                gui.set_input(&mut nes);
                 nes.ppu.on_vblank();
                 last_render = Instant::now();
                 if gui.render(&mut nes) {

@@ -100,10 +100,8 @@ impl Nes {
             // Sets whether to poll or not
             0x4016 => {
                 // TODO: Delay this until 0 is written
-                if value == 0 {
-                    self.cached_controllers = self.controllers;
-                    self.controller_bit = 0;
-                }
+                self.cached_controllers = self.controllers;
+                self.controller_bit = 0;
             }
             // APU Registers
             0x4000..0x4020 => self.apu.write_byte(addr, value),
@@ -114,7 +112,7 @@ impl Nes {
 
     /// Update the internal controller state in thte NES.
     /// The ROM will still have to poll for the controller state.
-    /// `num`` should either be 0 or 1, depending on whose controller state is being updated
+    /// `num` should either be 0 or 1, depending on whose controller state is being updated
     pub fn set_input(&mut self, num: usize, state: Controller) {
         self.controllers[num] = state;
     }

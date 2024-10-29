@@ -2,19 +2,27 @@ use std::time::Instant;
 
 #[derive(Clone, Copy)]
 pub struct PulseRegister {
+    // The index of the duty to use
     pub duty: u32,
+    // Constant volume flag
     pub constant_volume: bool,
+    // Volume value (either the volume or the volume reload value)
     pub volume: u32,
-    // The timer as set by the CPU
+    // The period of the pulse wave
     pub timer: usize,
-    // The internal timer that counts down and is reset to timer
-    pub internal_timer: usize,
+    // The length limit on the beep's duration
     pub length: usize,
+    // The length halt flag
     pub length_halt: bool,
+    // Sweep enabled flag
     pub sweep_enabled: bool,
-    pub sweep_period: u32,
+    // Sweep period
+    pub sweep_period: usize,
+    // Sweep divider
+    pub sweep_divider: usize,
     pub sweep_negate: bool,
     pub sweep_shift: usize,
+    // Whether the register is enabled
     pub enabled: bool,
     pub actual_volume: u32,
     pub volume_step: usize,
@@ -27,10 +35,10 @@ impl PulseRegister {
             constant_volume: false,
             volume: 0,
             timer: 0,
-            internal_timer: 0,
             length: 0,
             sweep_enabled: false,
             sweep_period: 0,
+            sweep_divider: 0,
             sweep_negate: false,
             sweep_shift: 0,
             enabled: false,
@@ -46,9 +54,15 @@ const LENGTH_TABLE: [usize; 0x20] = [
 
 #[derive(Clone, Copy)]
 pub struct TriangleRegister {
+    // Length halt flag
+    // todo rename
     pub length_halt: bool,
+    // Length counter value
+    pub linear_counter: usize,
+    // Linear counter reload value
+    pub linear_counter_reload: usize,
+    pub reload_flag: bool,
     pub length: usize,
-    pub linear_load: usize,
     pub timer: usize,
     pub enabled: bool,
 }
@@ -56,8 +70,10 @@ impl TriangleRegister {
     pub fn new() -> TriangleRegister {
         TriangleRegister {
             length_halt: false,
+            linear_counter: 0,
+            linear_counter_reload: 0,
+            reload_flag: false,
             length: 0,
-            linear_load: 0,
             timer: 0,
             enabled: false,
         }
@@ -85,19 +101,18 @@ impl Apu {
             0x4004..0x4008 => self.set_pulse_byte(1, addr, value),
             0x4008 => {
                 self.triangle_register.length_halt = (value & 0x80) != 0;
-                self.triangle_register.linear_load = (value & 0x7F) as usize;
+                self.triangle_register.linear_counter_reload = (value & 0x7F) as usize;
             }
             0x4009 => {}
             0x400A => {
                 self.triangle_register.timer =
                     (self.triangle_register.timer & 0x700) + value as usize;
-                println!("Wrote timer high to {}", self.triangle_register.timer);
             }
             0x400B => {
                 self.triangle_register.timer =
                     (self.triangle_register.timer & 0x0FF) + ((value as usize & 0x07) << 8);
-                self.triangle_register.length = (value as usize & 0xF8) >> 3;
-                println!("Wrote timer low to {}", self.triangle_register.timer);
+                self.triangle_register.length = LENGTH_TABLE[(value as usize & 0xF8) >> 3];
+                self.triangle_register.reload_flag = true;
             }
             0x4015 => {
                 self.pulse_registers[0].enabled = (value & 0x01) != 0;
@@ -120,19 +135,17 @@ impl Apu {
             }
             1 => {
                 reg.sweep_enabled = (value & 0x80) != 0;
-                reg.sweep_period = ((value & 0x70) >> 4) as u32;
+                reg.sweep_period = (value as usize & 0x70) >> 4;
                 reg.sweep_negate = (value & 0x08) != 0;
-                reg.sweep_shift = (value & 0x07) as usize
+                reg.sweep_shift = (value & 0x07) as usize;
             }
             2 => {
-                reg.timer = (reg.timer & 0x0300) | value as usize;
+                reg.timer = (reg.timer & 0x0700) | value as usize;
             }
             3 => {
                 reg.timer = (reg.timer & 0x00FF) | ((value as usize & 0x07) << 8);
-                // let length = (((value & 0xF0) as usize) >> 4) + ((value as usize & 0x08) << 1);
                 let length = (value & 0xF8) as usize >> 3;
                 reg.length = LENGTH_TABLE[length];
-                // println!("Length has been set to {} from {:#X}", reg.length, value);
             }
             _ => {} // _ => panic!("Invalid address given to APU"),
         }
@@ -153,15 +166,22 @@ impl Apu {
                 reg.volume_step = reg.volume as usize;
                 if reg.actual_volume > 0 {
                     reg.actual_volume -= 1;
-                    // println!("Actual vol is {}", reg.actual_volume);
                 } else if reg.length_halt {
                     reg.actual_volume = 0xF;
                 }
             } else {
                 reg.volume_step -= 1;
-                // println!("Vol step is {}", reg.volume_step);
             }
         });
+        if self.triangle_register.reload_flag {
+            self.triangle_register.linear_counter = self.triangle_register.linear_counter_reload;
+        }
+        if !self.triangle_register.length_halt {
+            self.triangle_register.reload_flag = false;
+            if self.triangle_register.linear_counter > 0 {
+                self.triangle_register.linear_counter -= 1;
+            }
+        }
     }
     pub fn on_half_frame(&mut self) {
         self.pulse_registers.iter_mut().for_each(|reg| {
@@ -169,6 +189,17 @@ impl Apu {
             if !reg.length_halt && reg.length > 0 {
                 reg.length -= 1;
             }
+            // Update pulse registers
+            if reg.sweep_divider == 0 {
+                // reg.sweep_divider = reg.sweep_period;
+            } else {
+                reg.sweep_divider -= 1;
+            }
         });
+        if !self.triangle_register.length_halt {
+            if self.triangle_register.length > 0 {
+                self.triangle_register.length -= 1;
+            }
+        }
     }
 }

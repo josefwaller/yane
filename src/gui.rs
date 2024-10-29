@@ -33,27 +33,47 @@ impl AudioCallback for PulseWave {
     fn callback(&mut self, out: &mut [f32]) {
         for x in out.iter_mut() {
             // Conditions for register being disabled
-            if !self.register.enabled || self.register.timer < 8 || self.register.length == 0 {
-                *x = 0.00;
+            const MAX_VOLUME: f32 = 0.05;
+            let duty_cycle = DUTY_CYCLES[self.register.duty as usize];
+            // Should be between 0 and 1
+            let volume = if self.register.constant_volume {
+                self.register.volume as f32 / 0xF as f32
             } else {
-                const MAX_VOLUME: f32 = 0.05;
-                let duty_cycle = DUTY_CYCLES[self.register.duty as usize];
-                // Should be between 0 and 1
-                let volume = if self.register.constant_volume {
-                    self.register.volume as f32 / 0xF as f32
-                } else {
-                    self.register.actual_volume as f32 / 0xF as f32
-                };
+                self.register.actual_volume as f32 / 0xF as f32
+            };
 
+            // Compute sweep amount
+            let sweep_change = self.register.timer >> self.register.sweep_shift;
+            let target_period = self.register.timer as i32
+                + if self.register.sweep_negate { -1 } else { 1 } * sweep_change as i32;
+            let period = if self.register.sweep_enabled && self.register.sweep_divider == 0 {
+                target_period as f32
+            } else {
+                self.register.timer as f32
+            };
+
+            // Todo combine this
+            if !self.register.enabled
+                || self.register.length == 0
+                || period < 8.0
+                || target_period > 0x7FF
+            {
+                *x = 0.0;
+            } else {
                 *x = MAX_VOLUME
                     * (1.0
                         - 2.0
                             * duty_cycle[(self.phase * duty_cycle.len() as f32).floor() as usize
                                 % duty_cycle.len()])
                     * volume;
+                // println!(
+                //     "Enabled = {}, length = {}, period = {}, target period = {:X}",
+                //     self.register.enabled, self.register.length, period, target_period
+                // );
             }
+            // Advance phase
             let clock = 1_789_000.0;
-            let freq = clock / (16.0 * (self.register.timer + 1) as f32);
+            let freq = clock / (16.0 * (period + 1.0));
             self.phase = (self.phase + (freq / self.samples_per_second as f32)) % 1.0;
         }
     }
@@ -69,20 +89,19 @@ impl AudioCallback for TriangleWave {
     type Channel = f32;
     fn callback(&mut self, out: &mut [f32]) {
         for x in out.iter_mut() {
-            if !self.register.enabled || self.register.length == 0 {
-                *x = 0.0;
-                println!(
-                    "No triangle - enabled={}, length={}",
-                    self.register.enabled, self.register.length
-                );
-                continue;
-            }
             let amp = if self.phase < 0.5 {
                 self.phase * 2.0
             } else {
                 1.0 - (self.phase - 0.5) * 2.0
             };
-            *x = 0.05 * (2.0 * amp - 1.0);
+            if !self.register.enabled
+                || self.register.length == 0
+                || self.register.linear_counter == 0
+            {
+                *x = 0.0;
+            } else {
+                *x = 0.25 * (2.0 * amp - 1.0);
+            }
             let freq = 1_789_000.0 / (32.0 * (self.register.timer + 1) as f32);
             // println!("Freq is {} and timer is {}", freq, self.register.timer);
             self.phase = (self.phase + (freq / self.sample_rate as f32)) % 1.0;
