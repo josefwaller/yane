@@ -1,49 +1,56 @@
-use std::time::Instant;
+use std::cmp::max;
 
 #[derive(Clone, Copy)]
 pub struct PulseRegister {
-    // The index of the duty to use
+    /// The index of the duty to use
     pub duty: u32,
-    // Constant volume flag
+    /// Constant volume flag
     pub constant_volume: bool,
-    // Volume value (either the volume or the volume reload value)
-    pub volume: u32,
-    // The period of the pulse wave
+    /// Volume value (either the volume or the volume reload value)
+    pub volume: usize,
+    /// Current value of the volume divider
+    pub volume_divider: usize,
+    /// Current value of the volume decay
+    pub volume_decay: usize,
+    /// The period of the pulse wave
     pub timer: usize,
-    // The length limit on the beep's duration
-    pub length: usize,
-    // The length halt flag
-    pub length_halt: bool,
+    /// The length limit on the beep's duration
+    pub length_counter: usize,
+    /// The length counter halt flag, which also acts as the volume loop flag
+    pub length_counter_halt: bool,
     // Sweep enabled flag
     pub sweep_enabled: bool,
-    // Sweep period
+    /// Sweep period
     pub sweep_period: usize,
-    // Sweep divider
+    pub sweep_target_period: usize,
+    /// Sweep divider
     pub sweep_divider: usize,
+    /// Sweep negate flag
     pub sweep_negate: bool,
+    /// Sweep shift amount
     pub sweep_shift: usize,
     // Whether the register is enabled
     pub enabled: bool,
-    pub actual_volume: u32,
-    pub volume_step: usize,
 }
 impl PulseRegister {
     pub fn new() -> PulseRegister {
         PulseRegister {
             duty: 0,
-            length_halt: false,
+            length_counter: 0,
+            length_counter_halt: false,
+            // Volume
             constant_volume: false,
             volume: 0,
+            volume_divider: 0,
+            volume_decay: 0,
             timer: 0,
-            length: 0,
             sweep_enabled: false,
             sweep_period: 0,
             sweep_divider: 0,
             sweep_negate: false,
             sweep_shift: 0,
+            sweep_target_period: 0,
             enabled: false,
-            actual_volume: 0,
-            volume_step: 0,
         }
     }
 }
@@ -127,11 +134,9 @@ impl Apu {
         match addr % 4 {
             0 => {
                 reg.duty = ((value & 0xC0) >> 6) as u32;
-                reg.length_halt = (value & 0x20) != 0;
+                reg.length_counter_halt = (value & 0x20) != 0;
                 reg.constant_volume = (value & 0x10) != 0;
-                reg.volume = (value & 0x0F) as u32;
-                reg.actual_volume = 0xF;
-                reg.volume_step = reg.volume as usize;
+                reg.volume = value as usize & 0x0F;
             }
             1 => {
                 reg.sweep_enabled = (value & 0x80) != 0;
@@ -145,7 +150,10 @@ impl Apu {
             3 => {
                 reg.timer = (reg.timer & 0x00FF) | ((value as usize & 0x07) << 8);
                 let length = (value & 0xF8) as usize >> 3;
-                reg.length = LENGTH_TABLE[length];
+                reg.length_counter = LENGTH_TABLE[length];
+                // Mimic setting volume start flag
+                reg.volume_decay = 0xF;
+                reg.volume_divider = reg.volume;
             }
             _ => {} // _ => panic!("Invalid address given to APU"),
         }
@@ -161,16 +169,20 @@ impl Apu {
     }
     pub fn on_quater_frame(&mut self) {
         self.pulse_registers.iter_mut().for_each(|reg| {
-            // Decrease volume if not constant
-            if reg.volume_step == 0 {
-                reg.volume_step = reg.volume as usize;
-                if reg.actual_volume > 0 {
-                    reg.actual_volume -= 1;
-                } else if reg.length_halt {
-                    reg.actual_volume = 0xF;
+            // Clock volume divider
+            if reg.volume_divider == 0 {
+                reg.volume_divider = reg.volume;
+                // Clock volume decay
+                if reg.volume_decay == 0 {
+                    // Reset if loop flag is set
+                    if reg.length_counter_halt {
+                        reg.volume_decay = 0xF;
+                    }
+                } else {
+                    reg.volume_decay -= 1;
                 }
             } else {
-                reg.volume_step -= 1;
+                reg.volume_divider -= 1;
             }
         });
         if self.triangle_register.reload_flag {
@@ -185,13 +197,26 @@ impl Apu {
     }
     pub fn on_half_frame(&mut self) {
         self.pulse_registers.iter_mut().for_each(|reg| {
-            // Update length halt
-            if !reg.length_halt && reg.length > 0 {
-                reg.length -= 1;
+            // Clock length halt counter
+            if !reg.length_counter_halt && reg.length_counter > 0 {
+                reg.length_counter -= 1;
             }
-            // Update pulse registers
+            // Clock sweep divider
             if reg.sweep_divider == 0 {
-                // reg.sweep_divider = reg.sweep_period;
+                // Compute sweep change
+                // TODO: Slight difference between pulse 1 and 2
+                let sweep_change = reg.timer >> reg.sweep_shift;
+                reg.sweep_target_period = max(
+                    reg.timer as i32 + if reg.sweep_negate { -1 } else { 1 } * sweep_change as i32,
+                    0,
+                ) as usize;
+                if reg.sweep_enabled
+                    && reg.timer >= 8
+                    && reg.sweep_shift > 0
+                    && reg.sweep_target_period < 0x7FF
+                {
+                    reg.timer = reg.sweep_target_period;
+                }
             } else {
                 reg.sweep_divider -= 1;
             }

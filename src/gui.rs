@@ -9,7 +9,7 @@ use sdl2::{
     keyboard::Keycode,
 };
 
-use std::{cmp::max, mem::size_of};
+use std::mem::size_of;
 
 const DUTY_CYCLES: [[f32; 8]; 4] = [
     [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -39,24 +39,13 @@ impl AudioCallback for PulseWave {
             let volume = if self.register.constant_volume {
                 self.register.volume as f32 / 0xF as f32
             } else {
-                self.register.actual_volume as f32 / 0xF as f32
+                self.register.volume_decay as f32 / 0xF as f32
             };
-
-            // Compute sweep amount
-            let sweep_change = self.register.timer >> self.register.sweep_shift;
-            let target_period = self.register.timer as i32
-                + if self.register.sweep_negate { -1 } else { 1 } * sweep_change as i32;
-            let period = if self.register.sweep_enabled && self.register.sweep_divider == 0 {
-                target_period as f32
-            } else {
-                self.register.timer as f32
-            };
-
-            // Todo combine this
+            // Output no sound if muted one way or another
             if !self.register.enabled
-                || self.register.length == 0
-                || period < 8.0
-                || target_period > 0x7FF
+                || self.register.length_counter == 0
+                || self.register.timer < 8
+                || self.register.sweep_target_period > 0x7FF
             {
                 *x = 0.0;
             } else {
@@ -66,14 +55,10 @@ impl AudioCallback for PulseWave {
                             * duty_cycle[(self.phase * duty_cycle.len() as f32).floor() as usize
                                 % duty_cycle.len()])
                     * volume;
-                // println!(
-                //     "Enabled = {}, length = {}, period = {}, target period = {:X}",
-                //     self.register.enabled, self.register.length, period, target_period
-                // );
             }
             // Advance phase
             let clock = 1_789_000.0;
-            let freq = clock / (16.0 * (period + 1.0));
+            let freq = clock / (16.0 * (self.register.timer as f32 + 1.0));
             self.phase = (self.phase + (freq / self.samples_per_second as f32)) % 1.0;
         }
     }
@@ -103,7 +88,6 @@ impl AudioCallback for TriangleWave {
                 *x = 0.25 * (2.0 * amp - 1.0);
             }
             let freq = 1_789_000.0 / (32.0 * (self.register.timer + 1) as f32);
-            // println!("Freq is {} and timer is {}", freq, self.register.timer);
             self.phase = (self.phase + (freq / self.sample_rate as f32)) % 1.0;
         }
     }
