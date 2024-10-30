@@ -796,10 +796,10 @@ impl Nes {
     }
     fn push_to_stack(&mut self, v: u8) {
         self.write_byte(0x100 + self.cpu.s_p as usize, v);
-        self.cpu.s_p -= 1;
+        self.cpu.s_p = self.cpu.s_p.wrapping_sub(1);
     }
     fn pull_from_stack(&mut self) -> u8 {
-        self.cpu.s_p += 1;
+        self.cpu.s_p = self.cpu.s_p.wrapping_add(1);
         self.mem[0x100 + self.cpu.s_p as usize]
     }
     fn push_to_stack_u16(&mut self, v: u16) {

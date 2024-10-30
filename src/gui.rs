@@ -435,7 +435,11 @@ impl Gui {
         }
         for event in self.event_loop.poll_iter() {
             match event {
-                Quit { .. } => return true,
+                Quit { .. } => {
+                    self.pulse_devices.iter_mut().for_each(|t| t.pause());
+                    self.triangle_device.pause();
+                    return true;
+                }
                 _ => {}
             }
         }
@@ -451,8 +455,17 @@ impl Gui {
         let nametable_uni = self
             .gl
             .get_uniform_location(self.background_program, "nametable");
-        let n = nes.ppu.nametable_ram.map(|b| b as i32);
-        self.gl.uniform_1_i32_slice(nametable_uni.as_ref(), &n);
+        // Pack nametable tightly
+        let n: Vec<i32> = nes
+            .ppu
+            .nametable_ram
+            .chunks(4)
+            .map(|b| {
+                ((b[3] as i32) << 24) + ((b[2] as i32) << 16) + ((b[1] as i32) << 8) + b[0] as i32
+            })
+            .collect();
+        self.gl
+            .uniform_1_i32_slice(nametable_uni.as_ref(), n.as_slice());
         set_int_uniform(
             &self.gl,
             &self.background_program,

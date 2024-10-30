@@ -34,7 +34,7 @@ void main() {
     if (index == 0) {
         discard;
     }
-    int colorIndex = palettes[0x10 + 4 * paletteIndex + index];
+    int colorIndex = palettes[4 * paletteIndex + index];
     // Turn greyscale if greyscale mode is on
     if (greyscaleMode != 0) {
         colorIndex &= 0x30;

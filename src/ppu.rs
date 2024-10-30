@@ -21,7 +21,7 @@ pub struct Ppu {
     /// The OAMDMA register
     pub oam_dma: u8,
     /// VRAM
-    pub palette_ram: [u8; 0x100],
+    pub palette_ram: [u8; 0x20],
     pub nametable_ram: [u8; 0x400],
     // W register
     w: bool,
@@ -41,7 +41,7 @@ impl Ppu {
             addr: 0,
             data: 0,
             oam_dma: 0,
-            palette_ram: [0; 0x100],
+            palette_ram: [0; 0x20],
             nametable_ram: [0; 0x400],
             w: true,
         }
@@ -104,7 +104,7 @@ impl Ppu {
     /// Increments `PPUADDR` by 1 or by 32 depending `PPUSTATUS`
     pub fn write_to_vram(&mut self, value: u8) {
         if self.addr >= 0x3F00 {
-            self.palette_ram[(self.addr - 0x3F00) as usize % 0x100] = value;
+            self.palette_ram[(self.addr - 0x3F00) as usize % 0x020] = value;
         } else if self.addr >= 0x2000 {
             self.nametable_ram[(self.addr - 0x2000) as usize % 0x400] = value
         }
