@@ -1,23 +1,30 @@
 use std::cmp::max;
 
-#[derive(Clone, Copy)]
-pub struct PulseRegister {
-    /// The index of the duty to use
-    pub duty: u32,
+#[derive(Clone, Copy, Default)]
+pub struct LengthCounter {
+    pub halt: bool,
+    pub load: usize,
+}
+#[derive(Clone, Copy, Default)]
+pub struct Envelope {
     /// Constant volume flag
-    pub constant_volume: bool,
+    pub constant: bool,
     /// Volume value (either the volume or the volume reload value)
     pub volume: usize,
     /// Current value of the volume divider
-    pub volume_divider: usize,
+    pub divider: usize,
     /// Current value of the volume decay
-    pub volume_decay: usize,
+    pub decay: usize,
+}
+#[derive(Clone, Copy, Default)]
+pub struct PulseRegister {
+    /// The index of the duty to use
+    pub duty: u32,
     /// The period of the pulse wave
     pub timer: usize,
-    /// The length limit on the beep's duration
-    pub length_counter: usize,
-    /// The length counter halt flag, which also acts as the volume loop flag
-    pub length_counter_halt: bool,
+    /// The envelope
+    pub envelope: Envelope,
+    pub length_counter: LengthCounter,
     // Sweep enabled flag
     pub sweep_enabled: bool,
     /// Sweep period
@@ -32,72 +39,39 @@ pub struct PulseRegister {
     // Whether the register is enabled
     pub enabled: bool,
 }
-impl PulseRegister {
-    pub fn new() -> PulseRegister {
-        PulseRegister {
-            duty: 0,
-            length_counter: 0,
-            length_counter_halt: false,
-            // Volume
-            constant_volume: false,
-            volume: 0,
-            volume_divider: 0,
-            volume_decay: 0,
-            timer: 0,
-            sweep_enabled: false,
-            sweep_period: 0,
-            sweep_divider: 0,
-            sweep_negate: false,
-            sweep_shift: 0,
-            sweep_target_period: 0,
-            enabled: false,
-        }
-    }
-}
 const LENGTH_TABLE: [usize; 0x20] = [
     0x0A, 0xFE, 0x14, 0x02, 0x28, 0x04, 0x50, 0x06, 0xA0, 0x08, 0x3C, 0x0A, 0x0E, 0x0C, 0x1A, 0x0E,
     0x0C, 0x10, 0x18, 0x12, 0x30, 0x14, 0x60, 0x16, 0xC0, 0x18, 0x48, 0x1A, 0x10, 0x1C, 0x20, 0x1E,
 ];
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct TriangleRegister {
-    // Length halt flag
-    // todo rename
-    pub length_halt: bool,
-    // Length counter value
+    pub length_counter: LengthCounter,
     pub linear_counter: usize,
     // Linear counter reload value
     pub linear_counter_reload: usize,
     pub reload_flag: bool,
-    pub length: usize,
     pub timer: usize,
     pub enabled: bool,
 }
-impl TriangleRegister {
-    pub fn new() -> TriangleRegister {
-        TriangleRegister {
-            length_halt: false,
-            linear_counter: 0,
-            linear_counter_reload: 0,
-            reload_flag: false,
-            length: 0,
-            timer: 0,
-            enabled: false,
-        }
-    }
+#[derive(Clone, Copy, Default)]
+pub struct NoiseRegister {
+    pub lenth_counter: LengthCounter,
 }
 
 pub struct Apu {
     pub pulse_registers: [PulseRegister; 2],
     pub triangle_register: TriangleRegister,
+    pub noise_register: NoiseRegister,
     step: usize,
 }
 
 impl Apu {
     pub fn new() -> Apu {
         Apu {
-            pulse_registers: [PulseRegister::new(); 2],
-            triangle_register: TriangleRegister::new(),
+            pulse_registers: [PulseRegister::default(); 2],
+            triangle_register: TriangleRegister::default(),
+            noise_register: NoiseRegister::default(),
             step: 0,
         }
     }
@@ -107,7 +81,7 @@ impl Apu {
             0x4000..0x4004 => self.set_pulse_byte(0, addr, value),
             0x4004..0x4008 => self.set_pulse_byte(1, addr, value),
             0x4008 => {
-                self.triangle_register.length_halt = (value & 0x80) != 0;
+                self.triangle_register.length_counter.halt = (value & 0x80) != 0;
                 self.triangle_register.linear_counter_reload = (value & 0x7F) as usize;
             }
             0x4009 => {}
@@ -118,8 +92,19 @@ impl Apu {
             0x400B => {
                 self.triangle_register.timer =
                     (self.triangle_register.timer & 0x0FF) + ((value as usize & 0x07) << 8);
-                self.triangle_register.length = LENGTH_TABLE[(value as usize & 0xF8) >> 3];
+                self.triangle_register.length_counter.load =
+                    LENGTH_TABLE[(value as usize & 0xF8) >> 3];
                 self.triangle_register.reload_flag = true;
+            }
+            0x400C => {
+                self.noise_register.lenth_counter.halt = (value & 0x20) != 0;
+            }
+            0x400F => {
+                println!(
+                    "Set noise length to {}",
+                    self.noise_register.lenth_counter.load
+                );
+                self.noise_register.lenth_counter.load = (value as usize & 0xF8) >> 3;
             }
             0x4015 => {
                 self.pulse_registers[0].enabled = (value & 0x01) != 0;
@@ -134,9 +119,9 @@ impl Apu {
         match addr % 4 {
             0 => {
                 reg.duty = ((value & 0xC0) >> 6) as u32;
-                reg.length_counter_halt = (value & 0x20) != 0;
-                reg.constant_volume = (value & 0x10) != 0;
-                reg.volume = value as usize & 0x0F;
+                reg.length_counter.halt = (value & 0x20) != 0;
+                reg.envelope.constant = (value & 0x10) != 0;
+                reg.envelope.volume = value as usize & 0x0F;
             }
             1 => {
                 reg.sweep_enabled = (value & 0x80) != 0;
@@ -150,10 +135,10 @@ impl Apu {
             3 => {
                 reg.timer = (reg.timer & 0x00FF) | ((value as usize & 0x07) << 8);
                 let length = (value & 0xF8) as usize >> 3;
-                reg.length_counter = LENGTH_TABLE[length];
+                reg.length_counter.load = LENGTH_TABLE[length];
                 // Mimic setting volume start flag
-                reg.volume_decay = 0xF;
-                reg.volume_divider = reg.volume;
+                reg.envelope.decay = 0xF;
+                reg.envelope.divider = reg.envelope.volume;
             }
             _ => {} // _ => panic!("Invalid address given to APU"),
         }
@@ -170,25 +155,25 @@ impl Apu {
     pub fn on_quater_frame(&mut self) {
         self.pulse_registers.iter_mut().for_each(|reg| {
             // Clock volume divider
-            if reg.volume_divider == 0 {
-                reg.volume_divider = reg.volume;
+            if reg.envelope.divider == 0 {
+                reg.envelope.divider = reg.envelope.volume;
                 // Clock volume decay
-                if reg.volume_decay == 0 {
+                if reg.envelope.decay == 0 {
                     // Reset if loop flag is set
-                    if reg.length_counter_halt {
-                        reg.volume_decay = 0xF;
+                    if reg.length_counter.halt {
+                        reg.envelope.decay = 0xF;
                     }
                 } else {
-                    reg.volume_decay -= 1;
+                    reg.envelope.decay -= 1;
                 }
             } else {
-                reg.volume_divider -= 1;
+                reg.envelope.divider -= 1;
             }
         });
         if self.triangle_register.reload_flag {
             self.triangle_register.linear_counter = self.triangle_register.linear_counter_reload;
         }
-        if !self.triangle_register.length_halt {
+        if !self.triangle_register.length_counter.halt {
             self.triangle_register.reload_flag = false;
             if self.triangle_register.linear_counter > 0 {
                 self.triangle_register.linear_counter -= 1;
@@ -198,8 +183,8 @@ impl Apu {
     pub fn on_half_frame(&mut self) {
         self.pulse_registers.iter_mut().for_each(|reg| {
             // Clock length halt counter
-            if !reg.length_counter_halt && reg.length_counter > 0 {
-                reg.length_counter -= 1;
+            if !reg.length_counter.halt && reg.length_counter.load > 0 {
+                reg.length_counter.load -= 1;
             }
             // Clock sweep divider
             if reg.sweep_divider == 0 {
@@ -221,9 +206,9 @@ impl Apu {
                 reg.sweep_divider -= 1;
             }
         });
-        if !self.triangle_register.length_halt {
-            if self.triangle_register.length > 0 {
-                self.triangle_register.length -= 1;
+        if !self.triangle_register.length_counter.halt {
+            if self.triangle_register.length_counter.load > 0 {
+                self.triangle_register.length_counter.load -= 1;
             }
         }
     }

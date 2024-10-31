@@ -1,8 +1,9 @@
 use crate::{
-    apu::{PulseRegister, TriangleRegister},
+    apu::{NoiseRegister, PulseRegister, TriangleRegister},
     Controller, Nes,
 };
 use glow::*;
+use rand::rngs::ThreadRng;
 use sdl2::{
     audio::{AudioCallback, AudioDevice, AudioSpecDesired},
     event::Event::Quit,
@@ -36,14 +37,14 @@ impl AudioCallback for PulseWave {
             const MAX_VOLUME: f32 = 0.05;
             let duty_cycle = DUTY_CYCLES[self.register.duty as usize];
             // Should be between 0 and 1
-            let volume = if self.register.constant_volume {
-                self.register.volume as f32 / 0xF as f32
+            let volume = if self.register.envelope.constant {
+                self.register.envelope.volume as f32 / 0xF as f32
             } else {
-                self.register.volume_decay as f32 / 0xF as f32
+                self.register.envelope.decay as f32 / 0xF as f32
             };
             // Output no sound if muted one way or another
             if !self.register.enabled
-                || self.register.length_counter == 0
+                || self.register.length_counter.load == 0
                 || self.register.timer < 8
                 || self.register.sweep_target_period > 0x7FF
             {
@@ -80,7 +81,7 @@ impl AudioCallback for TriangleWave {
                 1.0 - (self.phase - 0.5) * 2.0
             };
             if !self.register.enabled
-                || self.register.length == 0
+                || self.register.length_counter.load == 0
                 || self.register.linear_counter == 0
             {
                 *x = 0.0;
@@ -88,7 +89,26 @@ impl AudioCallback for TriangleWave {
                 *x = 0.25 * (2.0 * amp - 1.0);
             }
             let freq = 1_789_000.0 / (32.0 * (self.register.timer + 1) as f32);
+            println!("Freq is {}", freq);
             self.phase = (self.phase + (freq / self.sample_rate as f32)) % 1.0;
+        }
+    }
+}
+
+struct NoiseWave {
+    register: NoiseRegister,
+}
+impl AudioCallback for NoiseWave {
+    type Channel = f32;
+    fn callback(&mut self, out: &mut [f32]) {
+        for x in out.iter_mut() {
+            if self.register.lenth_counter.load == 0 {
+                *x = 0.0;
+            } else {
+                // Generate random noise
+                println!("Noise!");
+                *x = 0.25 * (1.0 - rand::random::<f32>() % 2.0);
+            }
         }
     }
 }
@@ -108,6 +128,7 @@ pub struct Gui {
     background_vao: NativeVertexArray,
     pulse_devices: [AudioDevice<PulseWave>; 2],
     triangle_device: AudioDevice<TriangleWave>,
+    noise_device: AudioDevice<NoiseWave>,
 }
 impl Gui {
     // TODO: Rename
@@ -162,7 +183,12 @@ impl Gui {
                 })
                 .unwrap();
             triangle_device.resume();
-
+            let noise_device = audio
+                .open_playback(None, &spec, |spec| NoiseWave {
+                    register: nes.apu.noise_register,
+                })
+                .unwrap();
+            noise_device.resume();
             // Send CHR ROM data
             let data: &[u8] = nes.cartridge.chr_rom.as_slice();
             let chr_rom_tex = gl.create_texture().expect("Unable to create a Texture");
@@ -362,6 +388,7 @@ impl Gui {
                 background_vao,
                 pulse_devices,
                 triangle_device,
+                noise_device,
             }
         }
     }
@@ -404,6 +431,7 @@ impl Gui {
             .enumerate()
             .for_each(|(i, d)| d.lock().register = nes.apu.pulse_registers[i]);
         self.triangle_device.lock().register = nes.apu.triangle_register;
+        self.noise_device.lock().register = nes.apu.noise_register;
     }
     pub fn render(&mut self, nes: &Nes) -> bool {
         unsafe {
