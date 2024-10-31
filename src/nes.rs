@@ -1,5 +1,4 @@
 use crate::{opcodes::*, Apu, Cartridge, Controller, Cpu, Ppu};
-use std::ops::Range;
 
 /// The NES.
 pub struct Nes {
@@ -18,7 +17,7 @@ pub struct Nes {
     // Cached controller states, the ROM will need to poll to keep these up to date
     cached_controllers: [Controller; 2],
     // Current bit being read from the controller
-    controller_bit: usize,
+    controller_bits: [usize; 2],
 }
 
 impl Nes {
@@ -36,7 +35,7 @@ impl Nes {
             cartridge: Cartridge::new(c.as_slice()),
             controllers: [Controller::new(); 2],
             cached_controllers: [Controller::new(); 2],
-            controller_bit: 0,
+            controller_bits: [0; 2],
         }
     }
     pub fn from_cartridge(bytes: &[u8]) -> Nes {
@@ -48,7 +47,7 @@ impl Nes {
             cartridge: Cartridge::new(bytes),
             controllers: [Controller::new(); 2],
             cached_controllers: [Controller::new(); 2],
-            controller_bit: 0,
+            controller_bits: [0; 2],
         };
         nes.cpu.p_c = ((nes.cartridge.read_byte(0xFFFD) as u16) << 8)
             + (nes.cartridge.read_byte(0xFFFC) as u16);
@@ -57,7 +56,7 @@ impl Nes {
     }
 
     fn read_controller_bit(&mut self, num: usize) -> u8 {
-        let pressed = match self.controller_bit {
+        let pressed = match self.controller_bits[num] {
             0 => self.cached_controllers[num].a,
             1 => self.cached_controllers[num].b,
             2 => self.cached_controllers[num].select,
@@ -68,7 +67,7 @@ impl Nes {
             7 => self.cached_controllers[num].right,
             _ => true,
         };
-        self.controller_bit += 1;
+        self.controller_bits[num] += 1;
         return if pressed { 1 } else { 0 };
     }
 
@@ -77,7 +76,7 @@ impl Nes {
             0..0x2000 => self.mem[addr % 0x0800],
             0x2000..0x4000 => self.ppu.read_byte(addr),
             0x4016 => self.read_controller_bit(0),
-            0x4017 => self.read_controller_bit(1),
+            0x4017 => return self.read_controller_bit(1),
             // TBA
             0x4000..0x4020 => 0,
             0x4020..0x10000 => self.cartridge.read_byte(addr),
@@ -101,8 +100,10 @@ impl Nes {
             0x4016 => {
                 // TODO: Delay this until 0 is written
                 self.cached_controllers = self.controllers;
-                self.controller_bit = 0;
+                self.controller_bits[0] = 0;
+                self.controller_bits[1] = 0;
             }
+            // 0x4017 => self.controller_bit = 0,
             // APU Registers
             0x4000..0x4020 => self.apu.write_byte(addr, value),
             0x4020..0x10000 => self.cartridge.write_byte(addr, value),

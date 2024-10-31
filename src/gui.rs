@@ -89,7 +89,6 @@ impl AudioCallback for TriangleWave {
                 *x = 0.25 * (2.0 * amp - 1.0);
             }
             let freq = 1_789_000.0 / (32.0 * (self.register.timer + 1) as f32);
-            println!("Freq is {}", freq);
             self.phase = (self.phase + (freq / self.sample_rate as f32)) % 1.0;
         }
     }
@@ -106,7 +105,6 @@ impl AudioCallback for NoiseWave {
                 *x = 0.0;
             } else {
                 // Generate random noise
-                println!("Noise!");
                 *x = 0.25 * (1.0 - rand::random::<f32>() % 2.0);
             }
         }
