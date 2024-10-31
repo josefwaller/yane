@@ -1,5 +1,6 @@
 use std::thread::sleep;
 use std::time::{Duration, Instant};
+use yane::Audio;
 #[cfg(feature = "gui")]
 use yane::{Gui, Nes};
 
@@ -11,7 +12,13 @@ fn main() {
         let args: Vec<String> = std::env::args().collect();
         let data = std::fs::read(args[1].clone()).unwrap();
         let mut nes = Nes::from_cartridge(data.as_slice());
-        let mut gui = Gui::new(&nes);
+        let sdl = unsafe {
+            // Create SDL2 Window
+            sdl2::init().unwrap()
+        };
+        let mut gui = Gui::new(&nes, &sdl);
+        let mut audio = Audio::new(&nes, &sdl);
+
         let mut last_render = Instant::now();
         let mut s1 = Instant::now();
         let mut s2 = Instant::now();
@@ -38,7 +45,7 @@ fn main() {
             //     nes.ppu.status
             // );
             if Instant::now().duration_since(last_render) >= Duration::from_millis(1000 / 60) {
-                gui.update_audio(&nes);
+                audio.update_audio(&nes);
                 nes.ppu.on_vblank();
                 last_render = Instant::now();
                 if gui.render(&mut nes) {

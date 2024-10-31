@@ -1,115 +1,8 @@
-use crate::{
-    apu::{NoiseRegister, PulseRegister, TriangleRegister},
-    Controller, Nes,
-};
+use crate::{Controller, Nes};
 use glow::*;
-use rand::rngs::ThreadRng;
-use sdl2::{
-    audio::{AudioCallback, AudioDevice, AudioSpecDesired},
-    event::Event::Quit,
-    keyboard::Keycode,
-};
+use sdl2::{event::Event::Quit, keyboard::Keycode, Sdl};
 
 use std::mem::size_of;
-
-const DUTY_CYCLES: [[f32; 8]; 4] = [
-    [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    [0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    [0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0],
-    [1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0],
-];
-#[derive(Clone, Copy)]
-struct PulseWave {
-    // The pulse register this device is attached to
-    register: PulseRegister,
-    // How many sampels are taken every second, i.e. how many times callback is called per second
-    samples_per_second: i32,
-    // The phase of the wave, i.e. the progress through a single wave
-    phase: f32,
-}
-impl AudioCallback for PulseWave {
-    type Channel = f32;
-
-    // Ouputs the amplitude
-    fn callback(&mut self, out: &mut [f32]) {
-        for x in out.iter_mut() {
-            // Conditions for register being disabled
-            const MAX_VOLUME: f32 = 0.05;
-            let duty_cycle = DUTY_CYCLES[self.register.duty as usize];
-            // Should be between 0 and 1
-            let volume = if self.register.envelope.constant {
-                self.register.envelope.volume as f32 / 0xF as f32
-            } else {
-                self.register.envelope.decay as f32 / 0xF as f32
-            };
-            // Output no sound if muted one way or another
-            if !self.register.enabled
-                || self.register.length_counter.load == 0
-                || self.register.timer < 8
-                || self.register.sweep_target_period > 0x7FF
-            {
-                *x = 0.0;
-            } else {
-                *x = MAX_VOLUME
-                    * (1.0
-                        - 2.0
-                            * duty_cycle[(self.phase * duty_cycle.len() as f32).floor() as usize
-                                % duty_cycle.len()])
-                    * volume;
-            }
-            // Advance phase
-            let clock = 1_789_000.0;
-            let freq = clock / (16.0 * (self.register.timer as f32 + 1.0));
-            self.phase = (self.phase + (freq / self.samples_per_second as f32)) % 1.0;
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-struct TriangleWave {
-    register: TriangleRegister,
-    phase: f32,
-    sample_rate: i32,
-}
-impl AudioCallback for TriangleWave {
-    type Channel = f32;
-    fn callback(&mut self, out: &mut [f32]) {
-        for x in out.iter_mut() {
-            let amp = if self.phase < 0.5 {
-                self.phase * 2.0
-            } else {
-                1.0 - (self.phase - 0.5) * 2.0
-            };
-            if !self.register.enabled
-                || self.register.length_counter.load == 0
-                || self.register.linear_counter == 0
-            {
-                *x = 0.0;
-            } else {
-                *x = 0.25 * (2.0 * amp - 1.0);
-            }
-            let freq = 1_789_000.0 / (32.0 * (self.register.timer + 1) as f32);
-            self.phase = (self.phase + (freq / self.sample_rate as f32)) % 1.0;
-        }
-    }
-}
-
-struct NoiseWave {
-    register: NoiseRegister,
-}
-impl AudioCallback for NoiseWave {
-    type Channel = f32;
-    fn callback(&mut self, out: &mut [f32]) {
-        for x in out.iter_mut() {
-            if self.register.lenth_counter.load == 0 {
-                *x = 0.0;
-            } else {
-                // Generate random noise
-                *x = 0.25 * (1.0 - rand::random::<f32>() % 2.0);
-            }
-        }
-    }
-}
 
 pub struct Gui {
     gl: glow::Context,
@@ -124,18 +17,13 @@ pub struct Gui {
     palette: [[f32; 3]; 0x40],
     background_program: NativeProgram,
     background_vao: NativeVertexArray,
-    pulse_devices: [AudioDevice<PulseWave>; 2],
-    triangle_device: AudioDevice<TriangleWave>,
-    noise_device: AudioDevice<NoiseWave>,
 }
 impl Gui {
     // TODO: Rename
-    pub fn new(nes: &Nes) -> Gui {
+    pub fn new(nes: &Nes, sdl: &Sdl) -> Gui {
         let window_width = 256 * 3;
         let window_height = 240 * 3;
         unsafe {
-            // Create SDL2 Window
-            let sdl = sdl2::init().unwrap();
             // Setup video
             let video = sdl.video().unwrap();
             let gl_attr = video.gl_attr();
@@ -154,39 +42,6 @@ impl Gui {
             window.gl_make_current(&gl_context).unwrap();
             let event_loop = sdl.event_pump().unwrap();
 
-            // Setup audio
-            let audio = sdl.audio().unwrap();
-            let spec = AudioSpecDesired {
-                freq: Some(44_100),
-                channels: Some(1),
-                samples: None,
-            };
-
-            let pulse_devices: [AudioDevice<PulseWave>; 2] = core::array::from_fn(|i| {
-                let device = audio
-                    .open_playback(None, &spec, |spec| PulseWave {
-                        register: nes.apu.pulse_registers[i],
-                        samples_per_second: spec.freq,
-                        phase: 0.0,
-                    })
-                    .unwrap();
-                device.resume();
-                device
-            });
-            let triangle_device = audio
-                .open_playback(None, &spec, |spec| TriangleWave {
-                    register: nes.apu.triangle_register,
-                    sample_rate: spec.freq,
-                    phase: 0.0,
-                })
-                .unwrap();
-            triangle_device.resume();
-            let noise_device = audio
-                .open_playback(None, &spec, |spec| NoiseWave {
-                    register: nes.apu.noise_register,
-                })
-                .unwrap();
-            noise_device.resume();
             // Send CHR ROM data
             let data: &[u8] = nes.cartridge.chr_rom.as_slice();
             let chr_rom_tex = gl.create_texture().expect("Unable to create a Texture");
@@ -384,9 +239,6 @@ impl Gui {
                 palette,
                 background_program,
                 background_vao,
-                pulse_devices,
-                triangle_device,
-                noise_device,
             }
         }
     }
@@ -423,14 +275,7 @@ impl Gui {
         };
         nes.set_input(1, controller);
     }
-    pub fn update_audio(&mut self, nes: &Nes) {
-        self.pulse_devices
-            .iter_mut()
-            .enumerate()
-            .for_each(|(i, d)| d.lock().register = nes.apu.pulse_registers[i]);
-        self.triangle_device.lock().register = nes.apu.triangle_register;
-        self.noise_device.lock().register = nes.apu.noise_register;
-    }
+
     pub fn render(&mut self, nes: &Nes) -> bool {
         unsafe {
             self.gl.use_program(Some(self.sprite_program));
@@ -462,8 +307,6 @@ impl Gui {
         for event in self.event_loop.poll_iter() {
             match event {
                 Quit { .. } => {
-                    self.pulse_devices.iter_mut().for_each(|t| t.pause());
-                    self.triangle_device.pause();
                     return true;
                 }
                 _ => {}

@@ -13,7 +13,7 @@ mod controller;
 pub use controller::Controller;
 mod apu;
 pub use apu::Apu;
-#[cfg(feature = "gui")]
 mod gui;
-#[cfg(feature = "gui")]
 pub use gui::Gui;
+mod audio;
+pub use audio::Audio;
