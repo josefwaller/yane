@@ -1,4 +1,6 @@
-use glow::{Context, HasContext, NativeProgram, NativeTexture, Program, VertexArray};
+use glow::{
+    Context, HasContext, NativeFramebuffer, NativeProgram, NativeTexture, Program, VertexArray,
+};
 use sdl2::{
     video::{GLContext, Window},
     VideoSubsystem,
@@ -108,4 +110,86 @@ pub unsafe fn buffer_data_slice(gl: &Context, program: &Program, data: &[i32]) -
     gl.bind_vertex_array(None);
 
     vao
+}
+
+pub unsafe fn create_screen_texture(
+    gl: &Context,
+    size: (usize, usize),
+) -> (NativeFramebuffer, VertexArray, NativeProgram) {
+    let texture_program = gl.create_program().unwrap();
+
+    gl.link_program(texture_program);
+    gl.use_program(Some(texture_program));
+    compile_and_link_shader(
+        &gl,
+        glow::VERTEX_SHADER,
+        include_str!("./shaders/quad_shader.vert"),
+        &texture_program,
+    );
+    compile_and_link_shader(
+        &gl,
+        glow::FRAGMENT_SHADER,
+        include_str!("./shaders/quad_shader.frag"),
+        &texture_program,
+    );
+    let quad_verts: &[f32] = [
+        [-1.0, -1.0, 0.0],
+        [-1.0, 1.0, 0.0],
+        [1.0, 1.0, 0.0],
+        [-1.0, -1.0, 0.0],
+        [1.0, -1.0, 0.0],
+        [1.0, 1.0, 0.0],
+    ]
+    .as_flattened();
+    let quad_verts_u8 = core::slice::from_raw_parts(
+        quad_verts.as_ptr() as *const u8,
+        quad_verts.len() * size_of::<f32>(),
+    );
+    let tex_buf = gl.create_buffer().unwrap();
+    gl.bind_buffer(glow::ARRAY_BUFFER, Some(tex_buf));
+    gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, &quad_verts_u8, glow::STATIC_DRAW);
+
+    let vao = gl.create_vertex_array().unwrap();
+    gl.bind_vertex_array(Some(vao));
+    gl.enable_vertex_attrib_array(0);
+    gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, 3 * size_of::<f32>() as i32, 0);
+
+    gl.link_program(texture_program);
+
+    let texture_buffer = gl.create_framebuffer().unwrap();
+    gl.bind_framebuffer(glow::FRAMEBUFFER, Some(texture_buffer));
+    let render_texture = gl.create_texture().unwrap();
+    gl.bind_texture(glow::TEXTURE_2D, Some(render_texture));
+    gl.tex_image_2d(
+        glow::TEXTURE_2D,
+        0,
+        glow::RGBA as i32,
+        size.0 as i32,
+        size.1 as i32,
+        0,
+        glow::RGBA,
+        glow::UNSIGNED_BYTE,
+        None,
+    );
+    gl.tex_parameter_i32(
+        glow::TEXTURE_2D,
+        glow::TEXTURE_MAG_FILTER,
+        glow::NEAREST as i32,
+    );
+    gl.tex_parameter_i32(
+        glow::TEXTURE_2D,
+        glow::TEXTURE_MIN_FILTER,
+        glow::NEAREST as i32,
+    );
+    gl.framebuffer_texture(
+        glow::FRAMEBUFFER,
+        glow::COLOR_ATTACHMENT0,
+        Some(render_texture),
+        0,
+    );
+    gl.draw_buffers(&[glow::COLOR_ATTACHMENT0]);
+    if gl.check_framebuffer_status(glow::FRAMEBUFFER) != glow::FRAMEBUFFER_COMPLETE {
+        panic!("Error creating frame buffer");
+    }
+    (texture_buffer, vao, texture_program)
 }
