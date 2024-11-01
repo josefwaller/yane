@@ -1,14 +1,10 @@
-use crate::{Controller, Nes};
+use crate::Nes;
 use glow::*;
-use sdl2::{event::Event::Quit, keyboard::Keycode, Sdl};
-
 use std::mem::size_of;
 
-pub struct Gui {
-    gl: glow::Context,
-    _gl_context: sdl2::video::GLContext,
-    window: sdl2::video::Window,
-    event_loop: sdl2::EventPump,
+// Renders the PPU
+pub struct Screen {
+    gl: Context,
     sprite_program: NativeProgram,
     texture_program: NativeProgram,
     tex_vao: NativeVertexArray,
@@ -18,30 +14,10 @@ pub struct Gui {
     background_program: NativeProgram,
     background_vao: NativeVertexArray,
 }
-impl Gui {
+impl Screen {
     // TODO: Rename
-    pub fn new(nes: &Nes, sdl: &Sdl) -> Gui {
-        let window_width = 256 * 3;
-        let window_height = 240 * 3;
+    pub fn new(nes: &Nes, gl: Context) -> Screen {
         unsafe {
-            // Setup video
-            let video = sdl.video().unwrap();
-            let gl_attr = video.gl_attr();
-            gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
-            gl_attr.set_context_version(3, 3);
-            let window = video
-                .window("Y.A.N.E", window_width, window_height)
-                .opengl()
-                .resizable()
-                .build()
-                .unwrap();
-            let gl_context = window.gl_create_context().unwrap();
-            let gl =
-                glow::Context::from_loader_function(|s| video.gl_get_proc_address(s) as *const _);
-
-            window.gl_make_current(&gl_context).unwrap();
-            let event_loop = sdl.event_pump().unwrap();
-
             // Send CHR ROM data
             let data: &[u8] = nes.cartridge.chr_rom.as_slice();
             let chr_rom_tex = gl.create_texture().expect("Unable to create a Texture");
@@ -105,7 +81,7 @@ impl Gui {
             let vao_array = core::array::from_fn(|i| {
                 // Our "vertice" is a 1-D vector with the OAM ID in it
                 let vertices = [i as i32];
-                buffer_data_slice(&gl, &sprite_program, &vertices, 1)
+                buffer_data_slice(&gl, &sprite_program, &vertices)
             });
 
             let background_program = gl.create_program().expect("Unable to create program!");
@@ -136,7 +112,7 @@ impl Gui {
                 );
             }
             let verts: [i32; 32 * 60] = core::array::from_fn(|i| i as i32);
-            let background_vao = buffer_data_slice(&gl, &background_program, &verts, 1);
+            let background_vao = buffer_data_slice(&gl, &background_program, &verts);
 
             let texture_program = gl.create_program().unwrap();
 
@@ -225,12 +201,8 @@ impl Gui {
             if e != glow::NO_ERROR {
                 panic!("Error generated sometime during initialization: {:X?}", e);
             }
-            Gui {
+            Screen {
                 gl,
-                window,
-                event_loop,
-                // This just needs to stay in scope
-                _gl_context: gl_context,
                 sprite_program,
                 texture_program,
                 vao_array,
@@ -242,41 +214,8 @@ impl Gui {
             }
         }
     }
-    pub fn set_input(&self, nes: &mut Nes) {
-        // Update inputs
-        let keys: Vec<Keycode> = self
-            .event_loop
-            .keyboard_state()
-            .pressed_scancodes()
-            .filter_map(Keycode::from_scancode)
-            .collect();
-        // P1
-        let controller = Controller {
-            up: keys.contains(&Keycode::W),
-            left: keys.contains(&Keycode::A),
-            right: keys.contains(&Keycode::D),
-            down: keys.contains(&Keycode::S),
-            a: keys.contains(&Keycode::Q),
-            b: keys.contains(&Keycode::E),
-            start: keys.contains(&Keycode::R),
-            select: keys.contains(&Keycode::F),
-        };
-        nes.set_input(0, controller);
-        // P2
-        let controller = Controller {
-            up: keys.contains(&Keycode::I),
-            left: keys.contains(&Keycode::J),
-            right: keys.contains(&Keycode::L),
-            down: keys.contains(&Keycode::K),
-            a: keys.contains(&Keycode::U),
-            b: keys.contains(&Keycode::O),
-            start: keys.contains(&Keycode::Y),
-            select: keys.contains(&Keycode::H),
-        };
-        nes.set_input(1, controller);
-    }
 
-    pub fn render(&mut self, nes: &Nes) -> bool {
+    pub fn render(&mut self, nes: &Nes, window_size: (u32, u32)) {
         unsafe {
             self.gl.use_program(Some(self.sprite_program));
             self.gl
@@ -295,26 +234,11 @@ impl Gui {
 
             self.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
             self.gl.use_program(Some(self.texture_program));
-            self.gl.viewport(
-                0,
-                0,
-                self.window.size().0 as i32,
-                self.window.size().1 as i32,
-            );
+            self.gl
+                .viewport(0, 0, window_size.0 as i32, window_size.1 as i32);
             self.gl.bind_vertex_array(Some(self.tex_vao));
             self.gl.draw_arrays(glow::TRIANGLES, 0, 6);
         }
-        for event in self.event_loop.poll_iter() {
-            match event {
-                Quit { .. } => {
-                    return true;
-                }
-                _ => {}
-            }
-        }
-        self.window.gl_swap_window();
-
-        false
     }
     unsafe fn render_background(&mut self, nes: &Nes) {
         self.gl.use_program(Some(self.background_program));
@@ -449,12 +373,7 @@ unsafe fn set_int_uniform(gl: &glow::Context, program: &glow::Program, name: &st
     let location = gl.get_uniform_location(*program, name);
     gl.uniform_1_i32(location.as_ref(), value);
 }
-unsafe fn buffer_data_slice(
-    gl: &Context,
-    program: &Program,
-    data: &[i32],
-    count: i32,
-) -> VertexArray {
+unsafe fn buffer_data_slice(gl: &Context, program: &Program, data: &[i32]) -> VertexArray {
     gl.use_program(Some(*program));
     let vao = gl
         .create_vertex_array()

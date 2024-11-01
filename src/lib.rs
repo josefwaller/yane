@@ -13,7 +13,10 @@ mod controller;
 pub use controller::Controller;
 mod apu;
 pub use apu::Apu;
-mod gui;
-pub use gui::Gui;
+mod screen;
+pub use screen::Screen;
 mod audio;
 pub use audio::Audio;
+
+mod window;
+pub use window::Window;

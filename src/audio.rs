@@ -112,7 +112,7 @@ pub struct Audio {
 }
 
 impl Audio {
-    pub fn new(nes: &Nes, sdl: &Sdl) -> Audio {
+    pub fn new(sdl: &Sdl) -> Audio {
         // Setup audio
         let audio = sdl.audio().unwrap();
         let spec = AudioSpecDesired {
@@ -123,7 +123,7 @@ impl Audio {
         let pulse_devices: [AudioDevice<PulseWave>; 2] = core::array::from_fn(|i| {
             let device = audio
                 .open_playback(None, &spec, |spec| PulseWave {
-                    register: nes.apu.pulse_registers[i],
+                    register: PulseRegister::default(),
                     samples_per_second: spec.freq,
                     phase: 0.0,
                 })
@@ -133,7 +133,7 @@ impl Audio {
         });
         let triangle_device = audio
             .open_playback(None, &spec, |spec| TriangleWave {
-                register: nes.apu.triangle_register,
+                register: TriangleRegister::default(),
                 sample_rate: spec.freq,
                 phase: 0.0,
             })
@@ -141,7 +141,7 @@ impl Audio {
         triangle_device.resume();
         let noise_device = audio
             .open_playback(None, &spec, |spec| NoiseWave {
-                register: nes.apu.noise_register,
+                register: NoiseRegister::default(),
             })
             .unwrap();
         noise_device.resume();

@@ -1,23 +1,15 @@
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use yane::Audio;
-#[cfg(feature = "gui")]
-use yane::{Gui, Nes};
+use yane::{Nes, Window};
 
 fn main() {
-    #[cfg(not(feature = "gui"))]
-    panic!("Can only use yane as a program if the gui feature is enabled, reinstall with --features \"gui\"");
-    #[cfg(feature = "gui")]
     {
+        // Read file and init NES
         let args: Vec<String> = std::env::args().collect();
         let data = std::fs::read(args[1].clone()).unwrap();
         let mut nes = Nes::from_cartridge(data.as_slice());
-        let sdl = unsafe {
-            // Create SDL2 Window
-            sdl2::init().unwrap()
-        };
-        let mut gui = Gui::new(&nes, &sdl);
-        let mut audio = Audio::new(&nes, &sdl);
+
+        let mut window = Window::new(&nes);
 
         let mut last_render = Instant::now();
         let mut s1 = Instant::now();
@@ -25,10 +17,11 @@ fn main() {
         let mut delta = Instant::now();
         let wait_time_per_cycle_nanos = 1_000_000.0 / 1_789_000.0;
         loop {
+            window.update(&mut nes);
+
             let mut cycles = 0;
-            gui.set_input(&mut nes);
             (0..50).for_each(|_| cycles += nes.step().unwrap());
-            // (0..(cycles / 2)).for_each(|_| nes.apu.step());
+            // These functions will hopefully eventually be called from nes.step
             if Instant::now().duration_since(s1) > Duration::from_millis(1000 / 240) {
                 nes.apu.on_quater_frame();
                 s1 = Instant::now();
@@ -45,12 +38,12 @@ fn main() {
             //     nes.ppu.status
             // );
             if Instant::now().duration_since(last_render) >= Duration::from_millis(1000 / 60) {
-                audio.update_audio(&nes);
-                nes.ppu.on_vblank();
                 last_render = Instant::now();
-                if gui.render(&mut nes) {
+
+                if window.render(&mut nes) {
                     break;
                 }
+                nes.ppu.on_vblank();
                 if nes.ppu.get_nmi_enabled() {
                     nes.on_nmi();
                 }
