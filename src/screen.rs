@@ -1,4 +1,4 @@
-use crate::Nes;
+use crate::{utils::*, Nes};
 use glow::*;
 use std::mem::size_of;
 
@@ -20,34 +20,7 @@ impl Screen {
         unsafe {
             // Send CHR ROM data
             let data: &[u8] = nes.cartridge.chr_rom.as_slice();
-            let chr_rom_tex = gl.create_texture().expect("Unable to create a Texture");
-            gl.bind_texture(glow::TEXTURE_1D, Some(chr_rom_tex));
-            gl.tex_image_1d(
-                glow::TEXTURE_1D,
-                0,
-                glow::R8 as i32,
-                nes.cartridge.chr_rom.len() as i32,
-                0,
-                glow::RED,
-                glow::UNSIGNED_BYTE,
-                Some(&data),
-            );
-            gl.tex_parameter_i32(
-                glow::TEXTURE_1D,
-                glow::TEXTURE_MIN_FILTER,
-                glow::NEAREST as i32,
-            );
-
-            gl.tex_parameter_i32(
-                glow::TEXTURE_1D,
-                glow::TEXTURE_MAG_FILTER,
-                glow::NEAREST as i32,
-            );
-            gl.tex_parameter_i32(
-                glow::TEXTURE_1D,
-                glow::TEXTURE_MIN_FILTER,
-                glow::NEAREST as i32,
-            );
+            let chr_rom_tex = create_data_texture(&gl, data);
 
             // Create program for rendering sprites to texture
             let sprite_program = gl.create_program().expect("Unable to create program");
@@ -343,53 +316,4 @@ impl Screen {
             0, //nes.ppu.scroll_y as i32,
         );
     }
-}
-
-unsafe fn compile_and_link_shader(
-    gl: &Context,
-    shader_type: u32,
-    shader_src: &str,
-    program: &NativeProgram,
-) {
-    let shader = gl.create_shader(shader_type).expect("Cannot create shader");
-    gl.shader_source(shader, shader_src);
-    gl.compile_shader(shader);
-    if !gl.get_shader_compile_status(shader) {
-        panic!(
-            "Failed to compile shader with source {}: {}",
-            shader_src,
-            gl.get_shader_info_log(shader)
-        );
-    }
-    gl.attach_shader(*program, shader);
-    gl.delete_shader(shader);
-}
-
-unsafe fn set_bool_uniform(gl: &glow::Context, program: &glow::Program, name: &str, value: bool) {
-    let location = gl.get_uniform_location(*program, name);
-    gl.uniform_1_i32(location.as_ref(), if value { 1 } else { 0 });
-}
-unsafe fn set_int_uniform(gl: &glow::Context, program: &glow::Program, name: &str, value: i32) {
-    let location = gl.get_uniform_location(*program, name);
-    gl.uniform_1_i32(location.as_ref(), value);
-}
-unsafe fn buffer_data_slice(gl: &Context, program: &Program, data: &[i32]) -> VertexArray {
-    gl.use_program(Some(*program));
-    let vao = gl
-        .create_vertex_array()
-        .expect("Could not create VertexArray");
-    gl.bind_vertex_array(Some(vao));
-    // Pipe data
-    let data_u8: &[u8] =
-        core::slice::from_raw_parts(data.as_ptr() as *const u8, data.len() * size_of::<i32>());
-    let vbo = gl.create_buffer().unwrap();
-    gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
-    gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, data_u8, glow::STATIC_DRAW);
-    // Describe the format of the data
-    gl.enable_vertex_attrib_array(0);
-    gl.vertex_attrib_pointer_i32(0, 1 as i32, glow::INT, 4, 0);
-    // Unbind
-    gl.bind_vertex_array(None);
-
-    vao
 }

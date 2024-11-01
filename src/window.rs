@@ -1,48 +1,37 @@
-use crate::{Audio, Controller, Nes, Screen};
-use sdl2::{event::Event::Quit, keyboard::Keycode, video::GLContext, Sdl};
+use crate::{utils, Audio, Controller, Nes, Screen};
+use sdl2::{
+    event::{Event, WindowEvent},
+    keyboard::Keycode,
+    video::GLContext,
+    Sdl, VideoSubsystem,
+};
 
 pub struct Window {
     window: sdl2::video::Window,
     event_loop: sdl2::EventPump,
-    // Just needs to stay in scope
-    _gl_context: GLContext,
+    gl_context: GLContext,
     audio: Audio,
     screen: Screen,
 }
 
 impl Window {
-    pub fn new(nes: &Nes) -> Window {
+    pub fn new(nes: &Nes, video: &VideoSubsystem, sdl: &Sdl) -> Window {
+        // Init SDL window
         let window_width = 256 * 3;
         let window_height = 240 * 3;
-        unsafe {
-            let sdl = sdl2::init().unwrap();
-            // Setup video
-            let video = sdl.video().unwrap();
-            let gl_attr = video.gl_attr();
-            gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
-            gl_attr.set_context_version(3, 3);
-            let window = video
-                .window("Y.A.N.E", window_width, window_height)
-                .opengl()
-                .resizable()
-                .build()
-                .unwrap();
-            let gl_context = window.gl_create_context().unwrap();
-            let gl =
-                glow::Context::from_loader_function(|s| video.gl_get_proc_address(s) as *const _);
+        let (window, gl_context, gl) =
+            utils::create_window(video, "Y.A.N.E.", window_width, window_height);
 
-            window.gl_make_current(&gl_context).unwrap();
-            let event_loop = sdl.event_pump().unwrap();
-            let screen = Screen::new(&nes, gl);
-            let audio = Audio::new(&sdl);
-            Window {
-                window,
-                event_loop,
-                // Just needs to stay in scope
-                _gl_context: gl_context,
-                audio,
-                screen,
-            }
+        let event_loop = sdl.event_pump().unwrap();
+
+        let screen = Screen::new(&nes, gl);
+        let audio = Audio::new(&sdl);
+        Window {
+            window,
+            event_loop,
+            gl_context,
+            audio,
+            screen,
         }
     }
     pub fn update(&mut self, nes: &mut Nes) {
@@ -82,11 +71,14 @@ impl Window {
         self.audio.update_audio(nes);
     }
     pub fn render(&mut self, nes: &mut Nes) -> bool {
+        self.window.gl_make_current(&self.gl_context).unwrap();
         for event in self.event_loop.poll_iter() {
             match event {
-                Quit { .. } => {
-                    return true;
-                }
+                Event::Quit { .. } => return true,
+                Event::Window { win_event, .. } => match win_event {
+                    WindowEvent::Close => return true,
+                    _ => {}
+                },
                 _ => {}
             }
         }

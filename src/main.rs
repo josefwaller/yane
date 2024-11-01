@@ -1,6 +1,6 @@
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use yane::{Nes, Window};
+use yane::{DebugWindow, Nes, Window};
 
 fn main() {
     {
@@ -9,7 +9,15 @@ fn main() {
         let data = std::fs::read(args[1].clone()).unwrap();
         let mut nes = Nes::from_cartridge(data.as_slice());
 
-        let mut window = Window::new(&nes);
+        let sdl = sdl2::init().unwrap();
+        // Setup video
+        let video = sdl.video().unwrap();
+        let gl_attr = video.gl_attr();
+        gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
+        gl_attr.set_context_version(4, 0);
+
+        let mut debug_window = DebugWindow::new(&nes, &video);
+        let mut window = Window::new(&nes, &video, &sdl);
 
         let mut last_render = Instant::now();
         let mut s1 = Instant::now();
@@ -43,6 +51,7 @@ fn main() {
                 if window.render(&mut nes) {
                     break;
                 }
+                debug_window.render(&nes);
                 nes.ppu.on_vblank();
                 if nes.ppu.get_nmi_enabled() {
                     nes.on_nmi();
