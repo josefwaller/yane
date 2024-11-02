@@ -1,3 +1,5 @@
+use sdl2::event::{Event, WindowEvent};
+use sdl2::keyboard::Keycode;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use yane::{DebugWindow, Nes, Window};
@@ -15,8 +17,11 @@ fn main() {
         let gl_attr = video.gl_attr();
         gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
         gl_attr.set_context_version(4, 0);
+        // Setup input
+        // The two windows need a shared event pump since SDL only allows one at a time
+        let mut event_pump = sdl.event_pump().unwrap();
 
-        let mut debug_window = DebugWindow::new(&nes, &video);
+        let mut debug_window = DebugWindow::new(&nes, &video, &sdl);
         let mut window = Window::new(&nes, &video, &sdl);
 
         let mut last_render = Instant::now();
@@ -25,7 +30,27 @@ fn main() {
         let mut delta = Instant::now();
         let wait_time_per_cycle_nanos = 1_000_000.0 / 1_789_000.0;
         loop {
-            window.update(&mut nes);
+            // Update IMGUI/Window input
+            let mut should_exit = false;
+            for event in event_pump.poll_iter() {
+                match event {
+                    Event::Window { win_event, .. } => match win_event {
+                        WindowEvent::Close => should_exit = true,
+                        _ => {}
+                    },
+                    _ => debug_window.handle_event(&event),
+                }
+            }
+            if should_exit {
+                break;
+            }
+            // Update game input
+            let keys: Vec<Keycode> = event_pump
+                .keyboard_state()
+                .pressed_scancodes()
+                .filter_map(Keycode::from_scancode)
+                .collect();
+            window.update(&mut nes, keys);
 
             let mut cycles = 0;
             (0..50).for_each(|_| cycles += nes.step().unwrap());
@@ -38,29 +63,16 @@ fn main() {
                 nes.apu.on_half_frame();
                 s2 = Instant::now();
             }
-            // println!(
-            //     "{:X} {:X} {:X} status = {:X}",
-            //     nes.read_byte(nes.cpu.p_c as usize),
-            //     nes.read_byte(nes.cpu.p_c as usize + 1),
-            //     nes.read_byte(nes.cpu.p_c as usize + 2),
-            //     nes.ppu.status
-            // );
             if Instant::now().duration_since(last_render) >= Duration::from_millis(1000 / 60) {
                 last_render = Instant::now();
 
-                if window.render(&mut nes) {
-                    break;
-                }
-                debug_window.render(&nes);
+                window.render(&mut nes);
+                debug_window.render(&nes, &event_pump);
                 nes.ppu.on_vblank();
                 if nes.ppu.get_nmi_enabled() {
                     nes.on_nmi();
                 }
             }
-            // println!(
-            //     "Sleeping {}",
-            //     1.0 * (c1 + c2) as f64 * wait_time_per_cycle_millis
-            // );
             let new_delta = Instant::now();
             let emu_elapsed = (cycles as f64 * wait_time_per_cycle_nanos) as u64;
             let actual_elapsed = new_delta.duration_since(delta).as_nanos() as u64;
