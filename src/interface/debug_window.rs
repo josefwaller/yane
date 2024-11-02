@@ -54,19 +54,19 @@ impl DebugWindow {
             compile_and_link_shader(
                 &gl,
                 glow::VERTEX_SHADER,
-                include_str!("./shaders/pass_through.vert"),
+                include_str!("../shaders/pass_through.vert"),
                 &program,
             );
             compile_and_link_shader(
                 &gl,
                 glow::GEOMETRY_SHADER,
-                include_str!("./shaders/chr_rom_debug.geom"),
+                include_str!("../shaders/chr_rom_debug.geom"),
                 &program,
             );
             compile_and_link_shader(
                 &gl,
                 glow::FRAGMENT_SHADER,
-                include_str!("./shaders/tile.frag"),
+                include_str!("../shaders/tile.frag"),
                 &program,
             );
             gl.link_program(program);
@@ -75,7 +75,7 @@ impl DebugWindow {
                 .map(|i| i as i32)
                 .collect();
             let vao = buffer_data_slice(&gl, &program, verts.as_slice());
-            let palette_data: &[u8] = include_bytes!("./2C02G_wiki.pal");
+            let palette_data: &[u8] = include_bytes!("../2C02G_wiki.pal");
             let palette: [[f32; 3]; 64] = core::array::from_fn(|i| {
                 core::array::from_fn(|j| palette_data[3 * i + j] as f32 / 255.0)
             });

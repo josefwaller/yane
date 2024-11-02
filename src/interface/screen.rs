@@ -27,19 +27,19 @@ impl Screen {
             compile_and_link_shader(
                 &gl,
                 glow::VERTEX_SHADER,
-                include_str!("./shaders/pass_through.vert"),
+                include_str!("../shaders/pass_through.vert"),
                 &sprite_program,
             );
             compile_and_link_shader(
                 &gl,
                 glow::GEOMETRY_SHADER,
-                include_str!("./shaders/oam.geom"),
+                include_str!("../shaders/oam.geom"),
                 &sprite_program,
             );
             compile_and_link_shader(
                 &gl,
                 glow::FRAGMENT_SHADER,
-                include_str!("./shaders/tile.frag"),
+                include_str!("../shaders/tile.frag"),
                 &sprite_program,
             );
 
@@ -61,19 +61,19 @@ impl Screen {
             compile_and_link_shader(
                 &gl,
                 glow::VERTEX_SHADER,
-                include_str!("./shaders/pass_through.vert"),
+                include_str!("../shaders/pass_through.vert"),
                 &background_program,
             );
             compile_and_link_shader(
                 &gl,
                 glow::GEOMETRY_SHADER,
-                include_str!("./shaders/background.geom"),
+                include_str!("../shaders/background.geom"),
                 &background_program,
             );
             compile_and_link_shader(
                 &gl,
                 glow::FRAGMENT_SHADER,
-                include_str!("./shaders/tile.frag"),
+                include_str!("../shaders/tile.frag"),
                 &background_program,
             );
 
@@ -90,7 +90,7 @@ impl Screen {
             let (texture_buffer, texture_vao, texture_program) =
                 create_screen_texture(&gl, (256, 240));
             // Load pallete
-            let palette_data: &[u8] = include_bytes!("./2C02G_wiki.pal");
+            let palette_data: &[u8] = include_bytes!("../2C02G_wiki.pal");
             let palette: [[f32; 3]; 64] = core::array::from_fn(|i| {
                 core::array::from_fn(|j| palette_data[3 * i + j] as f32 / 255.0)
             });
