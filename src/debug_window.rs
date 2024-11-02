@@ -1,5 +1,6 @@
 use crate::{utils::*, Nes};
 use glow::{HasContext, NativeFramebuffer, NativeProgram, VertexArray};
+use imgui::Condition::FirstUseEver;
 use imgui_glow_renderer::AutoRenderer;
 use imgui_sdl2_support::SdlPlatform;
 use sdl2::{event::Event, EventPump, Sdl, VideoSubsystem};
@@ -21,6 +22,10 @@ pub struct DebugWindow {
     imgui: imgui::Context,
     platform: SdlPlatform,
     renderer: AutoRenderer,
+    // Settings to change through imgui
+    palette_index: usize,
+    paused: bool,
+    volume: f32,
 }
 
 impl DebugWindow {
@@ -82,8 +87,6 @@ impl DebugWindow {
             DebugWindow {
                 window,
                 gl_context,
-                // event_pump,
-                // gl,
                 vao,
                 palette,
                 program,
@@ -95,6 +98,9 @@ impl DebugWindow {
                 platform,
                 renderer,
                 imgui,
+                palette_index: 0,
+                paused: false,
+                volume: 0.25,
             }
         }
     }
@@ -129,6 +135,12 @@ impl DebugWindow {
             // Set number of columns
             set_int_uniform(&gl, &self.program, "numColumns", self.num_columns as i32);
             set_int_uniform(&gl, &self.program, "numRows", self.num_rows as i32);
+            set_int_uniform(
+                &gl,
+                &self.program,
+                "globalPaletteIndex",
+                self.palette_index as i32,
+            );
 
             gl.bind_vertex_array(Some(self.vao));
             gl.draw_arrays(glow::POINTS, 0, nes.cartridge.chr_rom.len() as i32 / 0x10);
@@ -149,12 +161,39 @@ impl DebugWindow {
             self.platform
                 .prepare_frame(&mut self.imgui, &self.window, event_pump);
             let ui = self.imgui.new_frame();
-            ui.show_demo_window(&mut true);
+            // ui.text("Hello world");
+            ui.window("Settings")
+                .size([200.0, 200.0], FirstUseEver)
+                .build(|| {
+                    if let Some(c) =
+                        ui.begin_combo("Palette", format!("Palette {}", self.palette_index))
+                    {
+                        (0..8).for_each(|i| {
+                            let label = format!("Palette {}", i);
+                            if ui.selectable(label) {
+                                self.palette_index = i;
+                            }
+                        });
+                        c.end();
+                    }
+                    if ui.button(if self.paused { "Unpause" } else { "Pause" }) {
+                        self.paused = !self.paused;
+                    }
+                    ui.slider("Volume", 0.0, 1.0, &mut self.volume);
+                });
+            // ui.show_demo_window(&mut true);
             let draw_data = self.imgui.render();
             self.renderer
                 .render(draw_data)
                 .expect("Error rendering DearImGui");
         }
         self.window.gl_swap_window();
+    }
+
+    pub fn paused(&self) -> bool {
+        self.paused
+    }
+    pub fn volume(&self) -> f32 {
+        self.volume
     }
 }

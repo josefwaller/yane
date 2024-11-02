@@ -50,27 +50,31 @@ fn main() {
                 .pressed_scancodes()
                 .filter_map(Keycode::from_scancode)
                 .collect();
-            window.update(&mut nes, keys);
+            window.update(&mut nes, keys, debug_window.volume());
 
             let mut cycles = 0;
-            (0..50).for_each(|_| cycles += nes.step().unwrap());
-            // These functions will hopefully eventually be called from nes.step
-            if Instant::now().duration_since(s1) > Duration::from_millis(1000 / 240) {
-                nes.apu.on_quater_frame();
-                s1 = Instant::now();
-            }
-            if Instant::now().duration_since(s2) > Duration::from_millis(1000 / 120) {
-                nes.apu.on_half_frame();
-                s2 = Instant::now();
+            if !debug_window.paused() {
+                (0..50).for_each(|_| cycles += nes.step().unwrap());
+                // These functions will hopefully eventually be called from nes.step
+                if Instant::now().duration_since(s1) > Duration::from_millis(1000 / 240) {
+                    nes.apu.on_quater_frame();
+                    s1 = Instant::now();
+                }
+                if Instant::now().duration_since(s2) > Duration::from_millis(1000 / 120) {
+                    nes.apu.on_half_frame();
+                    s2 = Instant::now();
+                }
             }
             if Instant::now().duration_since(last_render) >= Duration::from_millis(1000 / 60) {
                 last_render = Instant::now();
 
                 window.render(&mut nes);
                 debug_window.render(&nes, &event_pump);
-                nes.ppu.on_vblank();
-                if nes.ppu.get_nmi_enabled() {
-                    nes.on_nmi();
+                if !debug_window.paused() {
+                    nes.ppu.on_vblank();
+                    if nes.ppu.get_nmi_enabled() {
+                        nes.on_nmi();
+                    }
                 }
             }
             let new_delta = Instant::now();

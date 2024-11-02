@@ -21,6 +21,7 @@ struct PulseWave {
     samples_per_second: i32,
     // The phase of the wave, i.e. the progress through a single wave
     phase: f32,
+    max_volume: f32,
 }
 impl AudioCallback for PulseWave {
     type Channel = f32;
@@ -29,7 +30,6 @@ impl AudioCallback for PulseWave {
     fn callback(&mut self, out: &mut [f32]) {
         for x in out.iter_mut() {
             // Conditions for register being disabled
-            const MAX_VOLUME: f32 = 0.05;
             let duty_cycle = DUTY_CYCLES[self.register.duty as usize];
             // Should be between 0 and 1
             let volume = if self.register.envelope.constant {
@@ -45,7 +45,8 @@ impl AudioCallback for PulseWave {
             {
                 *x = 0.0;
             } else {
-                *x = MAX_VOLUME
+                *x = self.max_volume
+                    * 0.25
                     * (1.0
                         - 2.0
                             * duty_cycle[(self.phase * duty_cycle.len() as f32).floor() as usize
@@ -65,6 +66,7 @@ struct TriangleWave {
     register: TriangleRegister,
     phase: f32,
     sample_rate: i32,
+    max_volume: f32,
 }
 impl AudioCallback for TriangleWave {
     type Channel = f32;
@@ -81,7 +83,7 @@ impl AudioCallback for TriangleWave {
             {
                 *x = 0.0;
             } else {
-                *x = 0.25 * (2.0 * amp - 1.0);
+                *x = self.max_volume * 0.25 * (2.0 * amp - 1.0);
             }
             let freq = 1_789_000.0 / (32.0 * (self.register.timer + 1) as f32);
             self.phase = (self.phase + (freq / self.sample_rate as f32)) % 1.0;
@@ -90,6 +92,7 @@ impl AudioCallback for TriangleWave {
 }
 struct NoiseWave {
     register: NoiseRegister,
+    max_volume: f32,
 }
 impl AudioCallback for NoiseWave {
     type Channel = f32;
@@ -99,7 +102,7 @@ impl AudioCallback for NoiseWave {
                 *x = 0.0;
             } else {
                 // Generate random noise
-                *x = 0.25 * (1.0 - rand::random::<f32>() % 2.0);
+                *x = self.max_volume * 0.25 * (1.0 - rand::random::<f32>() % 2.0);
             }
         }
     }
@@ -126,6 +129,7 @@ impl Audio {
                     register: PulseRegister::default(),
                     samples_per_second: spec.freq,
                     phase: 0.0,
+                    max_volume: 1.0,
                 })
                 .unwrap();
             device.resume();
@@ -136,12 +140,14 @@ impl Audio {
                 register: TriangleRegister::default(),
                 sample_rate: spec.freq,
                 phase: 0.0,
+                max_volume: 1.0,
             })
             .unwrap();
         triangle_device.resume();
         let noise_device = audio
             .open_playback(None, &spec, |spec| NoiseWave {
                 register: NoiseRegister::default(),
+                max_volume: 1.0,
             })
             .unwrap();
         noise_device.resume();
@@ -151,12 +157,17 @@ impl Audio {
             noise_device,
         }
     }
-    pub fn update_audio(&mut self, nes: &Nes) {
+    pub fn update_audio(&mut self, nes: &Nes, volume: f32) {
         self.pulse_devices
             .iter_mut()
             .enumerate()
-            .for_each(|(i, d)| d.lock().register = nes.apu.pulse_registers[i]);
+            .for_each(|(i, d)| {
+                d.lock().register = nes.apu.pulse_registers[i];
+                d.lock().max_volume = volume;
+            });
         self.triangle_device.lock().register = nes.apu.triangle_register;
+        self.triangle_device.lock().max_volume = volume;
         self.noise_device.lock().register = nes.apu.noise_register;
+        self.noise_device.lock().max_volume = volume;
     }
 }

@@ -8,6 +8,7 @@ in int[] index;
 
 uniform int numRows;
 uniform int numColumns;
+uniform int globalPaletteIndex;
 
 flat out int pixelIndex;
 flat out int tileAddr;
@@ -27,7 +28,7 @@ void main() {
                 );
                 pixelIndex = 8 * y + x;
                 tileAddr = index[i];
-                paletteIndex = 0;
+                paletteIndex = globalPaletteIndex;
                 EmitVertex();
             }
         }

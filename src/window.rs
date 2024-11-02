@@ -29,7 +29,7 @@ impl Window {
             screen,
         }
     }
-    pub fn update(&mut self, nes: &mut Nes, pressed_keys: Vec<Keycode>) {
+    pub fn update(&mut self, nes: &mut Nes, pressed_keys: Vec<Keycode>, volume: f32) {
         // Update inputs
 
         // P1
@@ -58,7 +58,7 @@ impl Window {
         nes.set_input(1, controller);
 
         // Update audio
-        self.audio.update_audio(nes);
+        self.audio.update_audio(nes, volume);
     }
     pub fn render(&mut self, nes: &mut Nes) {
         self.window.gl_make_current(&self.gl_context).unwrap();
