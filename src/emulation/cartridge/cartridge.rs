@@ -1,17 +1,28 @@
+use crate::{emulation::cartridge::mapper::get_mapper, Mapper};
+use std::cmp::min;
+
 pub enum NametableArrangement {
     Horizontal,
     Vertical,
 }
 
+/// Holds all the memory in the cartridge
+// Todo: Maybe rename (get rid of cartridge)
+pub struct CartridgeMemory {
+    pub prg_ram: Vec<u8>,
+    pub prg_rom: Vec<u8>,
+    pub chr_rom: Vec<u8>,
+    pub chr_ram: Vec<u8>,
+}
+
 /// An NES cartridge, or perhaps more accurately, an iNES file.
 /// Contains all the ROM and information encoded in the header.
 pub struct Cartridge {
-    prg_ram: Vec<u8>,
-    prg_rom: Vec<u8>,
-    pub chr_rom: Vec<u8>,
-    chr_ram: Vec<u8>,
+    pub memory: CartridgeMemory,
     /// Nametable mirroring arrangement
     nametable_arrangement: NametableArrangement,
+    // Mapper
+    mapper: Box<dyn Mapper>,
 }
 
 impl Cartridge {
@@ -24,18 +35,28 @@ impl Cartridge {
         }
         let prg_rom_size = 0x4000 * bytes[4] as usize;
         let chr_rom_size = 0x2000 * bytes[5] as usize;
+        let mut prg_ram_size: usize = 0x0;
+        let mut chr_ram_size = 0x0;
+        if bytes[7] & 0x0C == 0x08 {
+            println!("iNES 2.0 file detected");
+        } else {
+            println!("iNES file detected");
+            println!("{:X?}", &bytes[0..16]);
+            prg_ram_size = min(bytes[8] as usize * 8000, 8000);
+            println!(
+                "Detected as {}, ignoring.",
+                if bytes[9] & 0x01 != 0 { "PAL" } else { "NTSC" }
+            );
+        }
         // Todo
-        let prg_ram_size = 8000;
-        let chr_ram_size = 0x00;
-        let mapper = (bytes[6] >> 4) + (bytes[7] & 0xF0);
+        let mapper_id = (bytes[6] >> 4) + (bytes[7] & 0xF0);
         let nametable_arrangement = if (bytes[6] & 0x01) != 0 {
             NametableArrangement::Horizontal
         } else {
             NametableArrangement::Vertical
         };
-        if mapper != 0 {
-            panic!("Unsupported mapper {}", mapper);
-        }
+
+        let mapper = Box::new(get_mapper(mapper_id as usize));
         // TODO: Check for trainer and offset by 512 bytes if present
         // TODO: Add CHR_RAM
         let mut start = 16;
@@ -46,22 +67,20 @@ impl Cartridge {
         println!("Reading CHRROM at {:#X}", start);
         let chr_rom = bytes[start..end].to_vec();
         Cartridge {
-            prg_rom,
-            chr_rom,
-            prg_ram: vec![0; prg_ram_size],
-            chr_ram: vec![0; chr_ram_size],
+            memory: CartridgeMemory {
+                prg_rom,
+                chr_rom,
+                prg_ram: vec![0; prg_ram_size],
+                chr_ram: vec![0; chr_ram_size],
+            },
             nametable_arrangement,
+            mapper,
         }
     }
-    /// Read a byte from the cartridge given an address in the CPU's memory space
     pub fn read_byte(&self, addr: usize) -> u8 {
-        if addr < 0x8000 {
-            return self.prg_ram[(addr - 0x6000) % self.prg_ram.len()];
-        }
-        self.prg_rom[(addr - 0x8000) as usize % self.prg_rom.len()]
+        self.mapper.read_cpu(addr, &self.memory)
     }
-    /// Write a byte from the cartridge given an address in the CPU's memory space
     pub fn write_byte(&mut self, addr: usize, value: u8) {
-        self.prg_ram[addr - 0x6000] = value
+        self.mapper.write_cpu(addr, &mut self.memory, value);
     }
 }

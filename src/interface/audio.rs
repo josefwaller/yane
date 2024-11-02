@@ -98,7 +98,7 @@ impl AudioCallback for NoiseWave {
     type Channel = f32;
     fn callback(&mut self, out: &mut [f32]) {
         for x in out.iter_mut() {
-            if self.register.lenth_counter.load == 0 {
+            if self.register.lenth_counter.load == 0 || !self.register.enabled {
                 *x = 0.0;
             } else {
                 // Generate random noise

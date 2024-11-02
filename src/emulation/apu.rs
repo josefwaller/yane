@@ -57,6 +57,7 @@ pub struct TriangleRegister {
 #[derive(Clone, Copy, Default)]
 pub struct NoiseRegister {
     pub lenth_counter: LengthCounter,
+    pub enabled: bool,
 }
 
 pub struct Apu {
@@ -100,10 +101,6 @@ impl Apu {
                 self.noise_register.lenth_counter.halt = (value & 0x20) != 0;
             }
             0x400F => {
-                println!(
-                    "Set noise length to {}",
-                    self.noise_register.lenth_counter.load
-                );
                 self.noise_register.lenth_counter.load = (value as usize & 0xF8) >> 3;
             }
             0x4015 => {

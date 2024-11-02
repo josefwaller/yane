@@ -1,6 +1,5 @@
 use crate::{utils::*, Nes};
 use glow::*;
-use std::mem::size_of;
 
 // Renders the PPU
 pub struct Screen {
@@ -19,7 +18,8 @@ impl Screen {
     pub fn new(nes: &Nes, gl: Context) -> Screen {
         unsafe {
             // Send CHR ROM data
-            let data: &[u8] = nes.cartridge.chr_rom.as_slice();
+            // TODO: Handle cartridges mapping this differently
+            let data: &[u8] = nes.cartridge.memory.chr_rom.as_slice();
             let chr_rom_tex = create_data_texture(&gl, data);
 
             // Create program for rendering sprites to texture

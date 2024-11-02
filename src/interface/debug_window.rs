@@ -32,7 +32,7 @@ impl DebugWindow {
     pub fn new(nes: &Nes, video: &VideoSubsystem, sdl: &Sdl) -> DebugWindow {
         // Figure out how many rows/columns
         let num_columns = 0x20;
-        let num_rows = (nes.cartridge.chr_rom.len() / 0x10) / num_columns;
+        let num_rows = (nes.cartridge.memory.chr_rom.len() / 0x10) / num_columns;
         // Set window size
         let window_width = 4 * 8 * num_columns as u32;
         let window_height = 4 * 8 * num_rows as u32;
@@ -50,7 +50,7 @@ impl DebugWindow {
         unsafe {
             let program = gl.create_program().unwrap();
             gl.use_program(Some(program));
-            let _chr_rom_tex = create_data_texture(&gl, nes.cartridge.chr_rom.as_slice());
+            let _chr_rom_tex = create_data_texture(&gl, nes.cartridge.memory.chr_rom.as_slice());
             compile_and_link_shader(
                 &gl,
                 glow::VERTEX_SHADER,
@@ -71,7 +71,7 @@ impl DebugWindow {
             );
             gl.link_program(program);
 
-            let verts: Vec<i32> = (0..(nes.cartridge.chr_rom.len() / 0x10))
+            let verts: Vec<i32> = (0..(nes.cartridge.memory.chr_rom.len() / 0x10))
                 .map(|i| i as i32)
                 .collect();
             let vao = buffer_data_slice(&gl, &program, verts.as_slice());
@@ -143,7 +143,11 @@ impl DebugWindow {
             );
 
             gl.bind_vertex_array(Some(self.vao));
-            gl.draw_arrays(glow::POINTS, 0, nes.cartridge.chr_rom.len() as i32 / 0x10);
+            gl.draw_arrays(
+                glow::POINTS,
+                0,
+                nes.cartridge.memory.chr_rom.len() as i32 / 0x10,
+            );
 
             // Render onto screen
             gl.bind_framebuffer(glow::FRAMEBUFFER, None);
