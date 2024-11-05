@@ -44,8 +44,8 @@ void main() {
                 }
                 // Screen coords are inbetween [-1.0, 1.0], sprite coords (xPos, yPos) are inbetween [0, 255]
                 gl_Position = vec4(
-                    float(xPos + scrollX) / 128.0 - 1.0,
-                    1.0 - float(yPos + scrollY) / 120.0,
+                    float(xPos) / 128.0 - 1.0,
+                    1.0 - float(yPos) / 120.0,
                     0,
                     1
                 );

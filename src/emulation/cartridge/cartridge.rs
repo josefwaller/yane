@@ -1,6 +1,7 @@
 use crate::{emulation::cartridge::mapper::get_mapper, Mapper};
 use std::cmp::{max, min};
 
+#[derive(Debug)]
 pub enum NametableArrangement {
     Horizontal,
     Vertical,
@@ -59,7 +60,7 @@ impl Cartridge {
         } else {
             NametableArrangement::Vertical
         };
-
+        println!("Cartridge is using {:?} nametable", nametable_arrangement);
         let mapper = get_mapper(mapper_id as usize);
         // TODO: Check for trainer and offset by 512 bytes if present
         // TODO: Add CHR_RAM

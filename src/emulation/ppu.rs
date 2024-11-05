@@ -24,7 +24,7 @@ pub struct Ppu {
     pub oam_dma: u8,
     /// VRAM
     pub palette_ram: [u8; 0x20],
-    pub nametable_ram: [u8; 0x400],
+    pub nametable_ram: [u8; 0x800],
     // W register
     w: bool,
 }
@@ -44,7 +44,7 @@ impl Ppu {
             data: 0,
             oam_dma: 0,
             palette_ram: [0; 0x20],
-            nametable_ram: [0; 0x400],
+            nametable_ram: [0; 0x800],
             w: true,
         }
     }
@@ -74,7 +74,16 @@ impl Ppu {
     /// Write a byte to the PPU registers given an address in CPU space
     pub fn write_byte(&mut self, addr: usize, value: u8, cartridge: &mut Cartridge) {
         match addr % 8 {
-            0 => self.ctrl = value,
+            0 => {
+                if self.ctrl & 0x3 != value & 0x3 {
+                    // println!(
+                    //     "Base nametable changed from {:X} to {:X}",
+                    //     self.ctrl & 0x3,
+                    //     value & 0x3
+                    // );
+                }
+                self.ctrl = value
+            }
             1 => self.mask = value,
             2 => self.status = value,
             3 => self.oam_addr = value,
@@ -108,7 +117,8 @@ impl Ppu {
         if self.addr < 0x2000 {
             cartridge.write_chr(self.addr as usize, value);
         } else if self.addr < 0x3F00 {
-            self.nametable_ram[(self.addr - 0x2000) as usize % 0x400] = value
+            // TODO: Mirroring
+            self.nametable_ram[(self.addr - 0x2000) as usize] = value
         } else {
             self.palette_ram[(self.addr - 0x3F00) as usize % 0x020] = value;
         }
@@ -176,5 +186,8 @@ impl Ppu {
     }
     pub fn get_nametable_addr(&self) -> usize {
         return 0x2000 + (self.status & 0x03) as usize * 0x400;
+    }
+    pub fn get_base_nametable(&self) -> usize {
+        0x400 * (self.ctrl as usize & 0x03)
     }
 }

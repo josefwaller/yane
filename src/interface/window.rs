@@ -38,8 +38,8 @@ impl Window {
             left: pressed_keys.contains(&Keycode::A),
             right: pressed_keys.contains(&Keycode::D),
             down: pressed_keys.contains(&Keycode::S),
-            a: pressed_keys.contains(&Keycode::Q),
-            b: pressed_keys.contains(&Keycode::E),
+            a: pressed_keys.contains(&Keycode::Z),
+            b: pressed_keys.contains(&Keycode::C),
             start: pressed_keys.contains(&Keycode::R),
             select: pressed_keys.contains(&Keycode::F),
         };

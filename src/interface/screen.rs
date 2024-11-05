@@ -12,17 +12,14 @@ pub struct Screen {
     palette: [[f32; 3]; 0x40],
     background_program: NativeProgram,
     background_vao: NativeVertexArray,
-    chr_ram_tex: NativeTexture,
+    chr_tex: NativeTexture,
 }
 impl Screen {
     // TODO: Rename
     pub fn new(nes: &Nes, gl: Context) -> Screen {
         unsafe {
-            // Send CHR ROM data
-            // TODO: Handle cartridges mapping this differently
-            let data: &[u8] = nes.cartridge.memory.chr_rom.as_slice();
-            // let chr_rom_tex = create_data_texture(&gl, data);
-            let chr_ram_tex = create_data_texture(&gl, nes.cartridge.memory.chr_ram.as_slice());
+            // Send CHR ROM/RAM data
+            let chr_tex = create_data_texture(&gl, nes.cartridge.memory.chr_ram.as_slice());
 
             // Create program for rendering sprites to texture
             let sprite_program = gl.create_program().expect("Unable to create program");
@@ -86,7 +83,7 @@ impl Screen {
                     gl.get_program_info_log(background_program)
                 );
             }
-            let verts: [i32; 32 * 60] = core::array::from_fn(|i| i as i32);
+            let verts: [i32; 2 * 32 * 30] = core::array::from_fn(|i| i as i32);
             let background_vao = buffer_data_slice(&gl, &background_program, &verts);
 
             let (texture_buffer, texture_vao, texture_program) =
@@ -111,7 +108,7 @@ impl Screen {
                 palette,
                 background_program,
                 background_vao,
-                chr_ram_tex,
+                chr_tex,
             }
         }
     }
@@ -129,11 +126,7 @@ impl Screen {
             self.gl.clear(glow::COLOR_BUFFER_BIT);
 
             // Set pattern table
-            set_data_texture_data(
-                &self.gl,
-                &self.chr_ram_tex,
-                nes.cartridge.get_pattern_table(),
-            );
+            set_data_texture_data(&self.gl, &self.chr_tex, nes.cartridge.get_pattern_table());
 
             self.render_background(nes);
             if nes.ppu.is_sprite_enabled() {
@@ -149,6 +142,7 @@ impl Screen {
         }
     }
     unsafe fn render_background(&mut self, nes: &Nes) {
+        println!("Scroll is ({:X}, {:X})", nes.ppu.scroll_x, nes.ppu.scroll_y);
         self.gl.use_program(Some(self.background_program));
         self.gl.bind_vertex_array(Some(self.background_vao));
         self.setup_render_uniforms(&self.background_program, nes);
@@ -156,10 +150,16 @@ impl Screen {
         let nametable_uni = self
             .gl
             .get_uniform_location(self.background_program, "nametable");
-        // Pack nametable tightly
-        let n: Vec<i32> = nes
-            .ppu
-            .nametable_ram
+        let base_nametable = nes.ppu.get_base_nametable();
+        // TODO: Tidy
+        let n: Vec<i32> = [
+            // First nametable guaranteed to be here
+            nes.ppu.nametable_ram[base_nametable..].to_vec(),
+            // Add second nametable if it would have wrapped around
+            nes.ppu.nametable_ram[0..0x400].to_vec(),
+        ]
+        .concat()[0..0x800]
+            // Pack nametable tightly
             .chunks(4)
             .map(|b| {
                 ((b[3] as i32) << 24) + ((b[2] as i32) << 16) + ((b[1] as i32) << 8) + b[0] as i32
@@ -173,13 +173,19 @@ impl Screen {
             "backgroundPatternLocation",
             nes.ppu.get_background_pattern_table_addr() as i32,
         );
+        // set_int_uniform(
+        //     &self.gl,
+        //     &self.background_program,
+        //     "baseNametableAddress",
+        //     nes.ppu.get_base_nametable() as i32,
+        // );
         set_bool_uniform(
             &self.gl,
             &self.background_program,
             "hideLeftmostBackground",
             nes.ppu.should_hide_leftmost_background(),
         );
-        self.gl.draw_arrays(glow::POINTS, 0, 30 * 32);
+        self.gl.draw_arrays(glow::POINTS, 0, 2 * 30 * 32);
     }
 
     unsafe fn render_sprites(&mut self, nes: &Nes) {
@@ -212,6 +218,7 @@ impl Screen {
         );
         // Draw sprites as points
         // GLSL Shaders add pixels to form the full 8x8 sprite
+        // Todo maybe: batch this
         self.vao_array.iter().for_each(|vao| {
             self.gl.bind_vertex_array(Some(*vao));
             self.gl.draw_arrays(glow::POINTS, 0, 1);
@@ -244,11 +251,7 @@ impl Screen {
             nes.ppu.is_greyscale_mode_on(),
         );
         // Set scroll
-        set_int_uniform(
-            &self.gl, program, "scrollX", 0, //nes.ppu.scroll_x as i32,
-        );
-        set_int_uniform(
-            &self.gl, program, "scrollY", 0, //nes.ppu.scroll_y as i32,
-        );
+        set_int_uniform(&self.gl, program, "scrollX", nes.ppu.scroll_x as i32);
+        set_int_uniform(&self.gl, program, "scrollY", nes.ppu.scroll_y as i32);
     }
 }
