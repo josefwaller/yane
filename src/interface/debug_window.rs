@@ -1,5 +1,7 @@
-use crate::{utils::*, Nes};
-use glow::{HasContext, NativeFramebuffer, NativeProgram, VertexArray};
+use std::cmp::{max, min};
+
+use crate::{check_error, utils::*, Cartridge, Nes};
+use glow::{HasContext, NativeFramebuffer, NativeProgram, NativeTexture, VertexArray};
 use imgui::Condition::FirstUseEver;
 use imgui_glow_renderer::AutoRenderer;
 use imgui_sdl2_support::SdlPlatform;
@@ -15,6 +17,7 @@ pub struct DebugWindow {
     texture_program: NativeProgram,
     texture_vao: VertexArray,
     texture_framebuffer: NativeFramebuffer,
+    chr_tex: NativeTexture,
     // Amount of rows/columns of tiles
     num_rows: usize,
     num_columns: usize,
@@ -31,14 +34,15 @@ pub struct DebugWindow {
 impl DebugWindow {
     pub fn new(nes: &Nes, video: &VideoSubsystem, sdl: &Sdl) -> DebugWindow {
         // Figure out how many rows/columns
+        let num_tiles =
+            (nes.cartridge.memory.chr_rom.len() + nes.cartridge.memory.chr_ram.len()) / 0x10;
         let num_columns = 0x20;
-        let num_rows = (nes.cartridge.memory.chr_rom.len() / 0x10) / num_columns;
+        let num_rows = max(num_tiles / num_columns, 1);
         // Set window size
         let window_width = 4 * 8 * num_columns as u32;
         let window_height = 4 * 8 * num_rows as u32;
 
         let (window, gl_context, gl) = create_window(video, "CHR ROM", window_width, window_height);
-        // let event_pump = sdl.event_pump().unwrap();
 
         let mut imgui = imgui::Context::create();
         imgui.set_ini_filename(None);
@@ -48,9 +52,10 @@ impl DebugWindow {
             .add_font(&[imgui::FontSource::DefaultFontData { config: None }]);
 
         unsafe {
+            check_error!(gl);
             let program = gl.create_program().unwrap();
-            gl.use_program(Some(program));
-            let _chr_rom_tex = create_data_texture(&gl, nes.cartridge.memory.chr_rom.as_slice());
+            check_error!(gl);
+            let chr_tex = create_data_texture(&gl, &[]);
             compile_and_link_shader(
                 &gl,
                 glow::VERTEX_SHADER,
@@ -70,15 +75,18 @@ impl DebugWindow {
                 &program,
             );
             gl.link_program(program);
+            check_error!(gl);
 
-            let verts: Vec<i32> = (0..(nes.cartridge.memory.chr_rom.len() / 0x10))
-                .map(|i| i as i32)
-                .collect();
+            gl.use_program(Some(program));
+            check_error!(gl, format!("Using program {:?}", program));
+
+            let verts: Vec<i32> = (0..num_tiles).map(|i| i as i32).collect();
             let vao = buffer_data_slice(&gl, &program, verts.as_slice());
             let palette_data: &[u8] = include_bytes!("../2C02G_wiki.pal");
             let palette: [[f32; 3]; 64] = core::array::from_fn(|i| {
                 core::array::from_fn(|j| palette_data[3 * i + j] as f32 / 255.0)
             });
+            check_error!(gl);
             let (texture_framebuffer, texture_vao, texture_program) =
                 create_screen_texture(&gl, (8 * num_columns, 8 * num_rows));
 
@@ -93,6 +101,7 @@ impl DebugWindow {
                 texture_program,
                 texture_vao,
                 texture_framebuffer,
+                chr_tex,
                 num_columns,
                 num_rows,
                 platform,
@@ -141,13 +150,15 @@ impl DebugWindow {
                 "globalPaletteIndex",
                 self.palette_index as i32,
             );
+            let data = [
+                nes.cartridge.memory.chr_rom.as_slice(),
+                nes.cartridge.memory.chr_ram.as_slice(),
+            ]
+            .concat();
+            set_data_texture_data(gl, &self.chr_tex, &data);
 
             gl.bind_vertex_array(Some(self.vao));
-            gl.draw_arrays(
-                glow::POINTS,
-                0,
-                nes.cartridge.memory.chr_rom.len() as i32 / 0x10,
-            );
+            gl.draw_arrays(glow::POINTS, 0, data.len() as i32 / 0x10);
 
             // Render onto screen
             gl.bind_framebuffer(glow::FRAMEBUFFER, None);
@@ -165,7 +176,6 @@ impl DebugWindow {
             self.platform
                 .prepare_frame(&mut self.imgui, &self.window, event_pump);
             let ui = self.imgui.new_frame();
-            // ui.text("Hello world");
             ui.window("Settings")
                 .size([200.0, 200.0], FirstUseEver)
                 .build(|| {
@@ -185,7 +195,6 @@ impl DebugWindow {
                     }
                     ui.slider("Volume", 0.0, 1.0, &mut self.volume);
                 });
-            // ui.show_demo_window(&mut true);
             let draw_data = self.imgui.render();
             self.renderer
                 .render(draw_data)

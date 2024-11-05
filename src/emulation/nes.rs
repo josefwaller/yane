@@ -86,7 +86,7 @@ impl Nes {
     fn write_byte(&mut self, addr: usize, value: u8) {
         match addr {
             0..0x2000 => self.mem[addr % 0x0800] = value,
-            0x2000..0x4000 => self.ppu.write_byte(addr, value),
+            0x2000..0x4000 => self.ppu.write_byte(addr, value, &mut self.cartridge),
             0x4014 => {
                 // Perform DMA
                 // TODO: Make this better

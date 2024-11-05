@@ -1,4 +1,4 @@
-use crate::{utils::*, Nes};
+use crate::{check_error, utils::*, Nes};
 use glow::*;
 
 // Renders the PPU
@@ -12,6 +12,7 @@ pub struct Screen {
     palette: [[f32; 3]; 0x40],
     background_program: NativeProgram,
     background_vao: NativeVertexArray,
+    chr_ram_tex: NativeTexture,
 }
 impl Screen {
     // TODO: Rename
@@ -20,7 +21,8 @@ impl Screen {
             // Send CHR ROM data
             // TODO: Handle cartridges mapping this differently
             let data: &[u8] = nes.cartridge.memory.chr_rom.as_slice();
-            let chr_rom_tex = create_data_texture(&gl, data);
+            // let chr_rom_tex = create_data_texture(&gl, data);
+            let chr_ram_tex = create_data_texture(&gl, nes.cartridge.memory.chr_ram.as_slice());
 
             // Create program for rendering sprites to texture
             let sprite_program = gl.create_program().expect("Unable to create program");
@@ -109,6 +111,7 @@ impl Screen {
                 palette,
                 background_program,
                 background_vao,
+                chr_ram_tex,
             }
         }
     }
@@ -124,6 +127,13 @@ impl Screen {
                 .clear_color(clear_color[0], clear_color[1], clear_color[2], 1.0);
             self.gl.viewport(0, 0, 256, 240);
             self.gl.clear(glow::COLOR_BUFFER_BIT);
+
+            // Set pattern table
+            set_data_texture_data(
+                &self.gl,
+                &self.chr_ram_tex,
+                nes.cartridge.get_pattern_table(),
+            );
 
             self.render_background(nes);
             if nes.ppu.is_sprite_enabled() {
@@ -174,11 +184,13 @@ impl Screen {
 
     unsafe fn render_sprites(&mut self, nes: &Nes) {
         self.gl.use_program(Some(self.sprite_program));
+        check_error!(self.gl);
+        self.setup_render_uniforms(&self.sprite_program, nes);
         // Pipe OAM data to GLSL
         let oam_uni = self.gl.get_uniform_location(self.sprite_program, "oamData");
         let oam_data: [u32; 4 * 64] = core::array::from_fn(|i| nes.ppu.oam[i] as u32);
         self.gl.uniform_1_u32_slice(oam_uni.as_ref(), &oam_data);
-        self.setup_render_uniforms(&self.sprite_program, nes);
+        check_error!(self.gl);
         // Set various flags
         set_bool_uniform(
             &self.gl,
@@ -210,12 +222,16 @@ impl Screen {
         // Set pallete
         let palette: Vec<i32> = nes.ppu.palette_ram.iter().map(|p| *p as i32).collect();
         let palette_uni = self.gl.get_uniform_location(*program, "palettes");
+        check_error!(self.gl);
         self.gl
             .uniform_1_i32_slice(palette_uni.as_ref(), palette.as_slice());
+        check_error!(self.gl);
         // Set colors
         let colors = self.palette.as_flattened();
         let color_uni = self.gl.get_uniform_location(*program, "colors");
+        check_error!(self.gl);
         self.gl.uniform_3_f32_slice(color_uni.as_ref(), colors);
+        check_error!(self.gl);
         // Set tint uniforms
         set_bool_uniform(&self.gl, program, "redTint", nes.ppu.is_red_tint_on());
         set_bool_uniform(&self.gl, program, "blueTint", nes.ppu.is_blue_tint_on());
@@ -229,16 +245,10 @@ impl Screen {
         );
         // Set scroll
         set_int_uniform(
-            &self.gl,
-            &self.background_program,
-            "scrollX",
-            0, //nes.ppu.scroll_x as i32,
+            &self.gl, program, "scrollX", 0, //nes.ppu.scroll_x as i32,
         );
         set_int_uniform(
-            &self.gl,
-            &self.background_program,
-            "scrollY",
-            0, //nes.ppu.scroll_y as i32,
+            &self.gl, program, "scrollY", 0, //nes.ppu.scroll_y as i32,
         );
     }
 }

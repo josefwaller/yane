@@ -1,3 +1,5 @@
+use super::Cartridge;
+
 pub struct Ppu {
     /// The Object Access Memory, or OAM
     pub oam: [u8; 0x100],
@@ -70,7 +72,7 @@ impl Ppu {
     }
 
     /// Write a byte to the PPU registers given an address in CPU space
-    pub fn write_byte(&mut self, addr: usize, value: u8) {
+    pub fn write_byte(&mut self, addr: usize, value: u8, cartridge: &mut Cartridge) {
         match addr % 8 {
             0 => self.ctrl = value,
             1 => self.mask = value,
@@ -86,7 +88,7 @@ impl Ppu {
                 self.w = !self.w;
             }
             6 => self.write_to_addr(value),
-            7 => self.write_to_vram(value),
+            7 => self.write_to_vram(value, cartridge),
             _ => panic!("This should never happen. Addr is {:#X}", addr),
         }
     }
@@ -102,11 +104,13 @@ impl Ppu {
 
     /// Write a single byte to VRAM at `PPUADDR`
     /// Increments `PPUADDR` by 1 or by 32 depending `PPUSTATUS`
-    pub fn write_to_vram(&mut self, value: u8) {
-        if self.addr >= 0x3F00 {
-            self.palette_ram[(self.addr - 0x3F00) as usize % 0x020] = value;
-        } else if self.addr >= 0x2000 {
+    pub fn write_to_vram(&mut self, value: u8, cartridge: &mut Cartridge) {
+        if self.addr < 0x2000 {
+            cartridge.write_chr(self.addr as usize, value);
+        } else if self.addr < 0x3F00 {
             self.nametable_ram[(self.addr - 0x2000) as usize % 0x400] = value
+        } else {
+            self.palette_ram[(self.addr - 0x3F00) as usize % 0x020] = value;
         }
         self.addr = self
             .addr

@@ -1,5 +1,5 @@
 use crate::{emulation::cartridge::mapper::get_mapper, Mapper};
-use std::cmp::min;
+use std::cmp::{max, min};
 
 pub enum NametableArrangement {
     Horizontal,
@@ -35,19 +35,23 @@ impl Cartridge {
         }
         let prg_rom_size = 0x4000 * bytes[4] as usize;
         let chr_rom_size = 0x2000 * bytes[5] as usize;
-        let mut prg_ram_size: usize = 0x0;
-        let mut chr_ram_size = 0x0;
+        let mut prg_ram_size = max(bytes[8] as usize, 1) * 8000;
+        let chr_ram_size = if chr_rom_size == 0 { 0x2000 } else { 0x0 };
         if bytes[7] & 0x0C == 0x08 {
             println!("iNES 2.0 file detected");
         } else {
             println!("iNES file detected");
-            println!("{:X?}", &bytes[0..16]);
+            println!("Header: {:X?}", &bytes[0..16]);
             prg_ram_size = min(bytes[8] as usize * 8000, 8000);
             println!(
                 "Detected as {}, ignoring.",
                 if bytes[9] & 0x01 != 0 { "PAL" } else { "NTSC" }
             );
         }
+        println!(
+            "{:X} bytes PRG ROM, {:X} bytes CHR ROM, {:X} bytes PRG RAM, {:X} bytes CHR RAM",
+            prg_rom_size, chr_rom_size, prg_ram_size, chr_ram_size
+        );
         // Todo
         let mapper_id = (bytes[6] >> 4) + (bytes[7] & 0xF0);
         let nametable_arrangement = if (bytes[6] & 0x01) != 0 {
@@ -56,7 +60,7 @@ impl Cartridge {
             NametableArrangement::Vertical
         };
 
-        let mapper = Box::new(get_mapper(mapper_id as usize));
+        let mapper = get_mapper(mapper_id as usize);
         // TODO: Check for trainer and offset by 512 bytes if present
         // TODO: Add CHR_RAM
         let mut start = 16;
@@ -82,5 +86,15 @@ impl Cartridge {
     }
     pub fn write_byte(&mut self, addr: usize, value: u8) {
         self.mapper.write_cpu(addr, &mut self.memory, value);
+    }
+    pub fn write_chr(&mut self, addr: usize, value: u8) {
+        // TBA - only do this if there is CHR RAM
+        self.memory.chr_ram[addr] = value;
+    }
+    pub fn get_pattern_table(&self) -> &[u8] {
+        if self.memory.chr_ram.len() == 0 {
+            return self.memory.chr_rom.as_slice();
+        }
+        return &self.memory.chr_ram;
     }
 }
