@@ -142,7 +142,6 @@ impl Screen {
         }
     }
     unsafe fn render_background(&mut self, nes: &Nes) {
-        println!("Scroll is ({:X}, {:X})", nes.ppu.scroll_x, nes.ppu.scroll_y);
         self.gl.use_program(Some(self.background_program));
         self.gl.bind_vertex_array(Some(self.background_vao));
         self.setup_render_uniforms(&self.background_program, nes);
@@ -173,12 +172,6 @@ impl Screen {
             "backgroundPatternLocation",
             nes.ppu.get_background_pattern_table_addr() as i32,
         );
-        // set_int_uniform(
-        //     &self.gl,
-        //     &self.background_program,
-        //     "baseNametableAddress",
-        //     nes.ppu.get_base_nametable() as i32,
-        // );
         set_bool_uniform(
             &self.gl,
             &self.background_program,

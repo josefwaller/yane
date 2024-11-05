@@ -50,7 +50,7 @@ void main() {
                     1
                 );
                 pixelIndex = 8 * y + x;
-                tileAddr = spritePatternLocation + int(oamData[4 * i + 1]);
+                tileAddr = tallSprites == 1 ? ((int(oamData[4 * i + 1]) & 0x01) << 8) + (int(oamData[4 * i + 1]) & 0xFE) : spritePatternLocation + int(oamData[4 * i + 1]);
                 paletteIndex = 4 + int(oamData[4 * i + 2]) % 4;
                 EmitVertex();
             }
