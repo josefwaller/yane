@@ -4,7 +4,14 @@ use crate::{emulation::cartridge::CartridgeMemory, Mapper};
 pub struct NRom {}
 impl Mapper for NRom {
     fn read_cpu(&self, addr: usize, mem: &CartridgeMemory) -> u8 {
+        if addr < 0x6000 {
+            return 0;
+        }
         if addr < 0x8000 {
+            // Todo: Figure out if this is correct
+            if mem.prg_ram.len() == 0 {
+                return 0;
+            }
             return mem.prg_ram[(addr - 0x6000) % mem.prg_ram.len()];
         }
         mem.prg_rom[(addr - 0x8000) % mem.prg_rom.len()]

@@ -1,7 +1,7 @@
 use crate::{emulation::cartridge::mapper::get_mapper, Mapper};
 use std::cmp::{max, min};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum NametableArrangement {
     Horizontal,
     Vertical,
@@ -21,7 +21,7 @@ pub struct CartridgeMemory {
 pub struct Cartridge {
     pub memory: CartridgeMemory,
     /// Nametable mirroring arrangement
-    nametable_arrangement: NametableArrangement,
+    pub nametable_arrangement: NametableArrangement,
     // Mapper
     mapper: Box<dyn Mapper>,
 }
@@ -62,10 +62,14 @@ impl Cartridge {
         };
         println!("Cartridge is using {:?} nametable", nametable_arrangement);
         let mapper = get_mapper(mapper_id as usize);
-        // TODO: Check for trainer and offset by 512 bytes if present
+        let has_trainer = bytes[6] & 0x04 != 0;
+        println!(
+            "Cartridge {} trainer",
+            if has_trainer { "has" } else { "does not have" },
+        );
         // TODO: Add CHR_RAM
-        let mut start = 16;
-        let mut end = 16 + prg_rom_size;
+        let mut start = 16 + if has_trainer { 512 } else { 0 };
+        let mut end = start + prg_rom_size;
         let prg_rom = bytes[start..end].to_vec();
         start = end;
         end += chr_rom_size;
@@ -91,6 +95,10 @@ impl Cartridge {
     pub fn write_chr(&mut self, addr: usize, value: u8) {
         // TBA - only do this if there is CHR RAM
         self.memory.chr_ram[addr] = value;
+    }
+    pub fn read_chr(&self, addr: usize) -> u8 {
+        self.get_pattern_table()[addr]
+        // self.memory.chr_ram[addr]
     }
     pub fn get_pattern_table(&self) -> &[u8] {
         if self.memory.chr_ram.len() == 0 {

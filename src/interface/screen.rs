@@ -1,4 +1,4 @@
-use crate::{check_error, utils::*, Nes};
+use crate::{check_error, utils::*, NametableArrangement, Nes};
 use glow::*;
 
 // Renders the PPU
@@ -19,7 +19,7 @@ impl Screen {
     pub fn new(nes: &Nes, gl: Context) -> Screen {
         unsafe {
             // Send CHR ROM/RAM data
-            let chr_tex = create_data_texture(&gl, nes.cartridge.memory.chr_ram.as_slice());
+            let chr_tex = create_data_texture(&gl, nes.cartridge.get_pattern_table());
 
             // Create program for rendering sprites to texture
             let sprite_program = gl.create_program().expect("Unable to create program");
@@ -127,6 +127,7 @@ impl Screen {
 
             // Set pattern table
             set_data_texture_data(&self.gl, &self.chr_tex, nes.cartridge.get_pattern_table());
+            self.gl.finish();
 
             self.render_background(nes);
             if nes.ppu.is_sprite_enabled() {
@@ -141,6 +142,21 @@ impl Screen {
             self.gl.draw_arrays(glow::TRIANGLES, 0, 6);
         }
     }
+    fn get_nametable(&self, addr: usize, nes: &Nes) -> Vec<u8> {
+        match nes.cartridge.nametable_arrangement {
+            NametableArrangement::Horizontal => nes.ppu.nametable_ram[(addr
+                % nes.ppu.nametable_ram.len())
+                ..((addr % nes.ppu.nametable_ram.len()) + 0x400)]
+                .to_vec(),
+            NametableArrangement::Vertical => {
+                nes.ppu.nametable_ram[(addr % 0x800)..((addr % 0x800) + 0x400)].to_vec()
+            }
+            _ => unimplemented!(
+                "Mapper {:?} not implemented",
+                nes.cartridge.nametable_arrangement
+            ),
+        }
+    }
     unsafe fn render_background(&mut self, nes: &Nes) {
         self.gl.use_program(Some(self.background_program));
         self.gl.bind_vertex_array(Some(self.background_vao));
@@ -152,10 +168,10 @@ impl Screen {
         let base_nametable = nes.ppu.get_base_nametable();
         // TODO: Tidy
         let n: Vec<i32> = [
-            // First nametable guaranteed to be here
-            nes.ppu.nametable_ram[base_nametable..].to_vec(),
-            // Add second nametable if it would have wrapped around
-            nes.ppu.nametable_ram[0..0x400].to_vec(),
+            // First nametable
+            self.get_nametable(base_nametable, nes),
+            // Second nametable
+            self.get_nametable(base_nametable + 0x400, nes),
         ]
         .concat()[0..0x800]
             // Pack nametable tightly

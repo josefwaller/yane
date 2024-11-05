@@ -7,7 +7,7 @@ pub use apu::Apu;
 mod status_register;
 pub use status_register::StatusRegister;
 mod cartridge;
-pub use cartridge::{Cartridge, Mapper};
+pub use cartridge::*;
 pub mod opcodes;
 mod ppu;
 pub use ppu::Ppu;

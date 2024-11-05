@@ -1,4 +1,4 @@
-use super::Cartridge;
+use super::{cartridge, Cartridge, NametableArrangement};
 
 pub struct Ppu {
     /// The Object Access Memory, or OAM
@@ -18,7 +18,7 @@ pub struct Ppu {
     pub scroll_y: u8,
     /// The PPUADDR register
     pub addr: u16,
-    /// The PPUDATA register
+    /// The PPUDATA register (actually the read buffer)
     pub data: u8,
     /// The OAMDMA register
     pub oam_dma: u8,
@@ -50,7 +50,7 @@ impl Ppu {
     }
 
     /// Read a byte from the PPU register given an address in CPU space
-    pub fn read_byte(&mut self, addr: usize) -> u8 {
+    pub fn read_byte(&mut self, addr: usize, cartridge: &Cartridge) -> u8 {
         match addr % 8 {
             // Zero out some bits in control
             0 => self.ctrl & 0xBF,
@@ -66,7 +66,11 @@ impl Ppu {
             // SCROLL and ADDR shouldn't be read from
             5 => self.scroll_x,
             6 => self.addr as u8,
-            7 => self.data,
+            7 => {
+                let t = self.data;
+                self.data = self.read_vram(cartridge);
+                t
+            }
             _ => panic!("This should never happen. Addr is {:#X}", addr),
         }
     }
@@ -74,16 +78,7 @@ impl Ppu {
     /// Write a byte to the PPU registers given an address in CPU space
     pub fn write_byte(&mut self, addr: usize, value: u8, cartridge: &mut Cartridge) {
         match addr % 8 {
-            0 => {
-                if self.ctrl & 0x3 != value & 0x3 {
-                    // println!(
-                    //     "Base nametable changed from {:X} to {:X}",
-                    //     self.ctrl & 0x3,
-                    //     value & 0x3
-                    // );
-                }
-                self.ctrl = value
-            }
+            0 => self.ctrl = value,
             1 => self.mask = value,
             2 => self.status = value,
             3 => self.oam_addr = value,
@@ -97,7 +92,10 @@ impl Ppu {
                 self.w = !self.w;
             }
             6 => self.write_to_addr(value),
-            7 => self.write_to_vram(value, cartridge),
+            7 => {
+                self.write_vram(value, cartridge);
+                // self.data = value;
+            }
             _ => panic!("This should never happen. Addr is {:#X}", addr),
         }
     }
@@ -113,15 +111,45 @@ impl Ppu {
 
     /// Write a single byte to VRAM at `PPUADDR`
     /// Increments `PPUADDR` by 1 or by 32 depending `PPUSTATUS`
-    pub fn write_to_vram(&mut self, value: u8, cartridge: &mut Cartridge) {
+    fn write_vram(&mut self, value: u8, cartridge: &mut Cartridge) {
         if self.addr < 0x2000 {
             cartridge.write_chr(self.addr as usize, value);
         } else if self.addr < 0x3F00 {
-            // TODO: Mirroring
-            self.nametable_ram[(self.addr - 0x2000) as usize] = value
+            match cartridge.nametable_arrangement {
+                NametableArrangement::Horizontal => {
+                    self.nametable_ram[(self.addr - 0x2000) as usize] = value
+                }
+                NametableArrangement::Vertical => {
+                    self.nametable_ram
+                        [(self.addr as usize - 0x2000) / 0x800 + self.addr as usize % 0x400] =
+                        value;
+                }
+                _ => unimplemented!(
+                    "Nametable \"{:?}\" unimplemented by PPU",
+                    cartridge.nametable_arrangement
+                ),
+            }
         } else {
             self.palette_ram[(self.addr - 0x3F00) as usize % 0x020] = value;
         }
+        self.inc_addr();
+    }
+
+    /// Read a single byte from VRAM
+    fn read_vram(&mut self, cartridge: &Cartridge) -> u8 {
+        let addr = self.addr;
+        self.inc_addr();
+        println!("Reading {:X}", addr);
+        if self.addr < 0x2000 {
+            return cartridge.read_chr(addr as usize);
+        }
+        if self.addr < 0x3F00 {
+            unimplemented!("todo");
+        }
+        self.palette_ram[(addr - 0x3F00) as usize % 0x020]
+    }
+
+    fn inc_addr(&mut self) {
         self.addr = self
             .addr
             .wrapping_add(if self.ctrl & 0x04 == 0 { 1 } else { 32 });

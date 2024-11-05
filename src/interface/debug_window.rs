@@ -27,6 +27,7 @@ pub struct DebugWindow {
     renderer: AutoRenderer,
     // Settings to change through imgui
     palette_index: usize,
+    debug_palette: bool,
     paused: bool,
     volume: f32,
 }
@@ -108,6 +109,7 @@ impl DebugWindow {
                 renderer,
                 imgui,
                 palette_index: 0,
+                debug_palette: false,
                 paused: false,
                 volume: 0.25,
             }
@@ -128,7 +130,11 @@ impl DebugWindow {
             gl.clear_color(clear_color[0], clear_color[1], clear_color[2], 1.0);
             gl.clear(glow::COLOR_BUFFER_BIT);
 
-            let palette: Vec<i32> = nes.ppu.palette_ram.iter().map(|p| *p as i32).collect();
+            let palette: Vec<i32> = if self.debug_palette {
+                vec![0x1D, 0x16, 0x19, 0x1C]
+            } else {
+                nes.ppu.palette_ram.iter().map(|p| *p as i32).collect()
+            };
             let palette_uni = gl.get_uniform_location(self.program, "palettes");
             gl.uniform_1_i32_slice(palette_uni.as_ref(), palette.as_slice());
             // Set colors
@@ -148,7 +154,11 @@ impl DebugWindow {
                 &gl,
                 &self.program,
                 "globalPaletteIndex",
-                self.palette_index as i32,
+                if self.debug_palette {
+                    0
+                } else {
+                    self.palette_index as i32
+                },
             );
             let data = [
                 nes.cartridge.memory.chr_rom.as_slice(),
@@ -179,17 +189,20 @@ impl DebugWindow {
             ui.window("Settings")
                 .size([200.0, 200.0], FirstUseEver)
                 .build(|| {
-                    if let Some(c) =
-                        ui.begin_combo("Palette", format!("Palette {}", self.palette_index))
-                    {
-                        (0..8).for_each(|i| {
-                            let label = format!("Palette {}", i);
-                            if ui.selectable(label) {
-                                self.palette_index = i;
-                            }
-                        });
-                        c.end();
-                    }
+                    ui.disabled(self.debug_palette, || {
+                        if let Some(c) =
+                            ui.begin_combo("Palette", format!("Palette {}", self.palette_index))
+                        {
+                            (0..8).for_each(|i| {
+                                let label = format!("Palette {}", i);
+                                if ui.selectable(label) {
+                                    self.palette_index = i;
+                                }
+                            });
+                            c.end();
+                        }
+                    });
+                    ui.checkbox("Debug palette", &mut self.debug_palette);
                     if ui.button(if self.paused { "Unpause" } else { "Pause" }) {
                         self.paused = !self.paused;
                     }

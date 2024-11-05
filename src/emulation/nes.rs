@@ -74,7 +74,7 @@ impl Nes {
     pub fn read_byte(&mut self, addr: usize) -> u8 {
         return match addr {
             0..0x2000 => self.mem[addr % 0x0800],
-            0x2000..0x4000 => self.ppu.read_byte(addr),
+            0x2000..0x4000 => self.ppu.read_byte(addr, &self.cartridge),
             0x4016 => self.read_controller_bit(0),
             0x4017 => return self.read_controller_bit(1),
             // TBA
@@ -126,6 +126,7 @@ impl Nes {
             self.read_byte(pc + 1),
             self.read_byte(pc + 2),
         ]);
+        // println!("{:X?}", inst);
         match self.decode_and_execute(&inst) {
             Ok((bytes, cycles)) => {
                 self.cpu.p_c += bytes;
