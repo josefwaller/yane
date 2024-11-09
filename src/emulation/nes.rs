@@ -85,8 +85,8 @@ impl Nes {
             #[cfg(debug_assertions)]
             last_inst_index: 0,
         };
-        nes.cpu.p_c = ((nes.cartridge.read_byte(0xFFFD) as u16) << 8)
-            + (nes.cartridge.read_byte(0xFFFC) as u16);
+        nes.cpu.p_c = ((nes.cartridge.read_cpu(0xFFFD) as u16) << 8)
+            + (nes.cartridge.read_cpu(0xFFFC) as u16);
         info!("Initialized PC to {:#X}", nes.cpu.p_c);
         nes
     }
@@ -115,7 +115,7 @@ impl Nes {
             0x4017 => return self.read_controller_bit(1),
             // TBA
             0x4000..0x4020 => 0,
-            0x4020..0x10000 => self.cartridge.read_byte(addr),
+            0x4020..0x10000 => self.cartridge.read_cpu(addr),
             _ => panic!("Invalid read address provided: {:#X}", addr),
         };
     }
@@ -142,7 +142,7 @@ impl Nes {
             // 0x4017 => self.controller_bit = 0,
             // APU Registers
             0x4000..0x4020 => self.apu.write_byte(addr, value),
-            0x4020..0x10000 => self.cartridge.write_byte(addr, value),
+            0x4020..0x10000 => self.cartridge.write_cpu(addr, value),
             _ => panic!("Invalid write address provided: {:#X}", addr),
         };
     }

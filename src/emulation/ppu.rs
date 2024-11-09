@@ -140,7 +140,7 @@ impl Ppu {
         let addr = self.addr;
         self.inc_addr();
         if self.addr < 0x2000 {
-            return cartridge.read_chr(addr as usize);
+            return cartridge.read_ppu(addr as usize);
         }
         // TODO: Deduplicate
         if self.addr < 0x3F00 {

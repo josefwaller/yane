@@ -87,20 +87,28 @@ impl Cartridge {
             mapper,
         }
     }
-    pub fn read_byte(&self, addr: usize) -> u8 {
+    /// Read a byte from the cartridge's memory given an address in CPU memory space
+    /// Usually reads from PRG ROM/RAM.
+    pub fn read_cpu(&self, addr: usize) -> u8 {
         self.mapper.read_cpu(addr, &self.memory)
     }
-    pub fn write_byte(&mut self, addr: usize, value: u8) {
+    /// Write a byte in the cartridge's memory given an address in CPU memory space
+    /// Usually reads from PRG RAM.
+    pub fn write_cpu(&mut self, addr: usize, value: u8) {
         self.mapper.write_cpu(addr, &mut self.memory, value);
     }
+    /// Read a byte in the cartridge's memory given an address in PPU memory space
+    /// Usually reads from CHR ROM/RAM.
+    pub fn read_ppu(&self, addr: usize) -> u8 {
+        self.get_pattern_table()[addr]
+    }
+    /// Write a byte to the cartridge's memory given an address in PPU memory space
+    /// Usually writes tot CHR RAM.
     pub fn write_chr(&mut self, addr: usize, value: u8) {
         // TBA - only do this if there is CHR RAM
         if addr < self.memory.chr_ram.len() {
             self.memory.chr_ram[addr] = value;
         }
-    }
-    pub fn read_chr(&self, addr: usize) -> u8 {
-        self.get_pattern_table()[addr]
     }
     pub fn get_pattern_table(&self) -> &[u8] {
         if self.memory.chr_ram.len() == 0 {
