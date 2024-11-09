@@ -1,3 +1,11 @@
+use std::fs::File;
+
+use log::*;
+use simplelog::{
+    ColorChoice, CombinedLogger, Config, LevelFilter, SimpleLogger, TermLogger, TerminalMode,
+    WriteLogger,
+};
+
 use crate::{opcodes::*, Apu, Cartridge, Controller, Cpu, Ppu};
 
 /// The NES.
@@ -18,6 +26,11 @@ pub struct Nes {
     cached_controllers: [Controller; 2],
     // Current bit being read from the controller
     controller_bits: [usize; 2],
+    // Last 200 instructions executed, stored for debugging purposes
+    #[cfg(debug_assertions)]
+    last_instructions: [[u8; 3]; 200],
+    #[cfg(debug_assertions)]
+    last_inst_index: usize,
 }
 
 impl Nes {
@@ -36,9 +49,28 @@ impl Nes {
             controllers: [Controller::new(); 2],
             cached_controllers: [Controller::new(); 2],
             controller_bits: [0; 2],
+            #[cfg(debug_assertions)]
+            last_instructions: [[0; 3]; 200],
+            #[cfg(debug_assertions)]
+            last_inst_index: 0,
         }
     }
     pub fn from_cartridge(bytes: &[u8]) -> Nes {
+        // Initialize logger
+        CombinedLogger::init(vec![
+            TermLogger::new(
+                LevelFilter::Debug,
+                Config::default(),
+                TerminalMode::Mixed,
+                ColorChoice::Auto,
+            ),
+            WriteLogger::new(
+                LevelFilter::Info,
+                Config::default(),
+                File::create("./yane.log").unwrap(),
+            ),
+        ])
+        .expect("Unable to create logger");
         let mut nes = Nes {
             cpu: Cpu::new(),
             ppu: Ppu::new(),
@@ -48,10 +80,14 @@ impl Nes {
             controllers: [Controller::new(); 2],
             cached_controllers: [Controller::new(); 2],
             controller_bits: [0; 2],
+            #[cfg(debug_assertions)]
+            last_instructions: [[0; 3]; 200],
+            #[cfg(debug_assertions)]
+            last_inst_index: 0,
         };
         nes.cpu.p_c = ((nes.cartridge.read_byte(0xFFFD) as u16) << 8)
             + (nes.cartridge.read_byte(0xFFFC) as u16);
-        println!("Initialized PC to {:#X}", nes.cpu.p_c);
+        info!("Initialized PC to {:#X}", nes.cpu.p_c);
         nes
     }
 
@@ -126,12 +162,35 @@ impl Nes {
             self.read_byte(pc + 1),
             self.read_byte(pc + 2),
         ]);
+        #[cfg(debug_assertions)]
+        {
+            // Add instruction for debugging purposes
+            self.last_instructions[self.last_inst_index].copy_from_slice(&inst);
+            self.last_inst_index = (self.last_inst_index + 1) % self.last_instructions.len();
+        }
         match self.decode_and_execute(&inst) {
             Ok((bytes, cycles)) => {
-                self.cpu.p_c += bytes;
+                self.cpu.p_c = self.cpu.p_c.wrapping_add(bytes);
                 return Ok(cycles);
             }
-            Err(s) => return Err(s),
+            Err(s) => {
+                error!("Encountered an error, printing last 200 instructions",);
+                [
+                    &self.last_instructions[((self.last_inst_index + 1)
+                        % self.last_instructions.len())
+                        ..self.last_instructions.len()],
+                    &self.last_instructions[0..self.last_inst_index],
+                ]
+                .concat()
+                .iter()
+                .for_each(|inst| {
+                    error!(
+                        "\t OPCODE={:X} OPERANDS={:X} {:X}",
+                        inst[0], inst[1], inst[2]
+                    )
+                });
+                return Err(s);
+            }
         }
     }
 
@@ -285,10 +344,10 @@ impl Nes {
             // BRK
             BRK => {
                 // Copy into stack
-                self.push_to_stack_u16(self.cpu.p_c);
+                self.push_to_stack_u16(self.cpu.p_c.wrapping_add(2));
                 self.push_to_stack(self.cpu.s_r.to_byte());
-                // self.mem[(0x100 + self.cpu.s_p as usize - 2)..(0x100 + self.cpu.s_p as usize + 1)]
-                //     .copy_from_slice(&to_push);
+                self.cpu.p_c =
+                    ((self.read_byte(0xFFFE) as u16) << 8) + self.read_byte(0xFFFF) as u16 - 1;
                 Ok((1, 7))
             }
             // Various flag clearing functions
@@ -420,10 +479,12 @@ impl Nes {
             RTI => {
                 let v = self.pull_from_stack();
                 self.cpu.s_r.from_byte(v);
+                // Subtract one for the byte that will be added
                 self.cpu.p_c = self.pull_from_stack_u16() - 1;
                 Ok((1, 6))
             }
             RTS => {
+                // We want to add one byte here, but that is done for us by the one byte we are returning
                 self.cpu.p_c = self.pull_from_stack_u16();
                 Ok((1, 6))
             }
@@ -1197,50 +1258,6 @@ mod tests {
         bit_test!(test_zero_page, BIT_ZP, set_addr_zp, (2, 3));
         bit_test!(test_absolute, BIT_ABS, set_addr_abs, (3, 4));
     }
-    // mod brk {
-    //     use super::*;
-    //     use test_case::test_case;
-    //     #[test_case(
-    //         0x1234, 0x4567, true, false, true, false, true, false, true, 0b10110101 ; "happy case"
-    //     )]
-    //     #[test_case(0xFFFF, 0x0000, true, true, true, true, true, true, true, 0b11111111 ; "all flags true")]
-    //     #[test_case(0xAABB, 0xBDF1, false, false, false, false, false, false, false, 0b00100000 ; "all flags false")]
-    //     #[test_case(0x6789, 0x6789, false, false, true, false, true, true, true, 0b00110111 ; "no change in PC")]
-    //     fn test_implied(
-    //         init_pc: u16,
-    //         final_pc: u16,
-    //         n: bool,
-    //         v: bool,
-    //         b: bool,
-    //         d: bool,
-    //         i: bool,
-    //         z: bool,
-    //         c: bool,
-    //         sr: u8,
-    //     ) {
-    //         let mut nes = Nes::new();
-    //         nes.cpu.s_r.n = n;
-    //         nes.cpu.s_r.v = v;
-    //         nes.cpu.s_r.b = b;
-    //         nes.cpu.s_r.d = d;
-    //         nes.cpu.s_r.i = i;
-    //         nes.cpu.s_r.z = z;
-    //         nes.cpu.s_r.c = c;
-    //         nes.cpu.p_c = init_pc;
-    //         // Set memeory to be read into PC
-    //         nes.mem[0xFFFE] = first_byte(final_pc);
-    //         nes.mem[0xFFFF] = second_byte(final_pc);
-    //         assert_eq!(nes.decode_and_execute(&[BRK]), Ok((1, 7)));
-    //         // Check flag is set
-    //         assert_eq!(nes.cpu.s_r.i, true);
-    //         // Check PC was set
-    //         assert_eq_hex!(nes.cpu.p_c, final_pc);
-    //         // Check stuff was pushed onto stack
-    //         assert_eq_hex!(nes.mem[0x1FD], first_byte(init_pc));
-    //         assert_eq_hex!(nes.mem[0x1FE], second_byte(init_pc));
-    //         assert_eq_hex!(nes.mem[0x1FF], sr);
-    //     }
-    // }
     macro_rules! test_clear {
         ($name: ident, $opcode: ident, $flag: ident) => {
             #[test]
@@ -1662,42 +1679,6 @@ mod tests {
         ror_test!(test_abs, ROR_ABS, get_addr_abs, set_addr_abs, 3, 6);
         ror_test!(test_abs_x, ROR_ABS_X, get_addr_abs_x, set_addr_abs_x, 3, 7);
     }
-    // #[test_case::test_case(0x0018, true, true, true, true, true, true, true ; "happy case")]
-    // #[test_case::test_case(0x00FF, false, false, false, false, false, false, false ; "happy case 2")]
-    // #[test_case::test_case(0x0000, true, false, true, false, true, false, true ; "happy case 3")]
-    // fn test_rti(p_c: u16, c: bool, z: bool, i: bool, d: bool, b: bool, v: bool, n: bool) {
-    //     let mut nes = Nes::new();
-    //     nes.cpu.p_c = p_c;
-    //     nes.cpu.s_r = StatusRegister {
-    //         c,
-    //         z,
-    //         i,
-    //         d,
-    //         b,
-    //         v,
-    //         n,
-    //     };
-    //     assert_eq!(nes.decode_and_execute(&[BRK]), Ok((1, 7)));
-    //     nes.cpu.p_c = random::<u16>();
-    //     nes.cpu.s_r = StatusRegister {
-    //         c: !c,
-    //         z: !z,
-    //         i: !i,
-    //         d: !d,
-    //         b: !b,
-    //         v: !v,
-    //         n: !n,
-    //     };
-    //     assert_eq!(nes.decode_and_execute(&[RTI]), Ok((1, 6)));
-    //     assert_eq_hex!(nes.cpu.p_c, p_c);
-    //     assert_c(&nes, c);
-    //     assert_z(&nes, z);
-    //     assert_i(&nes, i);
-    //     assert_d(&nes, d);
-    //     assert_b(&nes, b);
-    //     assert_v(&nes, v);
-    //     assert_n(&nes, n);
-    // }
     #[test_case::test_case(0x1234, 0x5678 ; "happy case")]
     fn test_rts(p_c: u16, addr: u16) {
         let mut nes = Nes::new();

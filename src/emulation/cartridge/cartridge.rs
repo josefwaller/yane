@@ -1,4 +1,5 @@
 use crate::{emulation::cartridge::mapper::get_mapper, Mapper};
+use log::*;
 use std::cmp::{max, min};
 
 #[derive(Debug, PartialEq)]
@@ -39,17 +40,17 @@ impl Cartridge {
         let mut prg_ram_size = max(bytes[8] as usize, 1) * 8000;
         let chr_ram_size = if chr_rom_size == 0 { 0x2000 } else { 0x0 };
         if bytes[7] & 0x0C == 0x08 {
-            println!("iNES 2.0 file detected");
+            info!("iNES 2.0 file detected");
         } else {
-            println!("iNES file detected");
-            println!("Header: {:X?}", &bytes[0..16]);
-            prg_ram_size = min(bytes[8] as usize * 8000, 8000);
-            println!(
+            info!("iNES file detected");
+            info!("Header: {:X?}", &bytes[0..16]);
+            prg_ram_size = max(bytes[8] as usize * 8000, 8000);
+            info!(
                 "Detected as {}, ignoring.",
                 if bytes[9] & 0x01 != 0 { "PAL" } else { "NTSC" }
             );
         }
-        println!(
+        info!(
             "{:X} bytes PRG ROM, {:X} bytes CHR ROM, {:X} bytes PRG RAM, {:X} bytes CHR RAM",
             prg_rom_size, chr_rom_size, prg_ram_size, chr_ram_size
         );
@@ -60,10 +61,10 @@ impl Cartridge {
         } else {
             NametableArrangement::Vertical
         };
-        println!("Cartridge is using {:?} nametable", nametable_arrangement);
+        info!("Cartridge is using {:?} nametable", nametable_arrangement);
         let mapper = get_mapper(mapper_id as usize);
         let has_trainer = bytes[6] & 0x04 != 0;
-        println!(
+        info!(
             "Cartridge {} trainer",
             if has_trainer { "has" } else { "does not have" },
         );
@@ -73,7 +74,7 @@ impl Cartridge {
         let prg_rom = bytes[start..end].to_vec();
         start = end;
         end += chr_rom_size;
-        println!("Reading CHRROM at {:#X}", start);
+        info!("Reading CHRROM at {:#X}", start);
         let chr_rom = bytes[start..end].to_vec();
         Cartridge {
             memory: CartridgeMemory {
@@ -94,11 +95,12 @@ impl Cartridge {
     }
     pub fn write_chr(&mut self, addr: usize, value: u8) {
         // TBA - only do this if there is CHR RAM
-        self.memory.chr_ram[addr] = value;
+        if addr < self.memory.chr_ram.len() {
+            self.memory.chr_ram[addr] = value;
+        }
     }
     pub fn read_chr(&self, addr: usize) -> u8 {
         self.get_pattern_table()[addr]
-        // self.memory.chr_ram[addr]
     }
     pub fn get_pattern_table(&self) -> &[u8] {
         if self.memory.chr_ram.len() == 0 {

@@ -658,6 +658,7 @@ dependencies = [
  "imgui",
  "imgui-glow-renderer",
  "imgui-sdl2-support",
+ "log",
  "rand",
  "sdl2",
  "simplelog",

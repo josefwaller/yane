@@ -1,3 +1,4 @@
+use log::*;
 use sdl2::event::{Event, WindowEvent};
 use sdl2::keyboard::Keycode;
 use std::thread::sleep;

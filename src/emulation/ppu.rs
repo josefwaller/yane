@@ -33,7 +33,7 @@ impl Ppu {
     pub fn new() -> Ppu {
         Ppu {
             oam: [0; 0x100],
-            ctrl: 0x00,
+            ctrl: 0x80,
             mask: 0,
             status: 0xA0,
             oam_addr: 0,
