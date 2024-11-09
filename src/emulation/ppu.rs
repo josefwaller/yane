@@ -114,10 +114,10 @@ impl Ppu {
     fn write_vram(&mut self, value: u8, cartridge: &mut Cartridge) {
         if self.addr < 0x2000 {
             cartridge.write_chr(self.addr as usize, value);
-        } else if self.addr < 0x3F00 {
+        } else if self.addr < 0x3000 {
             match cartridge.nametable_arrangement {
                 NametableArrangement::Horizontal => {
-                    self.nametable_ram[(self.addr - 0x2000) as usize] = value
+                    self.nametable_ram[(self.addr - 0x2000) as usize % 0x800] = value
                 }
                 NametableArrangement::Vertical => {
                     self.nametable_ram
@@ -129,7 +129,7 @@ impl Ppu {
                     cartridge.nametable_arrangement
                 ),
             }
-        } else {
+        } else if self.addr >= 0x3F00 {
             self.palette_ram[(self.addr - 0x3F00) as usize % 0x020] = value;
         }
         self.inc_addr();
@@ -139,12 +139,20 @@ impl Ppu {
     fn read_vram(&mut self, cartridge: &Cartridge) -> u8 {
         let addr = self.addr;
         self.inc_addr();
-        println!("Reading {:X}", addr);
         if self.addr < 0x2000 {
             return cartridge.read_chr(addr as usize);
         }
+        // TODO: Deduplicate
         if self.addr < 0x3F00 {
-            unimplemented!("todo");
+            match cartridge.nametable_arrangement {
+                NametableArrangement::Horizontal => {
+                    return self.nametable_ram[(self.addr - 0x2000) as usize % 0x800];
+                }
+                NametableArrangement::Vertical => {
+                    return self.nametable_ram
+                        [(self.addr as usize - 0x2000) / 0x800 + self.addr as usize % 0x400];
+                }
+            }
         }
         self.palette_ram[(addr - 0x3F00) as usize % 0x020]
     }

@@ -129,9 +129,16 @@ impl Screen {
             set_data_texture_data(&self.gl, &self.chr_tex, nes.cartridge.get_pattern_table());
             self.gl.finish();
 
-            self.render_background(nes);
+            // Behind background
             if nes.ppu.is_sprite_enabled() {
-                self.render_sprites(nes);
+                self.render_sprites(nes, 1);
+            }
+            if nes.ppu.is_background_enabled() {
+                self.render_background(nes);
+            }
+            // In front of background
+            if nes.ppu.is_sprite_enabled() {
+                self.render_sprites(nes, 0);
             }
 
             self.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
@@ -140,6 +147,7 @@ impl Screen {
                 .viewport(0, 0, window_size.0 as i32, window_size.1 as i32);
             self.gl.bind_vertex_array(Some(self.texture_vao));
             self.gl.draw_arrays(glow::TRIANGLES, 0, 6);
+            self.gl.finish();
         }
     }
     fn get_nametable(&self, addr: usize, nes: &Nes) -> Vec<u8> {
@@ -166,7 +174,7 @@ impl Screen {
             .gl
             .get_uniform_location(self.background_program, "nametable");
         let base_nametable = nes.ppu.get_base_nametable();
-        // TODO: Tidy
+        // Build the two nametables
         let n: Vec<i32> = [
             // First nametable
             self.get_nametable(base_nametable, nes),
@@ -197,7 +205,7 @@ impl Screen {
         self.gl.draw_arrays(glow::POINTS, 0, 2 * 30 * 32);
     }
 
-    unsafe fn render_sprites(&mut self, nes: &Nes) {
+    unsafe fn render_sprites(&mut self, nes: &Nes, priority: i32) {
         self.gl.use_program(Some(self.sprite_program));
         check_error!(self.gl);
         self.setup_render_uniforms(&self.sprite_program, nes);
@@ -225,6 +233,7 @@ impl Screen {
             "spritePatternLocation",
             nes.ppu.get_spr_pattern_table_addr() as i32,
         );
+        set_int_uniform(&self.gl, &self.sprite_program, "priority", priority);
         // Draw sprites as points
         // GLSL Shaders add pixels to form the full 8x8 sprite
         // Todo maybe: batch this

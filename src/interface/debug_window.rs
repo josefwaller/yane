@@ -37,7 +37,7 @@ impl DebugWindow {
         // Figure out how many rows/columns
         let num_tiles =
             (nes.cartridge.memory.chr_rom.len() + nes.cartridge.memory.chr_ram.len()) / 0x10;
-        let num_columns = 0x20;
+        let num_columns = 0x10;
         let num_rows = max(num_tiles / num_columns, 1);
         // Set window size
         let window_width = 4 * 8 * num_columns as u32;

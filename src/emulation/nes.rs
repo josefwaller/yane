@@ -126,7 +126,6 @@ impl Nes {
             self.read_byte(pc + 1),
             self.read_byte(pc + 2),
         ]);
-        // println!("{:X?}", inst);
         match self.decode_and_execute(&inst) {
             Ok((bytes, cycles)) => {
                 self.cpu.p_c += bytes;

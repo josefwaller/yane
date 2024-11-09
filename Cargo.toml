@@ -11,6 +11,7 @@ imgui-glow-renderer = "0.13.0"
 imgui-sdl2-support = "0.13.0"
 rand = "0.8.5"
 sdl2 = "0.37.0"
+simplelog = "0.12.2"
 test-case = "3.3.1"
 
 [features]

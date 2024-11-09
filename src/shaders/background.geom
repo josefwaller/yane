@@ -50,7 +50,7 @@ void main() {
                 gl_Position = vec4(
                     (8.0 * xPos + x - scrollX) / 128.0 - 1.0,
                     1 - (8.0 * yPos + y - scrollY) / 120.0,
-                    -1,
+                    1,
                     1);
                 pixelIndex = 8 * y + x;
                 // If we're in the second table, account for the attribute table

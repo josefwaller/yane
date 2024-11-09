@@ -40,9 +40,6 @@ pub fn create_window(
     let gl = unsafe {
         glow::Context::from_loader_function(|s| video.gl_get_proc_address(s) as *const _)
     };
-    // window
-    //     .gl_make_current(&gl_context)
-    //     .expect("Unable to make context current");
 
     (window, gl_context, gl)
 }

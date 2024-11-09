@@ -80,6 +80,7 @@ impl AudioCallback for TriangleWave {
             if !self.register.enabled
                 || self.register.length_counter.load == 0
                 || self.register.linear_counter == 0
+                || self.register.timer <= 1
             {
                 *x = 0.0;
             } else {

@@ -18,6 +18,7 @@ uniform int spritePatternLocation;
 
 uniform int scrollX;
 uniform int scrollY;
+uniform int priority;
 
 flat out int pixelIndex;
 flat out int paletteIndex;
@@ -35,6 +36,10 @@ void main() {
         int yMax = tallSprites != 0 ? 16 : 8;
         int i = index[j];
         uint attr_byte = oamData[4 * i + 2];
+        // Skip if we're not drawing that priority byte right now
+        if ((int(attr_byte >> 5) & 0x01) != priority) {
+            continue;
+        }
         for (int y = 0; y < yMax; y++) {
             int yPos = int(oamData[4 * i]) + (vertical_flip(attr_byte) ? 7 - y : y);
             for (int x = 0; x < 8; x++) {
@@ -46,7 +51,8 @@ void main() {
                 gl_Position = vec4(
                     float(xPos) / 128.0 - 1.0,
                     1.0 - float(yPos) / 120.0,
-                    0,
+                    // Z priority is the index in the OAM table
+                    1.0,
                     1
                 );
                 pixelIndex = 8 * y + x;
