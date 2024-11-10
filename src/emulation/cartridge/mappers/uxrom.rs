@@ -1,4 +1,5 @@
 use crate::{emulation::cartridge::CartridgeMemory, Mapper};
+use log::*;
 
 #[derive(Default)]
 pub struct UxRom {
@@ -9,10 +10,7 @@ const BANK_SIZE: usize = 0x4000;
 impl Mapper for UxRom {
     fn read_cpu(&self, cpu_addr: usize, mem: &CartridgeMemory) -> u8 {
         if cpu_addr < 0x8000 {
-            println!(
-                "Warning - trying to read PRG RAM when there is none (ADDR = {:X})",
-                cpu_addr
-            );
+            warn!("Reading PRG RAM when there is none (ADDR = {:X})", cpu_addr);
             return 0;
         }
         // Fixed to last bank

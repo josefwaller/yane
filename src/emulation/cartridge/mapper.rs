@@ -10,7 +10,6 @@ pub trait Mapper {
 }
 
 pub fn get_mapper(mapper_id: usize) -> Box<dyn Mapper> {
-    println!("Using mapper {}", mapper_id);
     match mapper_id {
         0 => Box::new(NRom::default()),
         2 => Box::new(UxRom::default()),

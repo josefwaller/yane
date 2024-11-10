@@ -1,4 +1,5 @@
 use super::{cartridge, Cartridge, NametableArrangement};
+use log::*;
 
 pub struct Ppu {
     /// The Object Access Memory, or OAM
@@ -33,7 +34,7 @@ impl Ppu {
     pub fn new() -> Ppu {
         Ppu {
             oam: [0; 0x100],
-            ctrl: 0x80,
+            ctrl: 0x00,
             mask: 0,
             status: 0xA0,
             oam_addr: 0,

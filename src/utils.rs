@@ -1,6 +1,7 @@
 use glow::{
     Context, HasContext, NativeFramebuffer, NativeProgram, NativeTexture, Program, VertexArray,
 };
+use log::*;
 use sdl2::{
     video::{GLContext, Window},
     VideoSubsystem,
@@ -69,7 +70,7 @@ pub unsafe fn compile_and_link_shader(
 }
 
 pub unsafe fn create_data_texture(gl: &Context, data: &[u8]) -> NativeTexture {
-    println!("Creating texture with length {}", data.len());
+    info!("Creating texture with length {}", data.len());
     let data_tex = gl.create_texture().expect("Unable to create a Texture");
     check_error!(gl);
     set_data_texture_data(gl, &data_tex, data);
@@ -166,7 +167,7 @@ pub unsafe fn create_screen_texture(
     gl: &Context,
     size: (usize, usize),
 ) -> (NativeFramebuffer, VertexArray, NativeProgram) {
-    println!("Creating screen buffer with size {:?}", size);
+    info!("Creating screen buffer with size {:?}", size);
     check_error!(gl);
     let texture_program = gl.create_program().unwrap();
     check_error!(gl);

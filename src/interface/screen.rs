@@ -141,6 +141,7 @@ impl Screen {
                 self.render_sprites(nes, 0);
             }
 
+            self.gl.finish();
             self.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
             self.gl.use_program(Some(self.texture_program));
             self.gl
@@ -202,6 +203,7 @@ impl Screen {
             "hideLeftmostBackground",
             nes.ppu.should_hide_leftmost_background(),
         );
+        self.gl.finish();
         self.gl.draw_arrays(glow::POINTS, 0, 2 * 30 * 32);
     }
 
@@ -237,6 +239,7 @@ impl Screen {
         // Draw sprites as points
         // GLSL Shaders add pixels to form the full 8x8 sprite
         // Todo maybe: batch this
+        self.gl.finish();
         self.vao_array.iter().for_each(|vao| {
             self.gl.bind_vertex_array(Some(*vao));
             self.gl.draw_arrays(glow::POINTS, 0, 1);

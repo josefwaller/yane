@@ -62,6 +62,7 @@ impl Cartridge {
             NametableArrangement::Vertical
         };
         info!("Cartridge is using {:?} nametable", nametable_arrangement);
+        info!("Cartridge is using {} mapper", mapper_id);
         let mapper = get_mapper(mapper_id as usize);
         let has_trainer = bytes[6] & 0x04 != 0;
         info!(
