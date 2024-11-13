@@ -72,7 +72,7 @@ impl DebugWindow {
             compile_and_link_shader(
                 &gl,
                 glow::FRAGMENT_SHADER,
-                include_str!("../shaders/tile.frag"),
+                include_str!("../shaders/old_tile.frag"),
                 &program,
             );
             gl.link_program(program);
@@ -111,7 +111,7 @@ impl DebugWindow {
                 palette_index: 0,
                 debug_palette: false,
                 paused: false,
-                volume: 0.25,
+                volume: 0.00,
             }
         }
     }

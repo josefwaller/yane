@@ -1,5 +1,6 @@
 use crate::{check_error, utils::*, NametableArrangement, Nes};
 use glow::*;
+use log::*;
 
 // Renders the PPU
 pub struct Screen {
@@ -12,6 +13,8 @@ pub struct Screen {
     palette: [[f32; 3]; 0x40],
     background_program: NativeProgram,
     background_vao: NativeVertexArray,
+    tile_program: NativeProgram,
+    tile_vao: NativeVertexArray,
     chr_tex: NativeTexture,
 }
 impl Screen {
@@ -38,7 +41,7 @@ impl Screen {
             compile_and_link_shader(
                 &gl,
                 glow::FRAGMENT_SHADER,
-                include_str!("../shaders/tile.frag"),
+                include_str!("../shaders/old_tile.frag"),
                 &sprite_program,
             );
 
@@ -72,7 +75,7 @@ impl Screen {
             compile_and_link_shader(
                 &gl,
                 glow::FRAGMENT_SHADER,
-                include_str!("../shaders/tile.frag"),
+                include_str!("../shaders/old_tile.frag"),
                 &background_program,
             );
 
@@ -98,6 +101,49 @@ impl Screen {
             if e != glow::NO_ERROR {
                 panic!("Error generated sometime during initialization: {:X?}", e);
             }
+
+            let tile_program = gl.create_program().unwrap();
+            check_error!(gl);
+            compile_and_link_shader(
+                &gl,
+                glow::VERTEX_SHADER,
+                include_str!("../shaders/tile.vert"),
+                &tile_program,
+            );
+            compile_and_link_shader(
+                &gl,
+                glow::FRAGMENT_SHADER,
+                include_str!("../shaders/tile.frag"),
+                &tile_program,
+            );
+            gl.link_program(tile_program);
+            if !gl.get_program_link_status(tile_program) {
+                panic!(
+                    "Couldn't link program: {}",
+                    gl.get_program_info_log(tile_program)
+                );
+            }
+            gl.use_program(Some(tile_program));
+            let tile_buf = gl.create_buffer().unwrap();
+            check_error!(gl);
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(tile_buf));
+            check_error!(gl);
+            let verts: &[f32] = [[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]].as_flattened();
+            let verts_u8 = core::slice::from_raw_parts(
+                verts.as_ptr() as *const u8,
+                verts.len() * size_of::<f32>(),
+            );
+            gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, &verts_u8, glow::STATIC_DRAW);
+            check_error!(gl);
+            // Describe the format of the data
+            let tile_vao = gl.create_vertex_array().unwrap();
+            check_error!(gl);
+            gl.bind_vertex_array(Some(tile_vao));
+            gl.enable_vertex_attrib_array(0);
+            check_error!(gl);
+            gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 2 * size_of::<f32>() as i32, 0);
+            check_error!(gl);
+
             Screen {
                 gl,
                 sprite_program,
@@ -109,6 +155,8 @@ impl Screen {
                 background_program,
                 background_vao,
                 chr_tex,
+                tile_program,
+                tile_vao,
             }
         }
     }
@@ -126,20 +174,32 @@ impl Screen {
             self.gl.clear(glow::COLOR_BUFFER_BIT);
 
             // Set pattern table
-            set_data_texture_data(&self.gl, &self.chr_tex, nes.cartridge.get_pattern_table());
+            // set_data_texture_data(&self.gl, &self.chr_tex, nes.cartridge.get_pattern_table());
             self.gl.finish();
 
+            self.gl.use_program(Some(self.tile_program));
+            check_error!(self.gl);
+            // Render OAM
+            nes.ppu.oam.chunks(4).for_each(|obj| {
+                let position_loc = self.gl.get_uniform_location(self.tile_program, "position");
+                self.gl
+                    .uniform_2_f32(position_loc.as_ref(), obj[3] as f32, obj[0] as f32);
+                self.gl.viewport(0, 0, 256, 240);
+                self.gl.bind_vertex_array(Some(self.tile_vao));
+                self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
+            });
+            check_error!(self.gl);
             // Behind background
-            if nes.ppu.is_sprite_enabled() {
-                self.render_sprites(nes, 1);
-            }
-            if nes.ppu.is_background_enabled() {
-                self.render_background(nes);
-            }
-            // In front of background
-            if nes.ppu.is_sprite_enabled() {
-                self.render_sprites(nes, 0);
-            }
+            // if nes.ppu.is_sprite_enabled() {
+            //     self.render_sprites(nes, 1);
+            // }
+            // if nes.ppu.is_background_enabled() {
+            //     self.render_background(nes);
+            // }
+            // // In front of background
+            // if nes.ppu.is_sprite_enabled() {
+            //     self.render_sprites(nes, 0);
+            // }
 
             self.gl.finish();
             self.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
