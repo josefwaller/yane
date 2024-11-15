@@ -5,6 +5,7 @@ in vec2 vertexPos;
 uniform vec2 position;
 
 const vec2 SCREEN_SIZE = vec2(256, 240);
+out vec2 UV;
 
 void main() {
     // Invert Y in order match GL window orientation
@@ -17,4 +18,5 @@ void main() {
         0.0,
         1.0
     );
+    UV = vertexPos;
 }

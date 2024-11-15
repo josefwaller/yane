@@ -181,12 +181,20 @@ impl Screen {
             // Set pattern table
             self.gl.use_program(Some(self.tile_program));
             check_error!(self.gl);
+            let palette = nes.ppu.palette_ram.map(|i| self.palette[i as usize]);
             // Render OAM
             self.gl.viewport(0, 0, 256, 240);
             nes.ppu.oam.chunks(4).for_each(|obj| {
                 let position_loc = self.gl.get_uniform_location(self.tile_program, "position");
                 self.gl
                     .uniform_2_f32(position_loc.as_ref(), obj[3] as f32, obj[0] as f32);
+                set_int_uniform(&self.gl, &self.tile_program, "tileIndex", obj[1] as i32);
+                let pos = self.gl.get_uniform_location(self.tile_program, "palette");
+                let pal_index = 4 + (obj[2] & 0x03) as usize;
+                self.gl.uniform_3_f32_slice(
+                    pos.as_ref(),
+                    palette[(4 * pal_index)..(4 * pal_index + 4)].as_flattened(),
+                );
                 self.gl.bind_vertex_array(Some(self.tile_vao));
                 self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
             });
@@ -240,7 +248,7 @@ impl Screen {
         self.gl.tex_image_2d(
             glow::TEXTURE_2D,
             0,
-            glow::RED as i32,
+            glow::R8 as i32,
             width,
             texture_data.len() as i32 / width,
             0,
