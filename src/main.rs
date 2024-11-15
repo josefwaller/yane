@@ -30,6 +30,9 @@ fn main() {
         let mut s2 = Instant::now();
         let mut delta = Instant::now();
         let wait_time_per_cycle_nanos = 1_000_000.0 / 1_789_000.0;
+        let mut scanline = 0;
+        let mut last_hundred_frames = Instant::now();
+        let mut frame_count = 0;
         loop {
             // Update IMGUI/Window input
             let mut should_exit = false;
@@ -66,17 +69,36 @@ fn main() {
                     s2 = Instant::now();
                 }
             }
-            if Instant::now().duration_since(last_render) >= Duration::from_millis(1000 / 60) {
+            if Instant::now().duration_since(last_render) >= Duration::from_millis(1000 / 60 / 240)
+            {
                 last_render = Instant::now();
-
-                window.render(&mut nes);
-                debug_window.render(&nes, &event_pump);
-                if !debug_window.paused() {
-                    nes.ppu.on_vblank();
-                    if nes.ppu.get_nmi_enabled() {
-                        nes.on_nmi();
+                if scanline < 240 {
+                    window.render_scanline(&nes, scanline);
+                }
+                if scanline == 256 {
+                    scanline = 0;
+                    window.render(&mut nes);
+                    debug_window.render(&nes, &event_pump);
+                    if !debug_window.paused() {
+                        nes.ppu.on_vblank();
+                        if nes.ppu.get_nmi_enabled() {
+                            nes.on_nmi();
+                        }
+                    }
+                    frame_count += 1;
+                    if frame_count == 100 {
+                        frame_count = 0;
+                        let now = Instant::now();
+                        debug!(
+                            "Approx FPS: {}",
+                            100.0
+                                / (now.duration_since(last_hundred_frames).as_millis() as f32
+                                    / 1000.0)
+                        );
+                        last_hundred_frames = now;
                     }
                 }
+                scanline += 1;
             }
             let new_delta = Instant::now();
             let emu_elapsed = (cycles as f64 * wait_time_per_cycle_nanos) as u64;

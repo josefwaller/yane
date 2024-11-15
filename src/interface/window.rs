@@ -60,6 +60,13 @@ impl Window {
         // Update audio
         self.audio.update_audio(nes, volume);
     }
+    pub fn render_scanline(&mut self, nes: &Nes, scanline: usize) {
+        self.window.gl_make_current(&self.gl_context).unwrap();
+        unsafe {
+            self.screen
+                .render_scanline(nes, self.window.size(), scanline);
+        }
+    }
     pub fn render(&mut self, nes: &mut Nes) {
         self.window.gl_make_current(&self.gl_context).unwrap();
         self.screen.render(nes, self.window.size());

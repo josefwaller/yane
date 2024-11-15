@@ -1,4 +1,4 @@
-use crate::{check_error, utils::*, NametableArrangement, Nes};
+use crate::{check_error, interface::window, utils::*, NametableArrangement, Nes};
 use glow::*;
 use log::*;
 
@@ -17,12 +17,15 @@ pub struct Screen {
     background_vao: NativeVertexArray,
     tile_program: NativeProgram,
     tile_vao: NativeVertexArray,
+    scanline_program: NativeProgram,
+    scanline_vao: NativeVertexArray,
     chr_tex: NativeTexture,
 }
 impl Screen {
     // TODO: Rename
     pub fn new(nes: &Nes, gl: Context) -> Screen {
         unsafe {
+            gl.disable(glow::DEPTH_TEST);
             // Send CHR ROM/RAM data
             let chr_tex = gl.create_texture().unwrap();
 
@@ -126,25 +129,34 @@ impl Screen {
                 );
             }
             gl.use_program(Some(tile_program));
-            let tile_buf = gl.create_buffer().unwrap();
-            check_error!(gl);
-            gl.bind_buffer(glow::ARRAY_BUFFER, Some(tile_buf));
-            check_error!(gl);
-            let verts: &[f32] = [[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]].as_flattened();
-            let verts_u8 = core::slice::from_raw_parts(
-                verts.as_ptr() as *const u8,
-                verts.len() * size_of::<f32>(),
+            let tile_vao = create_f32_slice_vao(
+                &gl,
+                [[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]].as_flattened(),
+                2,
             );
-            gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, &verts_u8, glow::STATIC_DRAW);
-            check_error!(gl);
-            // Describe the format of the data
-            let tile_vao = gl.create_vertex_array().unwrap();
-            check_error!(gl);
-            gl.bind_vertex_array(Some(tile_vao));
-            gl.enable_vertex_attrib_array(0);
-            check_error!(gl);
-            gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 2 * size_of::<f32>() as i32, 0);
-            check_error!(gl);
+
+            let scanline_program = gl.create_program().unwrap();
+            compile_and_link_shader(
+                &gl,
+                glow::VERTEX_SHADER,
+                include_str!("../shaders/scanline.vert"),
+                &scanline_program,
+            );
+            compile_and_link_shader(
+                &gl,
+                glow::FRAGMENT_SHADER,
+                include_str!("../shaders/color.frag"),
+                &scanline_program,
+            );
+            gl.link_program(scanline_program);
+            if !gl.get_program_link_status(tile_program) {
+                panic!(
+                    "Couldn't link program: {}",
+                    gl.get_program_info_log(tile_program)
+                );
+            }
+            let scanline_vao =
+                create_f32_slice_vao(&gl, [[0.0, 0.0], [1.0, 0.0]].as_flattened(), 2);
 
             Screen {
                 gl,
@@ -160,89 +172,100 @@ impl Screen {
                 chr_tex,
                 tile_program,
                 tile_vao,
+                scanline_program,
+                scanline_vao,
             }
         }
     }
 
+    pub unsafe fn render_scanline(&mut self, nes: &Nes, window_size: (u32, u32), scanline: usize) {
+        self.gl.enable(glow::STENCIL_TEST);
+        self.gl.viewport(0, 0, 256, 240);
+        self.gl.bind_texture(glow::TEXTURE_2D, Some(self.chr_tex));
+
+        self.gl
+            .bind_framebuffer(glow::FRAMEBUFFER, Some(self.screen_fbo));
+        // Set stencil buffer to only the one line
+        self.gl.stencil_mask(0x00);
+        self.gl.clear(glow::STENCIL_BUFFER_BIT);
+        check_error!(self.gl);
+        self.gl.stencil_func(glow::ALWAYS, 1, 0xFF);
+        self.gl.stencil_mask(0xFF);
+        check_error!(self.gl);
+        self.gl.stencil_op(glow::KEEP, glow::KEEP, glow::REPLACE);
+        check_error!(self.gl);
+
+        self.gl.use_program(Some(self.scanline_program));
+        check_error!(self.gl);
+        set_int_uniform(
+            &self.gl,
+            &self.scanline_program,
+            "scanline",
+            scanline as i32,
+        );
+        let clear_color = self.palette[(nes.ppu.palette_ram[0] & 0x3F) as usize];
+        let loc = self
+            .gl
+            .get_uniform_location(self.scanline_program, "inColor");
+        self.gl.uniform_3_f32_slice(loc.as_ref(), &clear_color);
+        self.gl.bind_vertex_array(Some(self.scanline_vao));
+        check_error!(self.gl);
+        self.gl.draw_arrays(glow::LINES, 0, 2);
+        check_error!(self.gl);
+
+        check_error!(self.gl);
+        self.gl.enable(glow::STENCIL_TEST);
+        self.gl.stencil_func(glow::EQUAL, 1, 0xFF);
+        self.gl.stencil_op(glow::KEEP, glow::KEEP, glow::KEEP);
+        check_error!(self.gl);
+
+        // Set pattern table
+        self.gl.use_program(Some(self.tile_program));
+        check_error!(self.gl);
+        let palette = nes.ppu.palette_ram.map(|i| self.palette[i as usize]);
+        // Render background
+        let nametable = self.get_nametable(nes.ppu.get_base_nametable(), nes);
+        let y = scanline / 8;
+        (0..32).for_each(|x| {
+            let tile_index = 32 * y + x;
+            let palette_byte = nametable[0x3C0 + (x / 4) + 8 * (y / 4)];
+            let pal_x = (x % 4) / 2;
+            let pal_y = (y % 4) / 2;
+            let palette_index = ((palette_byte >> (2 * (2 * pal_y + pal_x))) & 0x03) as usize;
+            self.render_tile(
+                8 * x,
+                8 * y,
+                nes.ppu.get_background_pattern_table_addr() / 0x10 + nametable[tile_index] as usize,
+                palette_index,
+                false,
+                false,
+                &palette,
+            );
+        });
+        // Render OAM
+        let oam_to_render: Vec<&[u8]> = nes
+            .ppu
+            .oam
+            .chunks(4)
+            .filter(|obj| obj[0] as usize <= scanline && obj[0] as usize + 8 > scanline)
+            .collect();
+        oam_to_render.iter().take(8).for_each(|obj| {
+            self.render_tile(
+                obj[3] as usize,
+                obj[0] as usize,
+                obj[1] as usize,
+                4 + (obj[2] & 0x03) as usize,
+                (obj[2] & 0x80) != 0,
+                (obj[2] & 0x40) != 0,
+                &palette,
+            );
+        });
+        // Todo: Check for sprite overflow
+    }
+
     pub fn render(&mut self, nes: &Nes, window_size: (u32, u32)) {
         unsafe {
-            self.refresh_chr_texture(nes);
-            self.gl.use_program(Some(self.sprite_program));
-            self.gl
-                .bind_framebuffer(glow::FRAMEBUFFER, Some(self.screen_fbo));
-            self.gl.bind_texture(glow::TEXTURE_2D, Some(self.chr_tex));
-            // Set clear color
-            let clear_color = self.palette[(nes.ppu.palette_ram[0] & 0x3F) as usize];
-            self.gl
-                .clear_color(clear_color[0], clear_color[1], clear_color[2], 1.0);
-            self.gl.viewport(0, 0, 256, 240);
-            self.gl.clear(glow::COLOR_BUFFER_BIT);
-
-            // Set pattern table
-            self.gl.use_program(Some(self.tile_program));
-            check_error!(self.gl);
-            let palette = nes.ppu.palette_ram.map(|i| self.palette[i as usize]);
-            // Render background
-            let nametable = self.get_nametable(nes.ppu.get_base_nametable(), nes);
-            (0..30).for_each(|y| {
-                (0..32).for_each(|x| {
-                    // let tile_addr = nes.ppu.get_background_pattern_table_addr() / 0x10
-                    //     + nametable[32 * y + x] as usize;
-                    // let position_loc = self.gl.get_uniform_location(self.tile_program, "position");
-                    // self.gl
-                    //     .uniform_2_f32(position_loc.as_ref(), 8.0 * x as f32, 8.0 * y as f32);
-                    // set_int_uniform(&self.gl, &self.tile_program, "tileIndex", tile_addr as i32);
-                    // let pal_index = 1;
-                    // let pos = self.gl.get_uniform_location(self.tile_program, "palette");
-                    // self.gl.uniform_3_f32_slice(
-                    //     pos.as_ref(),
-                    //     palette[(4 * pal_index)..(4 * pal_index + 4)].as_flattened(),
-                    // );
-                    // self.gl.bind_vertex_array(Some(self.tile_vao));
-                    // self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
-                    let palette_byte = nametable[0x3C0 + (x / 4) + 8 * (y / 4)];
-                    let pal_x = (x % 4) / 2;
-                    let pal_y = (y % 4) / 2;
-                    let palette_index =
-                        ((palette_byte >> (2 * (2 * pal_y + pal_x))) & 0x03) as usize;
-                    self.render_tile(
-                        8 * x,
-                        8 * y,
-                        nes.ppu.get_background_pattern_table_addr() / 0x10
-                            + nametable[32 * y + x] as usize,
-                        palette_index,
-                        false,
-                        false,
-                        &palette,
-                    );
-                });
-            });
-            // Render OAM
-            self.gl.viewport(0, 0, 256, 240);
-            nes.ppu.oam.chunks(4).for_each(|obj| {
-                self.render_tile(
-                    obj[3] as usize,
-                    obj[0] as usize,
-                    obj[1] as usize,
-                    4 + (obj[2] & 0x03) as usize,
-                    (obj[2] & 0x80) != 0,
-                    (obj[2] & 0x40) != 0,
-                    &palette,
-                );
-                // let position_loc = self.gl.get_uniform_location(self.tile_program, "position");
-                // self.gl
-                //     .uniform_2_f32(position_loc.as_ref(), obj[3] as f32, obj[0] as f32);
-                // set_int_uniform(&self.gl, &self.tile_program, "tileIndex", obj[1] as i32);
-                // let pos = self.gl.get_uniform_location(self.tile_program, "palette");
-                // let pal_index = 4 + (obj[2] & 0x03) as usize;
-                // self.gl.uniform_3_f32_slice(
-                //     pos.as_ref(),
-                //     palette[(4 * pal_index)..(4 * pal_index + 4)].as_flattened(),
-                // );
-                // self.gl.bind_vertex_array(Some(self.tile_vao));
-                // self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
-            });
-            check_error!(self.gl);
+            self.gl.disable(glow::STENCIL_TEST);
             self.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
             check_error!(self.gl);
             self.gl.use_program(Some(self.screen_program));
@@ -257,6 +280,7 @@ impl Screen {
             self.gl.draw_arrays(glow::TRIANGLES, 0, 6);
             check_error!(self.gl);
             self.gl.finish();
+            self.refresh_chr_texture(nes);
         }
     }
     unsafe fn render_tile(

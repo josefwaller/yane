@@ -133,6 +133,32 @@ pub unsafe fn set_int_uniform(gl: &glow::Context, program: &glow::Program, name:
         )
     );
 }
+pub unsafe fn create_f32_slice_vao(gl: &Context, verts: &[f32], element_size: i32) -> VertexArray {
+    let buf = gl.create_buffer().unwrap();
+    check_error!(gl);
+    gl.bind_buffer(glow::ARRAY_BUFFER, Some(buf));
+    check_error!(gl);
+    let verts_u8 =
+        core::slice::from_raw_parts(verts.as_ptr() as *const u8, verts.len() * size_of::<f32>());
+    gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, &verts_u8, glow::STATIC_DRAW);
+    check_error!(gl);
+    // Describe the format of the data
+    let vao = gl.create_vertex_array().unwrap();
+    check_error!(gl);
+    gl.bind_vertex_array(Some(vao));
+    gl.enable_vertex_attrib_array(0);
+    check_error!(gl);
+    gl.vertex_attrib_pointer_f32(
+        0,
+        element_size,
+        glow::FLOAT,
+        false,
+        element_size * size_of::<f32>() as i32,
+        0,
+    );
+    check_error!(gl);
+    vao
+}
 pub unsafe fn buffer_data_slice(gl: &Context, program: &Program, data: &[i32]) -> VertexArray {
     gl.use_program(Some(*program));
     check_error!(gl);
@@ -263,5 +289,25 @@ pub unsafe fn create_screen_texture(
     if status != glow::FRAMEBUFFER_COMPLETE {
         panic!("Error creating frame buffer: {:X}", status);
     }
+    let depth_stencil_tex = gl.create_texture().unwrap();
+    gl.bind_texture(glow::TEXTURE_2D, Some(depth_stencil_tex));
+    gl.tex_image_2d(
+        glow::TEXTURE_2D,
+        0,
+        glow::DEPTH24_STENCIL8 as i32,
+        size.0 as i32,
+        size.1 as i32,
+        0,
+        glow::DEPTH_STENCIL,
+        glow::UNSIGNED_INT_24_8,
+        None,
+    );
+    gl.framebuffer_texture_2d(
+        glow::FRAMEBUFFER,
+        glow::DEPTH_STENCIL_ATTACHMENT,
+        glow::TEXTURE_2D,
+        Some(depth_stencil_tex),
+        0,
+    );
     (texture_buffer, vao, texture_program, render_texture)
 }
