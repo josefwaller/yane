@@ -182,36 +182,63 @@ impl Screen {
             self.gl.use_program(Some(self.tile_program));
             check_error!(self.gl);
             let palette = nes.ppu.palette_ram.map(|i| self.palette[i as usize]);
+            // Render background
+            let nametable = self.get_nametable(nes.ppu.get_base_nametable(), nes);
+            (0..30).for_each(|y| {
+                (0..32).for_each(|x| {
+                    // let tile_addr = nes.ppu.get_background_pattern_table_addr() / 0x10
+                    //     + nametable[32 * y + x] as usize;
+                    // let position_loc = self.gl.get_uniform_location(self.tile_program, "position");
+                    // self.gl
+                    //     .uniform_2_f32(position_loc.as_ref(), 8.0 * x as f32, 8.0 * y as f32);
+                    // set_int_uniform(&self.gl, &self.tile_program, "tileIndex", tile_addr as i32);
+                    // let pal_index = 1;
+                    // let pos = self.gl.get_uniform_location(self.tile_program, "palette");
+                    // self.gl.uniform_3_f32_slice(
+                    //     pos.as_ref(),
+                    //     palette[(4 * pal_index)..(4 * pal_index + 4)].as_flattened(),
+                    // );
+                    // self.gl.bind_vertex_array(Some(self.tile_vao));
+                    // self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
+                    let palette_byte = nametable[0x3C0 + (x / 4) + 8 * (y / 4)];
+                    let pal_x = (x % 4) / 2;
+                    let pal_y = (y % 4) / 2;
+                    let palette_index =
+                        ((palette_byte >> (2 * (2 * pal_y + pal_x))) & 0x03) as usize;
+                    self.render_tile(
+                        8 * x,
+                        8 * y,
+                        nes.ppu.get_background_pattern_table_addr() / 0x10
+                            + nametable[32 * y + x] as usize,
+                        palette_index,
+                        &palette,
+                    );
+                });
+            });
             // Render OAM
             self.gl.viewport(0, 0, 256, 240);
             nes.ppu.oam.chunks(4).for_each(|obj| {
-                let position_loc = self.gl.get_uniform_location(self.tile_program, "position");
-                self.gl
-                    .uniform_2_f32(position_loc.as_ref(), obj[3] as f32, obj[0] as f32);
-                set_int_uniform(&self.gl, &self.tile_program, "tileIndex", obj[1] as i32);
-                let pos = self.gl.get_uniform_location(self.tile_program, "palette");
-                let pal_index = 4 + (obj[2] & 0x03) as usize;
-                self.gl.uniform_3_f32_slice(
-                    pos.as_ref(),
-                    palette[(4 * pal_index)..(4 * pal_index + 4)].as_flattened(),
+                self.render_tile(
+                    obj[3] as usize,
+                    obj[0] as usize,
+                    obj[1] as usize,
+                    4 + (obj[2] & 0x03) as usize,
+                    &palette,
                 );
-                self.gl.bind_vertex_array(Some(self.tile_vao));
-                self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
+                // let position_loc = self.gl.get_uniform_location(self.tile_program, "position");
+                // self.gl
+                //     .uniform_2_f32(position_loc.as_ref(), obj[3] as f32, obj[0] as f32);
+                // set_int_uniform(&self.gl, &self.tile_program, "tileIndex", obj[1] as i32);
+                // let pos = self.gl.get_uniform_location(self.tile_program, "palette");
+                // let pal_index = 4 + (obj[2] & 0x03) as usize;
+                // self.gl.uniform_3_f32_slice(
+                //     pos.as_ref(),
+                //     palette[(4 * pal_index)..(4 * pal_index + 4)].as_flattened(),
+                // );
+                // self.gl.bind_vertex_array(Some(self.tile_vao));
+                // self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
             });
             check_error!(self.gl);
-            // Behind background
-            // if nes.ppu.is_sprite_enabled() {
-            //     self.render_sprites(nes, 1);
-            // }
-            // if nes.ppu.is_background_enabled() {
-            //     self.render_background(nes);
-            // }
-            // // In front of background
-            // if nes.ppu.is_sprite_enabled() {
-            //     self.render_sprites(nes, 0);
-            // }
-
-            self.gl.finish();
             self.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
             check_error!(self.gl);
             self.gl.use_program(Some(self.screen_program));
@@ -227,6 +254,27 @@ impl Screen {
             check_error!(self.gl);
             self.gl.finish();
         }
+    }
+    unsafe fn render_tile(
+        &self,
+        x: usize,
+        y: usize,
+        tile_addr: usize,
+        palette_index: usize,
+        palette: &[[f32; 3]; 0x20],
+    ) {
+        // Set position
+        let loc = self.gl.get_uniform_location(self.tile_program, "position");
+        self.gl.uniform_2_f32(loc.as_ref(), x as f32, y as f32);
+        // Set address
+        set_int_uniform(&self.gl, &self.tile_program, "tileIndex", tile_addr as i32);
+        let pos = self.gl.get_uniform_location(self.tile_program, "palette");
+        self.gl.uniform_3_f32_slice(
+            pos.as_ref(),
+            palette[(4 * palette_index)..(4 * palette_index + 4)].as_flattened(),
+        );
+        self.gl.bind_vertex_array(Some(self.tile_vao));
+        self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
     }
     unsafe fn refresh_chr_texture(&mut self, nes: &Nes) {
         let pattern_table = nes.cartridge.get_pattern_table();
