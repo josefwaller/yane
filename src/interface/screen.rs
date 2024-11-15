@@ -6,10 +6,12 @@ use log::*;
 pub struct Screen {
     gl: Context,
     sprite_program: NativeProgram,
-    texture_program: NativeProgram,
-    texture_vao: NativeVertexArray,
     vao_array: [NativeVertexArray; 64],
-    texture_buffer: NativeFramebuffer,
+    // Stuff for rendering to screen
+    screen_fbo: NativeFramebuffer,
+    screen_texture: NativeTexture,
+    screen_program: NativeProgram,
+    screen_vao: NativeVertexArray,
     palette: [[f32; 3]; 0x40],
     background_program: NativeProgram,
     background_vao: NativeVertexArray,
@@ -22,7 +24,7 @@ impl Screen {
     pub fn new(nes: &Nes, gl: Context) -> Screen {
         unsafe {
             // Send CHR ROM/RAM data
-            let chr_tex = create_data_texture(&gl, nes.cartridge.get_pattern_table());
+            let chr_tex = gl.create_texture().unwrap();
 
             // Create program for rendering sprites to texture
             let sprite_program = gl.create_program().expect("Unable to create program");
@@ -89,7 +91,7 @@ impl Screen {
             let verts: [i32; 2 * 32 * 30] = core::array::from_fn(|i| i as i32);
             let background_vao = buffer_data_slice(&gl, &background_program, &verts);
 
-            let (texture_buffer, texture_vao, texture_program) =
+            let (screen_fbo, screen_vao, screen_program, screen_texture) =
                 create_screen_texture(&gl, (256, 240));
             // Load pallete
             let palette_data: &[u8] = include_bytes!("../2C02G_wiki.pal");
@@ -148,9 +150,10 @@ impl Screen {
                 gl,
                 sprite_program,
                 vao_array,
-                texture_program,
-                texture_buffer,
-                texture_vao,
+                screen_fbo,
+                screen_program,
+                screen_texture,
+                screen_vao,
                 palette,
                 background_program,
                 background_vao,
@@ -163,9 +166,11 @@ impl Screen {
 
     pub fn render(&mut self, nes: &Nes, window_size: (u32, u32)) {
         unsafe {
+            self.refresh_chr_texture(nes);
             self.gl.use_program(Some(self.sprite_program));
             self.gl
-                .bind_framebuffer(glow::FRAMEBUFFER, Some(self.texture_buffer));
+                .bind_framebuffer(glow::FRAMEBUFFER, Some(self.screen_fbo));
+            self.gl.bind_texture(glow::TEXTURE_2D, Some(self.chr_tex));
             // Set clear color
             let clear_color = self.palette[(nes.ppu.palette_ram[0] & 0x3F) as usize];
             self.gl
@@ -174,17 +179,14 @@ impl Screen {
             self.gl.clear(glow::COLOR_BUFFER_BIT);
 
             // Set pattern table
-            // set_data_texture_data(&self.gl, &self.chr_tex, nes.cartridge.get_pattern_table());
-            self.gl.finish();
-
             self.gl.use_program(Some(self.tile_program));
             check_error!(self.gl);
             // Render OAM
+            self.gl.viewport(0, 0, 256, 240);
             nes.ppu.oam.chunks(4).for_each(|obj| {
                 let position_loc = self.gl.get_uniform_location(self.tile_program, "position");
                 self.gl
                     .uniform_2_f32(position_loc.as_ref(), obj[3] as f32, obj[0] as f32);
-                self.gl.viewport(0, 0, 256, 240);
                 self.gl.bind_vertex_array(Some(self.tile_vao));
                 self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
             });
@@ -203,13 +205,68 @@ impl Screen {
 
             self.gl.finish();
             self.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
-            self.gl.use_program(Some(self.texture_program));
+            check_error!(self.gl);
+            self.gl.use_program(Some(self.screen_program));
+            self.gl
+                .bind_texture(glow::TEXTURE_2D, Some(self.screen_texture));
+            check_error!(self.gl);
             self.gl
                 .viewport(0, 0, window_size.0 as i32, window_size.1 as i32);
-            self.gl.bind_vertex_array(Some(self.texture_vao));
+            check_error!(self.gl);
+            self.gl.bind_vertex_array(Some(self.screen_vao));
+            check_error!(self.gl);
             self.gl.draw_arrays(glow::TRIANGLES, 0, 6);
+            check_error!(self.gl);
             self.gl.finish();
         }
+    }
+    unsafe fn refresh_chr_texture(&mut self, nes: &Nes) {
+        let pattern_table = nes.cartridge.get_pattern_table();
+        let texture_data: Vec<u8> = pattern_table
+            .chunks(16)
+            .map(|sprite_data| {
+                (0..(8 * 8)).map(|i| {
+                    let less_sig = (sprite_data[i / 8] >> (7 - i % 8)) & 0x01;
+                    let more_sig = (sprite_data[i / 8 + 8] >> (7 - i % 8)) & 0x01;
+                    2 * more_sig + less_sig
+                })
+            })
+            .flatten()
+            .collect();
+        self.gl.bind_texture(glow::TEXTURE_2D, Some(self.chr_tex));
+        check_error!(self.gl);
+        // Generate a texture 8 pixels long to use for the CHR ROM/RAM
+        let width = 8;
+        self.gl.tex_image_2d(
+            glow::TEXTURE_2D,
+            0,
+            glow::RED as i32,
+            width,
+            texture_data.len() as i32 / width,
+            0,
+            glow::RED,
+            glow::UNSIGNED_BYTE,
+            Some(&texture_data),
+        );
+        check_error!(self.gl);
+        self.gl.tex_parameter_i32(
+            glow::TEXTURE_2D,
+            glow::TEXTURE_MIN_FILTER,
+            glow::NEAREST as i32,
+        );
+        check_error!(self.gl);
+        self.gl.tex_parameter_i32(
+            glow::TEXTURE_2D,
+            glow::TEXTURE_MAG_FILTER,
+            glow::NEAREST as i32,
+        );
+        check_error!(self.gl);
+        self.gl.tex_parameter_i32(
+            glow::TEXTURE_2D,
+            glow::TEXTURE_MIN_FILTER,
+            glow::NEAREST as i32,
+        );
+        check_error!(self.gl);
     }
     fn get_nametable(&self, addr: usize, nes: &Nes) -> Vec<u8> {
         match nes.cartridge.nametable_arrangement {

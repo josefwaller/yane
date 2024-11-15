@@ -166,7 +166,7 @@ pub unsafe fn buffer_data_slice(gl: &Context, program: &Program, data: &[i32]) -
 pub unsafe fn create_screen_texture(
     gl: &Context,
     size: (usize, usize),
-) -> (NativeFramebuffer, VertexArray, NativeProgram) {
+) -> (NativeFramebuffer, VertexArray, NativeProgram, NativeTexture) {
     info!("Creating screen buffer with size {:?}", size);
     check_error!(gl);
     let texture_program = gl.create_program().unwrap();
@@ -263,5 +263,5 @@ pub unsafe fn create_screen_texture(
     if status != glow::FRAMEBUFFER_COMPLETE {
         panic!("Error creating frame buffer: {:X}", status);
     }
-    (texture_buffer, vao, texture_program)
+    (texture_buffer, vao, texture_program, render_texture)
 }

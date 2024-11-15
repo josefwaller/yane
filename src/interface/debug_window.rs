@@ -88,7 +88,7 @@ impl DebugWindow {
                 core::array::from_fn(|j| palette_data[3 * i + j] as f32 / 255.0)
             });
             check_error!(gl);
-            let (texture_framebuffer, texture_vao, texture_program) =
+            let (texture_framebuffer, texture_vao, texture_program, _render_texture) =
                 create_screen_texture(&gl, (8 * num_columns, 8 * num_rows));
 
             let platform = SdlPlatform::new(&mut imgui);
