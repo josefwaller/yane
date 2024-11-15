@@ -211,6 +211,8 @@ impl Screen {
                         nes.ppu.get_background_pattern_table_addr() / 0x10
                             + nametable[32 * y + x] as usize,
                         palette_index,
+                        false,
+                        false,
                         &palette,
                     );
                 });
@@ -223,6 +225,8 @@ impl Screen {
                     obj[0] as usize,
                     obj[1] as usize,
                     4 + (obj[2] & 0x03) as usize,
+                    (obj[2] & 0x80) != 0,
+                    (obj[2] & 0x40) != 0,
                     &palette,
                 );
                 // let position_loc = self.gl.get_uniform_location(self.tile_program, "position");
@@ -261,6 +265,8 @@ impl Screen {
         y: usize,
         tile_addr: usize,
         palette_index: usize,
+        flip_vert: bool,
+        flip_horz: bool,
         palette: &[[f32; 3]; 0x20],
     ) {
         // Set position
@@ -268,11 +274,13 @@ impl Screen {
         self.gl.uniform_2_f32(loc.as_ref(), x as f32, y as f32);
         // Set address
         set_int_uniform(&self.gl, &self.tile_program, "tileIndex", tile_addr as i32);
-        let pos = self.gl.get_uniform_location(self.tile_program, "palette");
+        let loc = self.gl.get_uniform_location(self.tile_program, "palette");
         self.gl.uniform_3_f32_slice(
-            pos.as_ref(),
+            loc.as_ref(),
             palette[(4 * palette_index)..(4 * palette_index + 4)].as_flattened(),
         );
+        set_bool_uniform(&self.gl, &self.tile_program, "flipVertical", flip_vert);
+        set_bool_uniform(&self.gl, &self.tile_program, "flipHorizontal", flip_horz);
         self.gl.bind_vertex_array(Some(self.tile_vao));
         self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
     }
