@@ -184,7 +184,7 @@ impl Screen {
         self.gl.use_program(Some(self.background_program));
         self.gl.bind_vertex_array(Some(self.background_vao));
         // Set texture
-        const TEX_NUM: i32 = 0;
+        const TEX_NUM: i32 = 2;
         self.gl.active_texture(glow::TEXTURE0 + TEX_NUM as u32);
         check_error!(self.gl);
         self.gl.bind_texture(glow::TEXTURE_2D, Some(self.chr_tex));
@@ -267,8 +267,14 @@ impl Screen {
             self.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
             check_error!(self.gl);
             self.gl.use_program(Some(self.screen_program));
+            const TEX_NUM: i32 = 1;
+            self.gl.active_texture(glow::TEXTURE0 + TEX_NUM as u32);
             self.gl
                 .bind_texture(glow::TEXTURE_2D, Some(self.screen_texture));
+            let loc = self
+                .gl
+                .get_uniform_location(self.screen_program, "renderedTexture");
+            self.gl.uniform_1_i32(loc.as_ref(), TEX_NUM);
             check_error!(self.gl);
             self.gl
                 .viewport(0, 0, window_size.0 as i32, window_size.1 as i32);
