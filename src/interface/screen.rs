@@ -1,25 +1,26 @@
-use crate::{check_error, interface::window, utils::*, NametableArrangement, Nes};
+use crate::{check_error, utils::*, NametableArrangement, Nes};
 use glow::*;
 use log::*;
 
 // Renders the PPU
 pub struct Screen {
     gl: Context,
-    sprite_program: NativeProgram,
-    vao_array: [NativeVertexArray; 64],
+    palette: [[f32; 3]; 0x40],
+    chr_tex: NativeTexture,
     // Stuff for rendering to screen
     screen_fbo: NativeFramebuffer,
     screen_texture: NativeTexture,
     screen_program: NativeProgram,
     screen_vao: NativeVertexArray,
-    palette: [[f32; 3]; 0x40],
+    // Stuff for rendering the background
     background_program: NativeProgram,
     background_vao: NativeVertexArray,
+    // Stuff for rendering a single tile
     tile_program: NativeProgram,
     tile_vao: NativeVertexArray,
+    // Stuff for rendering a scanline
     scanline_program: NativeProgram,
     scanline_vao: NativeVertexArray,
-    chr_tex: NativeTexture,
 }
 impl Screen {
     // TODO: Rename
@@ -29,58 +30,17 @@ impl Screen {
             // Send CHR ROM/RAM data
             let chr_tex = gl.create_texture().unwrap();
 
-            // Create program for rendering sprites to texture
-            let sprite_program = gl.create_program().expect("Unable to create program");
-            compile_and_link_shader(
-                &gl,
-                glow::VERTEX_SHADER,
-                include_str!("../shaders/pass_through.vert"),
-                &sprite_program,
-            );
-            compile_and_link_shader(
-                &gl,
-                glow::GEOMETRY_SHADER,
-                include_str!("../shaders/oam.geom"),
-                &sprite_program,
-            );
-            compile_and_link_shader(
-                &gl,
-                glow::FRAGMENT_SHADER,
-                include_str!("../shaders/old_tile.frag"),
-                &sprite_program,
-            );
-
-            gl.link_program(sprite_program);
-            if !gl.get_program_link_status(sprite_program) {
-                panic!(
-                    "Couldn't link program: {}",
-                    gl.get_program_info_log(sprite_program)
-                );
-            }
-
-            let vao_array = core::array::from_fn(|i| {
-                // Our "vertice" is a 1-D vector with the OAM ID in it
-                let vertices = [i as i32];
-                buffer_data_slice(&gl, &sprite_program, &vertices)
-            });
-
             let background_program = gl.create_program().expect("Unable to create program!");
             compile_and_link_shader(
                 &gl,
                 glow::VERTEX_SHADER,
-                include_str!("../shaders/pass_through.vert"),
-                &background_program,
-            );
-            compile_and_link_shader(
-                &gl,
-                glow::GEOMETRY_SHADER,
-                include_str!("../shaders/background.geom"),
+                include_str!("../shaders/background.vert"),
                 &background_program,
             );
             compile_and_link_shader(
                 &gl,
                 glow::FRAGMENT_SHADER,
-                include_str!("../shaders/old_tile.frag"),
+                include_str!("../shaders/tile.frag"),
                 &background_program,
             );
 
@@ -91,8 +51,9 @@ impl Screen {
                     gl.get_program_info_log(background_program)
                 );
             }
-            let verts: [i32; 2 * 32 * 30] = core::array::from_fn(|i| i as i32);
-            let background_vao = buffer_data_slice(&gl, &background_program, &verts);
+            let verts: [[f32; 8]; 64] =
+                core::array::from_fn(|_| [0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0]);
+            let background_vao = create_f32_slice_vao(&gl, verts.as_flattened(), 2);
 
             let (screen_fbo, screen_vao, screen_program, screen_texture) =
                 create_screen_texture(&gl, (256, 240));
@@ -160,8 +121,6 @@ impl Screen {
 
             Screen {
                 gl,
-                sprite_program,
-                vao_array,
                 screen_fbo,
                 screen_program,
                 screen_texture,
@@ -178,11 +137,11 @@ impl Screen {
         }
     }
 
-    pub unsafe fn render_scanline(&mut self, nes: &Nes, window_size: (u32, u32), scanline: usize) {
+    pub unsafe fn render_scanline(&mut self, nes: &Nes, scanline: usize) {
+        // Enable stencil test
         self.gl.enable(glow::STENCIL_TEST);
+        self.gl.disable(glow::DEPTH_TEST);
         self.gl.viewport(0, 0, 256, 240);
-        self.gl.bind_texture(glow::TEXTURE_2D, Some(self.chr_tex));
-
         self.gl
             .bind_framebuffer(glow::FRAMEBUFFER, Some(self.screen_fbo));
         // Set stencil buffer to only the one line
@@ -219,29 +178,68 @@ impl Screen {
         self.gl.stencil_op(glow::KEEP, glow::KEEP, glow::KEEP);
         check_error!(self.gl);
 
-        // Set pattern table
-        self.gl.use_program(Some(self.tile_program));
-        check_error!(self.gl);
-        let palette = nes.ppu.palette_ram.map(|i| self.palette[i as usize]);
         // Render background
         let nametable = self.get_nametable(nes.ppu.get_base_nametable(), nes);
-        let y = scanline / 8;
-        (0..32).for_each(|x| {
-            let tile_index = 32 * y + x;
-            let palette_byte = nametable[0x3C0 + (x / 4) + 8 * (y / 4)];
-            let pal_x = (x % 4) / 2;
-            let pal_y = (y % 4) / 2;
-            let palette_index = ((palette_byte >> (2 * (2 * pal_y + pal_x))) & 0x03) as usize;
-            self.render_tile(
-                8 * x,
-                8 * y,
-                nes.ppu.get_background_pattern_table_addr() / 0x10 + nametable[tile_index] as usize,
-                palette_index,
-                false,
-                false,
-                &palette,
-            );
+        let nametable_row_index = scanline / 8;
+        self.gl.use_program(Some(self.background_program));
+        self.gl.bind_vertex_array(Some(self.background_vao));
+        // Set texture
+        const TEX_NUM: i32 = 0;
+        self.gl.active_texture(glow::TEXTURE0 + TEX_NUM as u32);
+        check_error!(self.gl);
+        self.gl.bind_texture(glow::TEXTURE_2D, Some(self.chr_tex));
+        check_error!(self.gl);
+        let loc = self
+            .gl
+            .get_uniform_location(self.background_program, "chrTex");
+        check_error!(self.gl);
+        self.gl.uniform_1_i32(loc.as_ref(), TEX_NUM);
+        check_error!(self.gl);
+        // Set position
+        let loc = self
+            .gl
+            .get_uniform_location(self.background_program, "nametableRow");
+        let row: Vec<i32> = nametable[(32 * nametable_row_index)..(32 * nametable_row_index + 32)]
+            .iter()
+            .map(|i| (nes.ppu.get_background_pattern_table_addr() / 0x10) as i32 + *i as i32)
+            .collect();
+        self.gl.uniform_1_i32_slice(loc.as_ref(), row.as_slice());
+        set_int_uniform(
+            &self.gl,
+            &self.background_program,
+            "scanline",
+            scanline as i32,
+        );
+        let palette_indices: [i32; 32] = core::array::from_fn(|i| {
+            // Get the X,Y coords of the 4x4 tile area whose palette is controlled by a single byte
+            let area_x = i / 4;
+            let area_y = nametable_row_index / 4;
+            // Get the config byte
+            let config_byte = nametable[0x3C0 + (8 * area_y + area_x)];
+            // Get the specific 2 bit value that controls this tile's palette
+            let x = (i / 2) % 2;
+            let y = (nametable_row_index / 2) % 2;
+            ((config_byte >> (2 * (2 * y + x))) & 0x03) as i32
         });
+        let loc = self
+            .gl
+            .get_uniform_location(self.background_program, "paletteIndices");
+        self.gl.uniform_1_i32_slice(loc.as_ref(), &palette_indices);
+        let palette = nes.ppu.palette_ram.map(|i| self.palette[i as usize]);
+        let loc = self
+            .gl
+            .get_uniform_location(self.background_program, "palette");
+        self.gl
+            .uniform_3_f32_slice(loc.as_ref(), palette.as_flattened());
+        self.gl
+            .draw_arrays_instanced(glow::TRIANGLE_STRIP, 0, 4, 64);
+
+        self.gl.use_program(Some(self.tile_program));
+        check_error!(self.gl);
+        // Set texture
+        let loc = self.gl.get_uniform_location(self.tile_program, "chrTex");
+        self.gl.uniform_1_i32(loc.as_ref(), TEX_NUM);
+
         // Render OAM
         let oam_to_render: Vec<&[u8]> = nes
             .ppu
@@ -299,12 +297,16 @@ impl Screen {
         // Set address
         set_int_uniform(&self.gl, &self.tile_program, "tileIndex", tile_addr as i32);
         let loc = self.gl.get_uniform_location(self.tile_program, "palette");
-        self.gl.uniform_3_f32_slice(
-            loc.as_ref(),
-            palette[(4 * palette_index)..(4 * palette_index + 4)].as_flattened(),
-        );
+        self.gl
+            .uniform_3_f32_slice(loc.as_ref(), palette.as_flattened());
         set_bool_uniform(&self.gl, &self.tile_program, "flipVertical", flip_vert);
         set_bool_uniform(&self.gl, &self.tile_program, "flipHorizontal", flip_horz);
+        set_int_uniform(
+            &self.gl,
+            &self.tile_program,
+            "oamPaletteIndex",
+            palette_index as i32,
+        );
         self.gl.bind_vertex_array(Some(self.tile_vao));
         self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
     }
@@ -349,12 +351,6 @@ impl Screen {
             glow::NEAREST as i32,
         );
         check_error!(self.gl);
-        self.gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_MIN_FILTER,
-            glow::NEAREST as i32,
-        );
-        check_error!(self.gl);
     }
     fn get_nametable(&self, addr: usize, nes: &Nes) -> Vec<u8> {
         match nes.cartridge.nametable_arrangement {
@@ -370,114 +366,5 @@ impl Screen {
                 nes.cartridge.nametable_arrangement
             ),
         }
-    }
-    unsafe fn render_background(&mut self, nes: &Nes) {
-        self.gl.use_program(Some(self.background_program));
-        self.gl.bind_vertex_array(Some(self.background_vao));
-        self.setup_render_uniforms(&self.background_program, nes);
-        // Set nametable
-        let nametable_uni = self
-            .gl
-            .get_uniform_location(self.background_program, "nametable");
-        let base_nametable = nes.ppu.get_base_nametable();
-        // Build the two nametables
-        let n: Vec<i32> = [
-            // First nametable
-            self.get_nametable(base_nametable, nes),
-            // Second nametable
-            self.get_nametable(base_nametable + 0x400, nes),
-        ]
-        .concat()[0..0x800]
-            // Pack nametable tightly
-            .chunks(4)
-            .map(|b| {
-                ((b[3] as i32) << 24) + ((b[2] as i32) << 16) + ((b[1] as i32) << 8) + b[0] as i32
-            })
-            .collect();
-        self.gl
-            .uniform_1_i32_slice(nametable_uni.as_ref(), n.as_slice());
-        set_int_uniform(
-            &self.gl,
-            &self.background_program,
-            "backgroundPatternLocation",
-            nes.ppu.get_background_pattern_table_addr() as i32,
-        );
-        set_bool_uniform(
-            &self.gl,
-            &self.background_program,
-            "hideLeftmostBackground",
-            nes.ppu.should_hide_leftmost_background(),
-        );
-        self.gl.finish();
-        self.gl.draw_arrays(glow::POINTS, 0, 2 * 30 * 32);
-    }
-
-    unsafe fn render_sprites(&mut self, nes: &Nes, priority: i32) {
-        self.gl.use_program(Some(self.sprite_program));
-        check_error!(self.gl);
-        self.setup_render_uniforms(&self.sprite_program, nes);
-        // Pipe OAM data to GLSL
-        let oam_uni = self.gl.get_uniform_location(self.sprite_program, "oamData");
-        let oam_data: [u32; 4 * 64] = core::array::from_fn(|i| nes.ppu.oam[i] as u32);
-        self.gl.uniform_1_u32_slice(oam_uni.as_ref(), &oam_data);
-        check_error!(self.gl);
-        // Set various flags
-        set_bool_uniform(
-            &self.gl,
-            &self.sprite_program,
-            "hide_left_sprites",
-            nes.ppu.should_hide_leftmost_sprites(),
-        );
-        set_bool_uniform(
-            &self.gl,
-            &self.sprite_program,
-            "tallSprites",
-            nes.ppu.is_8x16_sprites(),
-        );
-        set_int_uniform(
-            &self.gl,
-            &self.sprite_program,
-            "spritePatternLocation",
-            nes.ppu.get_spr_pattern_table_addr() as i32,
-        );
-        set_int_uniform(&self.gl, &self.sprite_program, "priority", priority);
-        // Draw sprites as points
-        // GLSL Shaders add pixels to form the full 8x8 sprite
-        // Todo maybe: batch this
-        self.gl.finish();
-        self.vao_array.iter().for_each(|vao| {
-            self.gl.bind_vertex_array(Some(*vao));
-            self.gl.draw_arrays(glow::POINTS, 0, 1);
-        });
-    }
-
-    unsafe fn setup_render_uniforms(&self, program: &NativeProgram, nes: &Nes) {
-        // Set pallete
-        let palette: Vec<i32> = nes.ppu.palette_ram.iter().map(|p| *p as i32).collect();
-        let palette_uni = self.gl.get_uniform_location(*program, "palettes");
-        check_error!(self.gl);
-        self.gl
-            .uniform_1_i32_slice(palette_uni.as_ref(), palette.as_slice());
-        check_error!(self.gl);
-        // Set colors
-        let colors = self.palette.as_flattened();
-        let color_uni = self.gl.get_uniform_location(*program, "colors");
-        check_error!(self.gl);
-        self.gl.uniform_3_f32_slice(color_uni.as_ref(), colors);
-        check_error!(self.gl);
-        // Set tint uniforms
-        set_bool_uniform(&self.gl, program, "redTint", nes.ppu.is_red_tint_on());
-        set_bool_uniform(&self.gl, program, "blueTint", nes.ppu.is_blue_tint_on());
-        set_bool_uniform(&self.gl, program, "greenTint", nes.ppu.is_green_tint_on());
-        // Set greyscale mode
-        set_bool_uniform(
-            &self.gl,
-            program,
-            "greyscaleMode",
-            nes.ppu.is_greyscale_mode_on(),
-        );
-        // Set scroll
-        set_int_uniform(&self.gl, program, "scrollX", nes.ppu.scroll_x as i32);
-        set_int_uniform(&self.gl, program, "scrollY", nes.ppu.scroll_y as i32);
     }
 }

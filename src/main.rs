@@ -105,7 +105,7 @@ fn main() {
             let actual_elapsed = new_delta.duration_since(delta).as_nanos() as u64;
             // If we are going too fast, slow down
             if emu_elapsed > actual_elapsed {
-                sleep(Duration::from_nanos(emu_elapsed - actual_elapsed));
+                // sleep(Duration::from_nanos(emu_elapsed - actual_elapsed));
             }
             delta = new_delta;
         }

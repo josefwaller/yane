@@ -5,9 +5,13 @@ in vec2 vertexPos;
 uniform vec2 position;
 uniform bool flipVertical;
 uniform bool flipHorizontal;
+uniform int tileIndex;
+uniform int oamPaletteIndex;
 
 const vec2 SCREEN_SIZE = vec2(256, 240);
 out vec2 UV;
+out float tileAddr;
+out float paletteIndex;
 
 void main() {
     // Invert Y in order match GL window orientation
@@ -32,4 +36,6 @@ void main() {
         1.0
     );
     UV = vec2(vec3(vertexPos, 1) * (flipHorizontal ? flipX : mat3(1.0)) * (flipVertical ? flipY : mat3(1.0)));
+    tileAddr = float(tileIndex);
+    paletteIndex = float(oamPaletteIndex);
 }

@@ -63,8 +63,7 @@ impl Window {
     pub fn render_scanline(&mut self, nes: &Nes, scanline: usize) {
         self.window.gl_make_current(&self.gl_context).unwrap();
         unsafe {
-            self.screen
-                .render_scanline(nes, self.window.size(), scanline);
+            self.screen.render_scanline(nes, scanline);
         }
     }
     pub fn render(&mut self, nes: &mut Nes) {
