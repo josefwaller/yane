@@ -69,13 +69,12 @@ fn main() {
                     s2 = Instant::now();
                 }
             }
-            if Instant::now().duration_since(last_render) >= Duration::from_millis(1000 / 60 / 240)
-            {
-                last_render = Instant::now();
+            let scanline_duration = Duration::from_nanos(1_000_000_000 / 60 / 256);
+            if Instant::now().duration_since(last_render) >= scanline_duration {
+                last_render += scanline_duration;
                 if scanline < 240 {
                     window.render_scanline(&nes, scanline);
-                }
-                if scanline == 256 {
+                } else if scanline == 256 {
                     scanline = 0;
                     window.render(&mut nes);
                     debug_window.render(&nes, &event_pump);
@@ -105,7 +104,7 @@ fn main() {
             let actual_elapsed = new_delta.duration_since(delta).as_nanos() as u64;
             // If we are going too fast, slow down
             if emu_elapsed > actual_elapsed {
-                // sleep(Duration::from_nanos(emu_elapsed - actual_elapsed));
+                sleep(Duration::from_nanos(emu_elapsed - actual_elapsed));
             }
             delta = new_delta;
         }
