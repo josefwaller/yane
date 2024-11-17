@@ -21,6 +21,9 @@ pub struct Screen {
     // Stuff for rendering a scanline
     scanline_program: NativeProgram,
     scanline_vao: NativeVertexArray,
+    // Program for rendering a primitve using wireframe
+    wireframe_program: NativeProgram,
+    wireframe_vao: NativeVertexArray,
 }
 impl Screen {
     // TODO: Rename
@@ -109,14 +112,40 @@ impl Screen {
                 &scanline_program,
             );
             gl.link_program(scanline_program);
-            if !gl.get_program_link_status(tile_program) {
+            if !gl.get_program_link_status(scanline_program) {
                 panic!(
                     "Couldn't link program: {}",
-                    gl.get_program_info_log(tile_program)
+                    gl.get_program_info_log(scanline_program)
                 );
             }
             let scanline_vao =
                 create_f32_slice_vao(&gl, [[0.0, 0.0], [1.0, 0.0]].as_flattened(), 2);
+
+            let wireframe_program = gl.create_program().unwrap();
+            compile_and_link_shader(
+                &gl,
+                glow::VERTEX_SHADER,
+                include_str!("../shaders/tile.vert"),
+                &wireframe_program,
+            );
+            compile_and_link_shader(
+                &gl,
+                glow::FRAGMENT_SHADER,
+                include_str!("../shaders/color.frag"),
+                &wireframe_program,
+            );
+            gl.link_program(wireframe_program);
+            if !gl.get_program_link_status(wireframe_program) {
+                panic!(
+                    "Couldn't link program: {}",
+                    gl.get_program_info_log(wireframe_program)
+                );
+            }
+            let wireframe_vao = create_f32_slice_vao(
+                &gl,
+                [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]].as_flattened(),
+                2,
+            );
 
             Screen {
                 gl,
@@ -132,6 +161,8 @@ impl Screen {
                 tile_vao,
                 scanline_program,
                 scanline_vao,
+                wireframe_program,
+                wireframe_vao,
             }
         }
     }
@@ -269,6 +300,7 @@ impl Screen {
         unsafe {
             self.gl.disable(glow::STENCIL_TEST);
             self.gl.disable(glow::DEPTH_TEST);
+
             self.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
             self.gl.clear_color(0.0, 0.0, 0.0, 1.0);
             self.gl.clear(glow::COLOR_BUFFER_BIT);
@@ -290,6 +322,24 @@ impl Screen {
             check_error!(self.gl);
             self.gl.draw_arrays(glow::TRIANGLES, 0, 6);
             check_error!(self.gl);
+
+            // Render wireframe box around each OAM object
+            self.gl.use_program(Some(self.wireframe_program));
+            self.gl.bind_vertex_array(Some(self.wireframe_vao));
+            check_error!(self.gl);
+            nes.ppu.oam.chunks(4).for_each(|obj| {
+                let loc = self
+                    .gl
+                    .get_uniform_location(self.wireframe_program, "position");
+                self.gl
+                    .uniform_2_f32(loc.as_ref(), obj[3] as f32, obj[0] as f32);
+                let loc = self
+                    .gl
+                    .get_uniform_location(self.wireframe_program, "inColor");
+                self.gl.uniform_3_f32(loc.as_ref(), 1.0, 0.0, 0.0);
+                self.gl.draw_arrays(glow::LINE_LOOP, 0, 4);
+            });
+
             self.gl.finish();
             self.refresh_chr_texture(nes);
         }
