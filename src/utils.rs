@@ -302,6 +302,8 @@ pub unsafe fn create_screen_texture(
         glow::UNSIGNED_INT_24_8,
         None,
     );
+    check_error!(gl);
+    // Add a stencil and depth attachment
     gl.framebuffer_texture_2d(
         glow::FRAMEBUFFER,
         glow::DEPTH_STENCIL_ATTACHMENT,
@@ -309,5 +311,10 @@ pub unsafe fn create_screen_texture(
         Some(depth_stencil_tex),
         0,
     );
+    check_error!(gl);
+    let status = gl.check_framebuffer_status(glow::FRAMEBUFFER);
+    if status != glow::FRAMEBUFFER_COMPLETE {
+        panic!("Error creating frame buffer: {:X}", status);
+    }
     (texture_buffer, vao, texture_program, render_texture)
 }

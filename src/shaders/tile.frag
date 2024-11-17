@@ -8,6 +8,7 @@ uniform sampler2D chrTex;
 // this should actually be an int
 in float tileAddr;
 in float paletteIndex;
+in float depth;
 
 out vec4 color;
 
@@ -18,4 +19,6 @@ void main() {
         discard;
     }
     color = vec4(palette[4 * int(paletteIndex) + int(index)], 1.0);
+    gl_FragDepth = depth;
+    // color = vec4(gl_FragDepth, 0, 0, 1);
 }

@@ -26,7 +26,6 @@ impl Screen {
     // TODO: Rename
     pub fn new(nes: &Nes, gl: Context) -> Screen {
         unsafe {
-            gl.disable(glow::DEPTH_TEST);
             // Send CHR ROM/RAM data
             let chr_tex = gl.create_texture().unwrap();
 
@@ -140,13 +139,17 @@ impl Screen {
     pub unsafe fn render_scanline(&mut self, nes: &Nes, scanline: usize) {
         // Enable stencil test
         self.gl.enable(glow::STENCIL_TEST);
-        self.gl.disable(glow::DEPTH_TEST);
+        self.gl.enable(glow::DEPTH_TEST);
+        self.gl.depth_func(glow::ALWAYS);
+        self.gl.depth_mask(true);
+        check_error!(self.gl);
         self.gl.viewport(0, 0, 256, 240);
         self.gl
             .bind_framebuffer(glow::FRAMEBUFFER, Some(self.screen_fbo));
         // Set stencil buffer to only the one line
-        self.gl.stencil_mask(0x00);
-        self.gl.clear(glow::STENCIL_BUFFER_BIT);
+        self.gl.stencil_mask(0xFF);
+        self.gl
+            .clear(glow::STENCIL_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
         check_error!(self.gl);
         self.gl.stencil_func(glow::ALWAYS, 1, 0xFF);
         self.gl.stencil_mask(0xFF);
@@ -176,6 +179,7 @@ impl Screen {
         self.gl.enable(glow::STENCIL_TEST);
         self.gl.stencil_func(glow::EQUAL, 1, 0xFF);
         self.gl.stencil_op(glow::KEEP, glow::KEEP, glow::KEEP);
+        self.gl.depth_func(glow::LESS);
         check_error!(self.gl);
 
         // Render background
@@ -245,7 +249,7 @@ impl Screen {
             .ppu
             .oam
             .chunks(4)
-            .filter(|obj| obj[0] as usize <= scanline && obj[0] as usize + 8 > scanline)
+            .filter(|obj| obj[0] as usize <= scanline && obj[0] as usize + 8 >= scanline)
             .collect();
         oam_to_render.iter().take(8).for_each(|obj| {
             self.render_tile(
@@ -264,7 +268,10 @@ impl Screen {
     pub fn render(&mut self, nes: &Nes, window_size: (u32, u32)) {
         unsafe {
             self.gl.disable(glow::STENCIL_TEST);
+            self.gl.disable(glow::DEPTH_TEST);
             self.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+            self.gl.clear_color(0.0, 0.0, 0.0, 1.0);
+            self.gl.clear(glow::COLOR_BUFFER_BIT);
             check_error!(self.gl);
             self.gl.use_program(Some(self.screen_program));
             const TEX_NUM: i32 = 1;
