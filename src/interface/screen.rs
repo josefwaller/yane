@@ -231,14 +231,6 @@ impl Screen {
         self.gl.uniform_1_i32(loc.as_ref(), TEX_NUM);
         check_error!(self.gl);
         // Set position
-        let loc = self
-            .gl
-            .get_uniform_location(self.background_program, "nametableRow");
-        let row: Vec<i32> = nametable[(32 * nametable_row_index)..(32 * nametable_row_index + 32)]
-            .iter()
-            .map(|i| (nes.ppu.get_background_pattern_table_addr() / 0x10) as i32 + *i as i32)
-            .collect();
-        self.gl.uniform_1_i32_slice(loc.as_ref(), row.as_slice());
         set_int_uniform(
             &self.gl,
             &self.background_program,
@@ -256,18 +248,27 @@ impl Screen {
             let y = (nametable_row_index / 2) % 2;
             ((config_byte >> (2 * (2 * y + x))) & 0x03) as i32
         });
-        let loc = self
-            .gl
-            .get_uniform_location(self.background_program, "paletteIndices");
-        self.gl.uniform_1_i32_slice(loc.as_ref(), &palette_indices);
         let palette = nes.ppu.palette_ram.map(|i| self.palette[i as usize]);
-        let loc = self
-            .gl
-            .get_uniform_location(self.background_program, "palette");
-        self.gl
-            .uniform_3_f32_slice(loc.as_ref(), palette.as_flattened());
-        self.gl
-            .draw_arrays_instanced(glow::TRIANGLE_STRIP, 0, 4, 64);
+
+        // We build a big table to tiles to render, and then render them all in one draw_arrays_instanced call
+        let tiles_pos: Vec<(i32, i32)> = (0..32)
+            .map(|i| (8 * i as i32, 8 * nametable_row_index as i32))
+            .collect();
+
+        let tiles_pattern_num = (0..32)
+            .map(|i| {
+                nes.ppu.get_background_pattern_table_addr() as i32 / 0x10
+                    + nametable[32 * nametable_row_index + i] as i32
+            })
+            .collect();
+
+        self.bulk_render_tiles(
+            tiles_pos,
+            tiles_pattern_num,
+            palette_indices.to_vec(),
+            &palette,
+            scanline,
+        );
 
         self.gl.use_program(Some(self.tile_program));
         check_error!(self.gl);
@@ -344,6 +345,50 @@ impl Screen {
             self.refresh_chr_texture(nes);
         }
     }
+    unsafe fn bulk_render_tiles(
+        &self,
+        pos: Vec<(i32, i32)>,
+        pattern_nums: Vec<i32>,
+        palette_indices: Vec<i32>,
+        palette: &[[f32; 3]; 0x20],
+        scanline: usize,
+    ) {
+        self.gl.use_program(Some(self.background_program));
+        let loc = self
+            .gl
+            .get_uniform_location(self.background_program, "patternIndices");
+        let row = pattern_nums;
+        // let row = vec![0; 32];
+        self.gl.uniform_1_i32_slice(loc.as_ref(), row.as_slice());
+        check_error!(self.gl);
+
+        // Set position
+        let loc = self
+            .gl
+            .get_uniform_location(self.background_program, "positions");
+        let temp_pos: Vec<i32> = pos.iter().map(|a| [a.0, a.1]).flatten().collect();
+        self.gl
+            .uniform_2_i32_slice(loc.as_ref(), temp_pos.as_slice());
+        check_error!(self.gl);
+        set_int_uniform(
+            &self.gl,
+            &self.background_program,
+            "scanline",
+            scanline as i32,
+        );
+        let loc = self
+            .gl
+            .get_uniform_location(self.background_program, "paletteIndices");
+        self.gl.uniform_1_i32_slice(loc.as_ref(), &palette_indices);
+        let loc = self
+            .gl
+            .get_uniform_location(self.background_program, "palette");
+        self.gl
+            .uniform_3_f32_slice(loc.as_ref(), palette.as_flattened());
+        self.gl
+            .draw_arrays_instanced(glow::TRIANGLE_STRIP, 0, 4, pos.len() as i32);
+    }
+
     unsafe fn render_tile(
         &self,
         x: usize,
