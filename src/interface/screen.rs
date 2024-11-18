@@ -1,4 +1,4 @@
-use crate::{check_error, utils::*, NametableArrangement, Nes};
+use crate::{check_error, set_uniform, utils::*, NametableArrangement, Nes};
 use glow::*;
 use log::*;
 
@@ -336,43 +336,60 @@ impl Screen {
         check_error!(self.gl);
         self.gl.bind_texture(glow::TEXTURE_2D, Some(self.chr_tex));
         check_error!(self.gl);
-        let loc = self.gl.get_uniform_location(self.tile_program, "chrTex");
-        self.gl.uniform_1_i32(loc.as_ref(), TEX_NUM);
-        // Set pattern
-        let loc = self
-            .gl
-            .get_uniform_location(self.tile_program, "patternIndices");
-        let row = pattern_nums;
-        // let row = vec![0; 32];
-        self.gl.uniform_1_i32_slice(loc.as_ref(), row.as_slice());
-        check_error!(self.gl);
+        set_uniform!(self.gl, self.tile_program, "chrTex", uniform_1_i32, TEX_NUM);
+        set_uniform!(
+            self.gl,
+            self.tile_program,
+            "patternIndices",
+            uniform_1_i32_slice,
+            pattern_nums.as_slice()
+        );
 
         // Set position
-        let loc = self.gl.get_uniform_location(self.tile_program, "positions");
         let temp_pos: Vec<i32> = pos.iter().map(|a| [a.0, a.1]).flatten().collect();
-        self.gl
-            .uniform_2_i32_slice(loc.as_ref(), temp_pos.as_slice());
-        check_error!(self.gl);
+        set_uniform!(
+            self.gl,
+            self.tile_program,
+            "positions",
+            uniform_2_i32_slice,
+            temp_pos.as_slice()
+        );
         set_int_uniform(&self.gl, &self.tile_program, "scanline", scanline as i32);
-        let loc = self
-            .gl
-            .get_uniform_location(self.tile_program, "paletteIndices");
-        self.gl.uniform_1_i32_slice(loc.as_ref(), &palette_indices);
-        let loc = self.gl.get_uniform_location(self.tile_program, "palette");
-        self.gl
-            .uniform_3_f32_slice(loc.as_ref(), palette.as_flattened());
-        let loc = self.gl.get_uniform_location(self.tile_program, "depths");
-        self.gl.uniform_1_f32_slice(loc.as_ref(), &depths);
-        let loc = self
-            .gl
-            .get_uniform_location(self.tile_program, "flipHorizontal");
-        self.gl
-            .uniform_1_i32_slice(loc.as_ref(), flip_horz.as_slice());
-        let loc = self
-            .gl
-            .get_uniform_location(self.tile_program, "flipVertical");
-        self.gl
-            .uniform_1_i32_slice(loc.as_ref(), flip_vert.as_slice());
+        set_uniform!(
+            self.gl,
+            self.tile_program,
+            "paletteIndices",
+            uniform_1_i32_slice,
+            palette_indices.as_slice()
+        );
+        set_uniform!(
+            self.gl,
+            self.tile_program,
+            "palette",
+            uniform_3_f32_slice,
+            palette.as_flattened()
+        );
+        set_uniform!(
+            self.gl,
+            self.tile_program,
+            "depths",
+            uniform_1_f32_slice,
+            depths.as_slice()
+        );
+        set_uniform!(
+            self.gl,
+            self.tile_program,
+            "flipHorizontal",
+            uniform_1_i32_slice,
+            flip_horz.as_slice()
+        );
+        set_uniform!(
+            self.gl,
+            self.tile_program,
+            "flipVertical",
+            uniform_1_i32_slice,
+            flip_vert.as_slice()
+        );
         self.gl
             .draw_arrays_instanced(glow::TRIANGLE_STRIP, 0, 4, pos.len() as i32);
     }

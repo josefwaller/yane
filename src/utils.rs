@@ -10,16 +10,31 @@ use sdl2::{
 #[macro_export]
 macro_rules! check_error {
     ($gl: expr, $str: expr) => {
-        let e = $gl.get_error();
-        if e != glow::NO_ERROR {
-            panic!(
-                "OpenGL error thrown (getError = {:X}, context = \"{}\")",
-                e, $str
-            );
+        #[cfg(debug_assertions)]
+        {
+            let e = $gl.get_error();
+            if e != glow::NO_ERROR {
+                panic!(
+                    "OpenGL error thrown (getError = {:X}, context = \"{}\")",
+                    e, $str
+                );
+            }
         }
     };
     ($gl: expr) => {
         check_error!($gl, "None provided");
+    };
+}
+#[macro_export]
+macro_rules! set_uniform {
+    ($gl: expr, $program: expr, $name: expr, $func: ident, $val: expr) => {
+        let loc = $gl.get_uniform_location($program, $name);
+        check_error!($gl, format!("Getting uniform location {}", $name));
+        $gl.$func(loc.as_ref(), $val);
+        check_error!(
+            $gl,
+            format!("Setting uniform {} value to 0x{:X?}", $name, $val)
+        );
     };
 }
 
