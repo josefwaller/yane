@@ -12,10 +12,7 @@ pub struct Screen {
     screen_texture: NativeTexture,
     screen_program: NativeProgram,
     screen_vao: NativeVertexArray,
-    // Stuff for rendering the background
-    background_program: NativeProgram,
-    background_vao: NativeVertexArray,
-    // Stuff for rendering a single tile
+    // Stuff for rendering a bunch of tiles at once
     tile_program: NativeProgram,
     tile_vao: NativeVertexArray,
     // Stuff for rendering a scanline
@@ -31,51 +28,12 @@ impl Screen {
         unsafe {
             // Send CHR ROM/RAM data
             let chr_tex = gl.create_texture().unwrap();
-
-            let background_program = gl.create_program().expect("Unable to create program!");
+            // Create tile program
+            let tile_program = gl.create_program().expect("Unable to create program!");
             compile_and_link_shader(
                 &gl,
                 glow::VERTEX_SHADER,
                 include_str!("../shaders/background.vert"),
-                &background_program,
-            );
-            compile_and_link_shader(
-                &gl,
-                glow::FRAGMENT_SHADER,
-                include_str!("../shaders/tile.frag"),
-                &background_program,
-            );
-
-            gl.link_program(background_program);
-            if !gl.get_program_link_status(background_program) {
-                panic!(
-                    "Couldn't link program: {}",
-                    gl.get_program_info_log(background_program)
-                );
-            }
-            let verts: [[f32; 8]; 64] =
-                core::array::from_fn(|_| [0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0]);
-            let background_vao = create_f32_slice_vao(&gl, verts.as_flattened(), 2);
-
-            let (screen_fbo, screen_vao, screen_program, screen_texture) =
-                create_screen_texture(&gl, (256, 240));
-            // Load pallete
-            let palette_data: &[u8] = include_bytes!("../2C02G_wiki.pal");
-            let palette: [[f32; 3]; 64] = core::array::from_fn(|i| {
-                core::array::from_fn(|j| palette_data[3 * i + j] as f32 / 255.0)
-            });
-
-            let e = gl.get_error();
-            if e != glow::NO_ERROR {
-                panic!("Error generated sometime during initialization: {:X?}", e);
-            }
-
-            let tile_program = gl.create_program().unwrap();
-            check_error!(gl);
-            compile_and_link_shader(
-                &gl,
-                glow::VERTEX_SHADER,
-                include_str!("../shaders/tile.vert"),
                 &tile_program,
             );
             compile_and_link_shader(
@@ -91,13 +49,21 @@ impl Screen {
                     gl.get_program_info_log(tile_program)
                 );
             }
-            gl.use_program(Some(tile_program));
+            // Create tile vertices
             let tile_vao = create_f32_slice_vao(
                 &gl,
                 [[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]].as_flattened(),
                 2,
             );
 
+            let (screen_fbo, screen_vao, screen_program, screen_texture) =
+                create_screen_texture(&gl, (256, 240));
+            // Load pallete data and convert to RGB values
+            let palette_data: &[u8] = include_bytes!("../2C02G_wiki.pal");
+            let palette: [[f32; 3]; 64] = core::array::from_fn(|i| {
+                core::array::from_fn(|j| palette_data[3 * i + j] as f32 / 255.0)
+            });
+            // Create scanline program
             let scanline_program = gl.create_program().unwrap();
             compile_and_link_shader(
                 &gl,
@@ -154,8 +120,6 @@ impl Screen {
                 screen_texture,
                 screen_vao,
                 palette,
-                background_program,
-                background_vao,
                 chr_tex,
                 tile_program,
                 tile_vao,
@@ -213,31 +177,10 @@ impl Screen {
         self.gl.depth_func(glow::LESS);
         check_error!(self.gl);
 
-        // Render background
+        // Gather information for rendering background
         let nametable = self.get_nametable(nes.ppu.get_base_nametable(), nes);
         let nametable_row_index = scanline / 8;
-        self.gl.use_program(Some(self.background_program));
-        self.gl.bind_vertex_array(Some(self.background_vao));
-        // Set texture
-        const TEX_NUM: i32 = 2;
-        self.gl.active_texture(glow::TEXTURE0 + TEX_NUM as u32);
-        check_error!(self.gl);
-        self.gl.bind_texture(glow::TEXTURE_2D, Some(self.chr_tex));
-        check_error!(self.gl);
-        let loc = self
-            .gl
-            .get_uniform_location(self.background_program, "chrTex");
-        check_error!(self.gl);
-        self.gl.uniform_1_i32(loc.as_ref(), TEX_NUM);
-        check_error!(self.gl);
-        // Set position
-        set_int_uniform(
-            &self.gl,
-            &self.background_program,
-            "scanline",
-            scanline as i32,
-        );
-        let palette_indices: [i32; 32] = core::array::from_fn(|i| {
+        let nametable_palettes: [i32; 32] = core::array::from_fn(|i| {
             // Get the X,Y coords of the 4x4 tile area whose palette is controlled by a single byte
             let area_x = i / 4;
             let area_y = nametable_row_index / 4;
@@ -248,27 +191,20 @@ impl Screen {
             let y = (nametable_row_index / 2) % 2;
             ((config_byte >> (2 * (2 * y + x))) & 0x03) as i32
         });
-        let palette = nes.ppu.palette_ram.map(|i| self.palette[i as usize]);
 
         // We build a big table to tiles to render, and then render them all in one draw_arrays_instanced call
-        let background_pos: Vec<(i32, i32)> = (0..32)
+        let nametable_pos: Vec<(i32, i32)> = (0..32)
             .map(|i| (8 * i as i32, 8 * nametable_row_index as i32))
             .collect();
 
-        let tiles_pattern_num: Vec<i32> = (0..32)
+        let nametable_patterns: Vec<i32> = (0..32)
             .map(|i| {
                 nes.ppu.get_background_pattern_table_addr() as i32 / 0x10
                     + nametable[32 * nametable_row_index + i] as i32
             })
             .collect();
 
-        self.gl.use_program(Some(self.tile_program));
-        check_error!(self.gl);
-        // Set texture
-        let loc = self.gl.get_uniform_location(self.tile_program, "chrTex");
-        self.gl.uniform_1_i32(loc.as_ref(), TEX_NUM);
-
-        // Render OAM
+        // Gether OAM to render
         let oam_to_render: Vec<&[u8]> = nes
             .ppu
             .oam
@@ -276,22 +212,11 @@ impl Screen {
             .filter(|obj| obj[0] as usize <= scanline && obj[0] as usize + 8 >= scanline)
             .take(8)
             .collect();
-        oam_to_render.iter().take(8).for_each(|obj| {
-            // self.render_tile(
-            //     obj[3] as usize,
-            //     obj[0] as usize,
-            //     obj[1] as usize,
-            //     4 + (obj[2] & 0x03) as usize,
-            //     (obj[2] & 0x80) != 0,
-            //     (obj[2] & 0x40) != 0,
-            //     &palette,
-            // );
-        });
         let oam_pos: Vec<(i32, i32)> = oam_to_render
             .iter()
             .map(|obj| (obj[3] as i32, obj[0] as i32))
             .collect();
-        let oam_pattern: Vec<i32> = oam_to_render
+        let oam_patterns: Vec<i32> = oam_to_render
             .iter()
             .map(|obj| nes.ppu.get_spr_pattern_table_addr() as i32 / 0x10 + obj[1] as i32)
             .collect();
@@ -299,8 +224,8 @@ impl Screen {
             .iter()
             .map(|obj| 4 + (obj[2] & 0x03) as i32)
             .collect();
-        let background_depths: Vec<f32> = (0..background_pos.len()).map(|_| 0.5).collect();
-        let background_flip: Vec<i32> = (0..background_pos.len()).map(|_| 0).collect();
+        let background_depths: Vec<f32> = (0..nametable_pos.len()).map(|_| 0.5).collect();
+        let background_flip: Vec<i32> = (0..nametable_pos.len()).map(|_| 0).collect();
         let oam_depths: Vec<f32> = (0..oam_to_render.len()).map(|_| 0.3).collect();
         let oam_flip_horz = oam_to_render
             .iter()
@@ -310,10 +235,13 @@ impl Screen {
             .iter()
             .map(|obj| if obj[2] & 0x40 != 0 { 1 } else { 0 })
             .collect();
+        // Get palette as RGB values
+        let palette = nes.ppu.palette_ram.map(|i| self.palette[i as usize]);
+        // Render tiles
         self.bulk_render_tiles(
-            [background_pos, oam_pos].concat(),
-            [tiles_pattern_num, oam_pattern].concat(),
-            [palette_indices.to_vec(), oam_palettes].concat(),
+            [nametable_pos, oam_pos].concat(),
+            [nametable_patterns, oam_patterns].concat(),
+            [nametable_palettes.to_vec(), oam_palettes].concat(),
             &palette,
             scanline,
             [background_flip.clone(), oam_flip_horz].concat(),
@@ -400,84 +328,53 @@ impl Screen {
                 })
             });
         }
-        self.gl.use_program(Some(self.background_program));
+        self.gl.use_program(Some(self.tile_program));
+        self.gl.bind_vertex_array(Some(self.tile_vao));
+        // Set texture
+        const TEX_NUM: i32 = 2;
+        self.gl.active_texture(glow::TEXTURE0 + TEX_NUM as u32);
+        check_error!(self.gl);
+        self.gl.bind_texture(glow::TEXTURE_2D, Some(self.chr_tex));
+        check_error!(self.gl);
+        let loc = self.gl.get_uniform_location(self.tile_program, "chrTex");
+        self.gl.uniform_1_i32(loc.as_ref(), TEX_NUM);
+        // Set pattern
         let loc = self
             .gl
-            .get_uniform_location(self.background_program, "patternIndices");
+            .get_uniform_location(self.tile_program, "patternIndices");
         let row = pattern_nums;
         // let row = vec![0; 32];
         self.gl.uniform_1_i32_slice(loc.as_ref(), row.as_slice());
         check_error!(self.gl);
 
         // Set position
-        let loc = self
-            .gl
-            .get_uniform_location(self.background_program, "positions");
+        let loc = self.gl.get_uniform_location(self.tile_program, "positions");
         let temp_pos: Vec<i32> = pos.iter().map(|a| [a.0, a.1]).flatten().collect();
         self.gl
             .uniform_2_i32_slice(loc.as_ref(), temp_pos.as_slice());
         check_error!(self.gl);
-        set_int_uniform(
-            &self.gl,
-            &self.background_program,
-            "scanline",
-            scanline as i32,
-        );
+        set_int_uniform(&self.gl, &self.tile_program, "scanline", scanline as i32);
         let loc = self
             .gl
-            .get_uniform_location(self.background_program, "paletteIndices");
+            .get_uniform_location(self.tile_program, "paletteIndices");
         self.gl.uniform_1_i32_slice(loc.as_ref(), &palette_indices);
-        let loc = self
-            .gl
-            .get_uniform_location(self.background_program, "palette");
+        let loc = self.gl.get_uniform_location(self.tile_program, "palette");
         self.gl
             .uniform_3_f32_slice(loc.as_ref(), palette.as_flattened());
-        let loc = self
-            .gl
-            .get_uniform_location(self.background_program, "depths");
+        let loc = self.gl.get_uniform_location(self.tile_program, "depths");
         self.gl.uniform_1_f32_slice(loc.as_ref(), &depths);
         let loc = self
             .gl
-            .get_uniform_location(self.background_program, "flipHorizontal");
+            .get_uniform_location(self.tile_program, "flipHorizontal");
         self.gl
             .uniform_1_i32_slice(loc.as_ref(), flip_horz.as_slice());
         let loc = self
             .gl
-            .get_uniform_location(self.background_program, "flipVertical");
+            .get_uniform_location(self.tile_program, "flipVertical");
         self.gl
             .uniform_1_i32_slice(loc.as_ref(), flip_vert.as_slice());
         self.gl
             .draw_arrays_instanced(glow::TRIANGLE_STRIP, 0, 4, pos.len() as i32);
-    }
-
-    unsafe fn render_tile(
-        &self,
-        x: usize,
-        y: usize,
-        tile_addr: usize,
-        palette_index: usize,
-        flip_vert: bool,
-        flip_horz: bool,
-        palette: &[[f32; 3]; 0x20],
-    ) {
-        // Set position
-        let loc = self.gl.get_uniform_location(self.tile_program, "position");
-        self.gl.uniform_2_f32(loc.as_ref(), x as f32, y as f32);
-        // Set address
-        set_int_uniform(&self.gl, &self.tile_program, "tileIndex", tile_addr as i32);
-        let loc = self.gl.get_uniform_location(self.tile_program, "palette");
-        self.gl
-            .uniform_3_f32_slice(loc.as_ref(), palette.as_flattened());
-        set_bool_uniform(&self.gl, &self.tile_program, "flipVertical", flip_vert);
-        set_bool_uniform(&self.gl, &self.tile_program, "flipHorizontal", flip_horz);
-        set_int_uniform(
-            &self.gl,
-            &self.tile_program,
-            "oamPaletteIndex",
-            palette_index as i32,
-        );
-        self.gl.bind_vertex_array(Some(self.tile_vao));
-        self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
     }
     unsafe fn refresh_chr_texture(&mut self, nes: &Nes) {
         let pattern_table = nes.cartridge.get_pattern_table();
