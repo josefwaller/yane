@@ -7,10 +7,10 @@ const int TILE_COUNT = 33 + 8;
 uniform ivec2 positions[TILE_COUNT];
 uniform int patternIndices[TILE_COUNT];
 uniform int paletteIndices[TILE_COUNT];
-uniform int scanline;
 uniform float depths[TILE_COUNT];
 uniform bool flipHorizontal[TILE_COUNT];
 uniform bool flipVertical[TILE_COUNT];
+uniform int heights[TILE_COUNT];
 
 out vec2 UV;
 out float tileAddr;
@@ -28,7 +28,8 @@ const mat3 FLIP_Y = mat3(
     0, 0, 1
 );
 void main() {
-    vec2 pos = 8 * vertexPosition + vec2(positions[gl_InstanceID]);
+    mat2 heightMatrix = mat2(1, 0, 0, heights[gl_InstanceID]);
+    vec2 pos = 8 * heightMatrix * vertexPosition + vec2(positions[gl_InstanceID]);
 
     gl_Position = vec4(
         -1 + 2 * float(pos.x) / 256.0,
@@ -37,7 +38,8 @@ void main() {
         1);
     UV = vec2(vec3(vertexPosition, 1)
         * (flipHorizontal[gl_InstanceID] ? FLIP_X : mat3(1))
-        * (flipVertical[gl_InstanceID] ? FLIP_Y : mat3(1)));
+        * (flipVertical[gl_InstanceID] ? FLIP_Y : mat3(1)))
+        * heightMatrix;
     tileAddr = float(patternIndices[gl_InstanceID]);
     paletteIndex = float(paletteIndices[gl_InstanceID]);
     depth = depths[gl_InstanceID];

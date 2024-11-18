@@ -29,13 +29,13 @@ macro_rules! check_error {
 }
 #[macro_export]
 macro_rules! set_uniform {
-    ($gl: expr, $program: expr, $name: expr, $func: ident, $val: expr) => {
+    ($gl: expr, $program: expr, $name: expr, $func: ident, $($vals: expr),+) => {
         let loc = $gl.get_uniform_location($program, $name);
         check_error!($gl, format!("Getting uniform location {}", $name));
-        $gl.$func(loc.as_ref(), $val);
+        $gl.$func(loc.as_ref(), $($vals),*);
         check_error!(
             $gl,
-            format!("Setting uniform {} value to 0x{:X?}", $name, $val)
+            format!("Setting uniform {} value to 0x{:X?}", $name, ($($vals),*))
         );
     };
 }
@@ -116,6 +116,8 @@ pub unsafe fn bulk_render_tiles(
     flip_vert: Vec<i32>,
     flip_horz: Vec<i32>,
     depths: Vec<f32>,
+    // These should be either 1 or 2
+    heights: Vec<i32>,
 ) {
     #[cfg(debug_assertions)]
     {
@@ -124,6 +126,7 @@ pub unsafe fn bulk_render_tiles(
         assert_eq!(pattern_nums.len(), palette_indices.len());
         assert_eq!(palette_indices.len(), flip_vert.len());
         assert_eq!(flip_vert.len(), flip_horz.len());
+        assert_eq!(flip_horz.len(), heights.len());
         // Make sure all the booleans are valid
         [&flip_horz, &flip_vert].iter().for_each(|v| {
             v.iter().for_each(|val| {
@@ -195,6 +198,13 @@ pub unsafe fn bulk_render_tiles(
         "flipVertical",
         uniform_1_i32_slice,
         flip_vert.as_slice()
+    );
+    set_uniform!(
+        gl,
+        tile_program,
+        "heights",
+        uniform_1_i32_slice,
+        heights.as_slice()
     );
     gl.draw_arrays_instanced(glow::TRIANGLE_STRIP, 0, 4, pos.len() as i32);
 }

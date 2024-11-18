@@ -205,11 +205,12 @@ impl Screen {
             .collect();
 
         // Gether OAM to render
+        let sprite_height = if nes.ppu.is_8x16_sprites() { 16 } else { 8 };
         let oam_to_render: Vec<&[u8]> = nes
             .ppu
             .oam
             .chunks(4)
-            .filter(|obj| obj[0] as usize <= scanline && obj[0] as usize + 8 >= scanline)
+            .filter(|obj| obj[0] as usize <= scanline && obj[0] as usize + sprite_height > scanline)
             .take(8)
             .collect();
         let oam_pos: Vec<(i32, i32)> = oam_to_render
@@ -218,7 +219,13 @@ impl Screen {
             .collect();
         let oam_patterns: Vec<i32> = oam_to_render
             .iter()
-            .map(|obj| nes.ppu.get_spr_pattern_table_addr() as i32 / 0x10 + obj[1] as i32)
+            .map(|obj| {
+                if nes.ppu.is_8x16_sprites() {
+                    (obj[1] & 0x01) as i32 * 0x100 + (obj[1] & 0xFE) as i32
+                } else {
+                    nes.ppu.get_spr_pattern_table_addr() as i32 / 0x10 + obj[1] as i32
+                }
+            })
             .collect();
         let oam_palettes: Vec<i32> = oam_to_render
             .iter()
@@ -226,6 +233,7 @@ impl Screen {
             .collect();
         let background_depths: Vec<f32> = (0..nametable_pos.len()).map(|_| 0.5).collect();
         let background_flip: Vec<i32> = (0..nametable_pos.len()).map(|_| 0).collect();
+        let background_heights: Vec<i32> = (0..nametable_pos.len()).map(|_| 1).collect();
         let oam_depths: Vec<f32> = (0..oam_to_render.len()).map(|_| 0.3).collect();
         let oam_flip_horz = oam_to_render
             .iter()
@@ -234,6 +242,9 @@ impl Screen {
         let oam_flip_vertz = oam_to_render
             .iter()
             .map(|obj| if obj[2] & 0x40 != 0 { 1 } else { 0 })
+            .collect();
+        let oam_heights: Vec<i32> = (0..oam_to_render.len())
+            .map(|_| if nes.ppu.is_8x16_sprites() { 2 } else { 1 })
             .collect();
         // Get palette as RGB values
         let palette = nes.ppu.palette_ram.map(|i| self.palette[i as usize]);
@@ -251,6 +262,7 @@ impl Screen {
             [background_flip.clone(), oam_flip_horz].concat(),
             [background_flip, oam_flip_vertz].concat(),
             [background_depths, oam_depths].concat(),
+            [background_heights, oam_heights].concat(),
         );
 
         // Todo: Check for sprite overflow
@@ -288,15 +300,31 @@ impl Screen {
             self.gl.bind_vertex_array(Some(self.wireframe_vao));
             check_error!(self.gl);
             nes.ppu.oam.chunks(4).for_each(|obj| {
-                let loc = self
-                    .gl
-                    .get_uniform_location(self.wireframe_program, "position");
-                self.gl
-                    .uniform_2_f32(loc.as_ref(), obj[3] as f32, obj[0] as f32);
-                let loc = self
-                    .gl
-                    .get_uniform_location(self.wireframe_program, "inColor");
-                self.gl.uniform_3_f32(loc.as_ref(), 1.0, 0.0, 0.0);
+                set_uniform!(
+                    self.gl,
+                    self.wireframe_program,
+                    "position",
+                    uniform_2_f32,
+                    obj[3] as f32,
+                    obj[0] as f32
+                );
+                set_uniform!(
+                    self.gl,
+                    self.wireframe_program,
+                    "inColor",
+                    uniform_3_f32,
+                    1.0,
+                    0.0,
+                    0.0
+                );
+                set_uniform!(
+                    self.gl,
+                    self.wireframe_program,
+                    "sizes",
+                    uniform_2_f32,
+                    1.0,
+                    if nes.ppu.is_8x16_sprites() { 2.0 } else { 1.0 }
+                );
                 self.gl.draw_arrays(glow::LINE_LOOP, 0, 4);
             });
 
