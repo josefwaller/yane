@@ -21,8 +21,11 @@ pub struct DebugWindow {
     screen_texture: NativeTexture,
     chr_tex: NativeTexture,
     // Amount of rows/columns of tiles
+    num_tiles: usize,
     num_rows: usize,
     num_columns: usize,
+    // Index of current page of tiles we are viewing
+    tile_page: usize,
     // Imgui stuff
     imgui: imgui::Context,
     platform: SdlPlatform,
@@ -90,8 +93,10 @@ impl DebugWindow {
                 screen_texture,
                 screen_vao,
                 chr_tex,
+                num_tiles,
                 num_columns,
                 num_rows,
+                tile_page: 0,
                 platform,
                 renderer,
                 imgui,
@@ -169,6 +174,13 @@ impl DebugWindow {
                 uniform_1_i32,
                 self.num_rows as i32
             );
+            set_uniform!(
+                gl,
+                self.program,
+                "tileOffset",
+                uniform_1_i32,
+                (self.tile_page * self.num_columns * self.num_rows) as i32
+            );
             // Set CHR data
             const TEX_NUM: i32 = 2;
             gl.use_program(Some(self.program));
@@ -221,6 +233,14 @@ impl DebugWindow {
             ui.window("Settings")
                 .size([200.0, 200.0], FirstUseEver)
                 .build(|| {
+                    if let Some(c) = ui.begin_combo("Page", format!("Page {}", self.tile_page)) {
+                        (0..(self.num_tiles / (self.num_columns * self.num_rows))).for_each(|i| {
+                            if ui.selectable(format!("Page {}", i)) {
+                                self.tile_page = i;
+                            }
+                        });
+                        c.end();
+                    }
                     ui.disabled(self.debug_palette, || {
                         if let Some(c) =
                             ui.begin_combo("Palette", format!("Palette {}", self.palette_index))

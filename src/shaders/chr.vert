@@ -4,6 +4,7 @@ in vec2 vertexPosition;
 
 uniform int numColumns;
 uniform int numRows;
+uniform int tileOffset;
 
 out float tileAddr;
 out float paletteIndex;
@@ -15,7 +16,7 @@ void main() {
     paletteIndex = 0.0;
     depth = 0.5;
     // This is
-    tileAddr = float(gl_InstanceID);
+    tileAddr = float(tileOffset + gl_InstanceID);
 
     vec2 position = vec2(
         8 * (gl_InstanceID % numColumns + vertexPosition.x),
