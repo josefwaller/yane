@@ -33,6 +33,7 @@ pub struct DebugWindow {
     // Settings to change through imgui
     palette_index: usize,
     debug_palette: bool,
+    debug_oam: bool,
     paused: bool,
     volume: f32,
 }
@@ -102,6 +103,7 @@ impl DebugWindow {
                 imgui,
                 palette_index: 0,
                 debug_palette: false,
+                debug_oam: false,
                 paused: false,
                 volume: 0.00,
             }
@@ -255,6 +257,7 @@ impl DebugWindow {
                         }
                     });
                     ui.checkbox("Debug palette", &mut self.debug_palette);
+                    ui.checkbox("Debug OAM", &mut self.debug_oam);
                     if ui.button(if self.paused { "Unpause" } else { "Pause" }) {
                         self.paused = !self.paused;
                     }
@@ -273,5 +276,8 @@ impl DebugWindow {
     }
     pub fn volume(&self) -> f32 {
         self.volume
+    }
+    pub fn debug_oam(&self) -> bool {
+        self.debug_oam
     }
 }

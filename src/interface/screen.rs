@@ -226,7 +226,7 @@ impl Screen {
         // Todo: Check for sprite overflow
     }
 
-    pub fn render(&mut self, nes: &Nes, window_size: (u32, u32)) {
+    pub fn render(&mut self, nes: &Nes, window_size: (u32, u32), debug_oam: bool) {
         unsafe {
             self.gl.disable(glow::STENCIL_TEST);
             self.gl.disable(glow::DEPTH_TEST);
@@ -254,39 +254,39 @@ impl Screen {
             check_error!(self.gl);
 
             // Render wireframe box around each OAM object
-            self.gl.use_program(Some(self.wireframe_program));
-            self.gl.bind_vertex_array(Some(self.wireframe_vao));
-            check_error!(self.gl);
-            nes.ppu.oam.chunks(4).for_each(|obj| {
-                set_uniform!(
-                    self.gl,
-                    self.wireframe_program,
-                    "position",
-                    uniform_2_f32,
-                    obj[3] as f32,
-                    obj[0] as f32
-                );
-                set_uniform!(
-                    self.gl,
-                    self.wireframe_program,
-                    "inColor",
-                    uniform_3_f32,
-                    1.0,
-                    0.0,
-                    0.0
-                );
-                set_uniform!(
-                    self.gl,
-                    self.wireframe_program,
-                    "sizes",
-                    uniform_2_f32,
-                    1.0,
-                    if nes.ppu.is_8x16_sprites() { 2.0 } else { 1.0 }
-                );
-                self.gl.draw_arrays(glow::LINE_LOOP, 0, 4);
-            });
-
-            self.gl.finish();
+            if debug_oam {
+                self.gl.use_program(Some(self.wireframe_program));
+                self.gl.bind_vertex_array(Some(self.wireframe_vao));
+                check_error!(self.gl);
+                nes.ppu.oam.chunks(4).for_each(|obj| {
+                    set_uniform!(
+                        self.gl,
+                        self.wireframe_program,
+                        "position",
+                        uniform_2_f32,
+                        obj[3] as f32,
+                        obj[0] as f32
+                    );
+                    set_uniform!(
+                        self.gl,
+                        self.wireframe_program,
+                        "inColor",
+                        uniform_3_f32,
+                        1.0,
+                        0.0,
+                        0.0
+                    );
+                    set_uniform!(
+                        self.gl,
+                        self.wireframe_program,
+                        "sizes",
+                        uniform_2_f32,
+                        1.0,
+                        if nes.ppu.is_8x16_sprites() { 2.0 } else { 1.0 }
+                    );
+                    self.gl.draw_arrays(glow::LINE_LOOP, 0, 4);
+                });
+            }
             refresh_chr_texture(&self.gl, self.chr_tex, nes);
         }
     }

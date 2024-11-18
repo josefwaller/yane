@@ -66,9 +66,9 @@ impl Window {
             self.screen.render_scanline(nes, scanline);
         }
     }
-    pub fn render(&mut self, nes: &mut Nes) {
+    pub fn render(&mut self, nes: &mut Nes, debug_oam: bool) {
         self.window.gl_make_current(&self.gl_context).unwrap();
-        self.screen.render(nes, self.window.size());
+        self.screen.render(nes, self.window.size(), debug_oam);
         self.window.gl_swap_window();
     }
 }

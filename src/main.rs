@@ -76,7 +76,7 @@ fn main() {
                     window.render_scanline(&nes, scanline);
                 } else if scanline == 256 {
                     scanline = 0;
-                    window.render(&mut nes);
+                    window.render(&mut nes, debug_window.debug_oam());
                     debug_window.render(&nes, &event_pump);
                     if !debug_window.paused() {
                         nes.ppu.on_vblank();
