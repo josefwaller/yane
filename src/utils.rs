@@ -1,5 +1,7 @@
+use crate::Nes;
 use glow::{
-    Context, HasContext, NativeFramebuffer, NativeProgram, NativeTexture, Program, VertexArray,
+    Context, HasContext, NativeFramebuffer, NativeProgram, NativeTexture, NativeVertexArray,
+    Program, VertexArray,
 };
 use log::*;
 use sdl2::{
@@ -83,59 +85,163 @@ pub unsafe fn compile_and_link_shader(
     gl.delete_shader(shader);
     check_error!(gl);
 }
+// pub unsafe fn create_program(gl: &Context, vertex_src: &'static str, frag_src: &'static str) {
+//     let program = gl.create_program().unwrap();
+//     compile_and_link_shader(&gl, glow::VERTEX_SHADER, include_str!(vertex_src), &program);
+//     compile_and_link_shader(
+//         &gl,
+//         glow::FRAGMENT_SHADER,
+//         include_str!("../shaders/color.frag"),
+//         &wireframe_program,
+//     );
+//     gl.link_program(wireframe_program);
+//     if !gl.get_program_link_status(wireframe_program) {
+//         panic!(
+//             "Couldn't link program: {}",
+//             gl.get_program_info_log(wireframe_program)
+//         );
+//     }
+// }
+/// Bulk render a bunch of tiles in one single draw_arrays_instanced call
+pub unsafe fn bulk_render_tiles(
+    gl: &Context,
+    tile_program: NativeProgram,
+    chr_tex: NativeTexture,
+    tile_vao: NativeVertexArray,
+    pos: Vec<(i32, i32)>,
+    pattern_nums: Vec<i32>,
+    palette_indices: Vec<i32>,
+    palette: &[[f32; 3]; 0x20],
+    scanline: usize,
+    flip_vert: Vec<i32>,
+    flip_horz: Vec<i32>,
+    depths: Vec<f32>,
+) {
+    #[cfg(debug_assertions)]
+    {
+        // Make sure everything is the same length
+        assert_eq!(pos.len(), pattern_nums.len());
+        assert_eq!(pattern_nums.len(), palette_indices.len());
+        assert_eq!(palette_indices.len(), flip_vert.len());
+        assert_eq!(flip_vert.len(), flip_horz.len());
+        // Make sure all the booleans are valid
+        [&flip_horz, &flip_vert].iter().for_each(|v| {
+            v.iter().for_each(|val| {
+                assert!(
+                    *val == 0 || *val == 1,
+                    "Invalid boolean value passed to bulk_render_tiles"
+                )
+            })
+        });
+    }
+    gl.use_program(Some(tile_program));
+    gl.bind_vertex_array(Some(tile_vao));
+    // Set texture
+    const TEX_NUM: i32 = 2;
+    gl.active_texture(glow::TEXTURE0 + TEX_NUM as u32);
+    check_error!(gl);
+    gl.bind_texture(glow::TEXTURE_2D, Some(chr_tex));
+    check_error!(gl);
+    set_uniform!(gl, tile_program, "chrTex", uniform_1_i32, TEX_NUM);
+    set_uniform!(
+        gl,
+        tile_program,
+        "patternIndices",
+        uniform_1_i32_slice,
+        pattern_nums.as_slice()
+    );
 
-pub unsafe fn create_data_texture(gl: &Context, data: &[u8]) -> NativeTexture {
-    info!("Creating texture with length {}", data.len());
-    let data_tex = gl.create_texture().expect("Unable to create a Texture");
-    check_error!(gl);
-    set_data_texture_data(gl, &data_tex, data);
-    data_tex
+    // Set position
+    let temp_pos: Vec<i32> = pos.iter().map(|a| [a.0, a.1]).flatten().collect();
+    set_uniform!(
+        gl,
+        tile_program,
+        "positions",
+        uniform_2_i32_slice,
+        temp_pos.as_slice()
+    );
+    set_int_uniform(&gl, &tile_program, "scanline", scanline as i32);
+    set_uniform!(
+        gl,
+        tile_program,
+        "paletteIndices",
+        uniform_1_i32_slice,
+        palette_indices.as_slice()
+    );
+    set_uniform!(
+        gl,
+        tile_program,
+        "palette",
+        uniform_3_f32_slice,
+        palette.as_flattened()
+    );
+    set_uniform!(
+        gl,
+        tile_program,
+        "depths",
+        uniform_1_f32_slice,
+        depths.as_slice()
+    );
+    set_uniform!(
+        gl,
+        tile_program,
+        "flipHorizontal",
+        uniform_1_i32_slice,
+        flip_horz.as_slice()
+    );
+    set_uniform!(
+        gl,
+        tile_program,
+        "flipVertical",
+        uniform_1_i32_slice,
+        flip_vert.as_slice()
+    );
+    gl.draw_arrays_instanced(glow::TRIANGLE_STRIP, 0, 4, pos.len() as i32);
 }
-pub unsafe fn set_data_texture_data(gl: &Context, texture: &NativeTexture, data: &[u8]) {
-    gl.bind_texture(glow::TEXTURE_1D, Some(*texture));
+/// Set the texture given to the CHR ROM/RAM in the nes given
+pub unsafe fn refresh_chr_texture(gl: &Context, chr_tex: NativeTexture, nes: &Nes) {
+    let pattern_table = nes.cartridge.get_pattern_table();
+    let texture_data: Vec<u8> = pattern_table
+        .chunks(16)
+        .map(|sprite_data| {
+            (0..(8 * 8)).map(|i| {
+                let less_sig = (sprite_data[i / 8] >> (7 - i % 8)) & 0x01;
+                let more_sig = (sprite_data[i / 8 + 8] >> (7 - i % 8)) & 0x01;
+                2 * more_sig + less_sig
+            })
+        })
+        .flatten()
+        .collect();
+    gl.bind_texture(glow::TEXTURE_2D, Some(chr_tex));
     check_error!(gl);
-    gl.tex_image_1d(
-        glow::TEXTURE_1D,
+    // Generate a texture 8 pixels long to use for the CHR ROM/RAM
+    let width = 8;
+    gl.tex_image_2d(
+        glow::TEXTURE_2D,
         0,
         glow::R8 as i32,
-        data.len() as i32,
+        width,
+        texture_data.len() as i32 / width,
         0,
         glow::RED,
         glow::UNSIGNED_BYTE,
-        Some(&data),
+        Some(&texture_data),
     );
     check_error!(gl);
     gl.tex_parameter_i32(
-        glow::TEXTURE_1D,
+        glow::TEXTURE_2D,
         glow::TEXTURE_MIN_FILTER,
         glow::NEAREST as i32,
     );
     check_error!(gl);
     gl.tex_parameter_i32(
-        glow::TEXTURE_1D,
+        glow::TEXTURE_2D,
         glow::TEXTURE_MAG_FILTER,
         glow::NEAREST as i32,
     );
     check_error!(gl);
-    gl.tex_parameter_i32(
-        glow::TEXTURE_1D,
-        glow::TEXTURE_MIN_FILTER,
-        glow::NEAREST as i32,
-    );
-    check_error!(gl);
 }
 
-pub unsafe fn set_bool_uniform(
-    gl: &glow::Context,
-    program: &glow::Program,
-    name: &str,
-    value: bool,
-) {
-    let location = gl.get_uniform_location(*program, name);
-    check_error!(gl, format!("Getting uniform {} location", name));
-    gl.uniform_1_i32(location.as_ref(), if value { 1 } else { 0 });
-    check_error!(gl);
-}
 pub unsafe fn set_int_uniform(gl: &glow::Context, program: &glow::Program, name: &str, value: i32) {
     let location = gl.get_uniform_location(*program, name);
     check_error!(gl);

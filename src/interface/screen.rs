@@ -238,7 +238,11 @@ impl Screen {
         // Get palette as RGB values
         let palette = nes.ppu.palette_ram.map(|i| self.palette[i as usize]);
         // Render tiles
-        self.bulk_render_tiles(
+        bulk_render_tiles(
+            &self.gl,
+            self.tile_program,
+            self.chr_tex,
+            self.tile_vao,
             [nametable_pos, oam_pos].concat(),
             [nametable_patterns, oam_patterns].concat(),
             [nametable_palettes.to_vec(), oam_palettes].concat(),
@@ -297,143 +301,8 @@ impl Screen {
             });
 
             self.gl.finish();
-            self.refresh_chr_texture(nes);
+            refresh_chr_texture(&self.gl, self.chr_tex, nes);
         }
-    }
-    unsafe fn bulk_render_tiles(
-        &self,
-        pos: Vec<(i32, i32)>,
-        pattern_nums: Vec<i32>,
-        palette_indices: Vec<i32>,
-        palette: &[[f32; 3]; 0x20],
-        scanline: usize,
-        flip_vert: Vec<i32>,
-        flip_horz: Vec<i32>,
-        depths: Vec<f32>,
-    ) {
-        #[cfg(debug_assertions)]
-        {
-            // Make sure everything is the same length
-            assert_eq!(pos.len(), pattern_nums.len());
-            assert_eq!(pattern_nums.len(), palette_indices.len());
-            assert_eq!(palette_indices.len(), flip_vert.len());
-            assert_eq!(flip_vert.len(), flip_horz.len());
-            // Make sure all the booleans are valid
-            [&flip_horz, &flip_vert].iter().for_each(|v| {
-                v.iter().for_each(|val| {
-                    assert!(
-                        *val == 0 || *val == 1,
-                        "Invalid boolean value passed to bulk_render_tiles"
-                    )
-                })
-            });
-        }
-        self.gl.use_program(Some(self.tile_program));
-        self.gl.bind_vertex_array(Some(self.tile_vao));
-        // Set texture
-        const TEX_NUM: i32 = 2;
-        self.gl.active_texture(glow::TEXTURE0 + TEX_NUM as u32);
-        check_error!(self.gl);
-        self.gl.bind_texture(glow::TEXTURE_2D, Some(self.chr_tex));
-        check_error!(self.gl);
-        set_uniform!(self.gl, self.tile_program, "chrTex", uniform_1_i32, TEX_NUM);
-        set_uniform!(
-            self.gl,
-            self.tile_program,
-            "patternIndices",
-            uniform_1_i32_slice,
-            pattern_nums.as_slice()
-        );
-
-        // Set position
-        let temp_pos: Vec<i32> = pos.iter().map(|a| [a.0, a.1]).flatten().collect();
-        set_uniform!(
-            self.gl,
-            self.tile_program,
-            "positions",
-            uniform_2_i32_slice,
-            temp_pos.as_slice()
-        );
-        set_int_uniform(&self.gl, &self.tile_program, "scanline", scanline as i32);
-        set_uniform!(
-            self.gl,
-            self.tile_program,
-            "paletteIndices",
-            uniform_1_i32_slice,
-            palette_indices.as_slice()
-        );
-        set_uniform!(
-            self.gl,
-            self.tile_program,
-            "palette",
-            uniform_3_f32_slice,
-            palette.as_flattened()
-        );
-        set_uniform!(
-            self.gl,
-            self.tile_program,
-            "depths",
-            uniform_1_f32_slice,
-            depths.as_slice()
-        );
-        set_uniform!(
-            self.gl,
-            self.tile_program,
-            "flipHorizontal",
-            uniform_1_i32_slice,
-            flip_horz.as_slice()
-        );
-        set_uniform!(
-            self.gl,
-            self.tile_program,
-            "flipVertical",
-            uniform_1_i32_slice,
-            flip_vert.as_slice()
-        );
-        self.gl
-            .draw_arrays_instanced(glow::TRIANGLE_STRIP, 0, 4, pos.len() as i32);
-    }
-    unsafe fn refresh_chr_texture(&mut self, nes: &Nes) {
-        let pattern_table = nes.cartridge.get_pattern_table();
-        let texture_data: Vec<u8> = pattern_table
-            .chunks(16)
-            .map(|sprite_data| {
-                (0..(8 * 8)).map(|i| {
-                    let less_sig = (sprite_data[i / 8] >> (7 - i % 8)) & 0x01;
-                    let more_sig = (sprite_data[i / 8 + 8] >> (7 - i % 8)) & 0x01;
-                    2 * more_sig + less_sig
-                })
-            })
-            .flatten()
-            .collect();
-        self.gl.bind_texture(glow::TEXTURE_2D, Some(self.chr_tex));
-        check_error!(self.gl);
-        // Generate a texture 8 pixels long to use for the CHR ROM/RAM
-        let width = 8;
-        self.gl.tex_image_2d(
-            glow::TEXTURE_2D,
-            0,
-            glow::R8 as i32,
-            width,
-            texture_data.len() as i32 / width,
-            0,
-            glow::RED,
-            glow::UNSIGNED_BYTE,
-            Some(&texture_data),
-        );
-        check_error!(self.gl);
-        self.gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_MIN_FILTER,
-            glow::NEAREST as i32,
-        );
-        check_error!(self.gl);
-        self.gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_MAG_FILTER,
-            glow::NEAREST as i32,
-        );
-        check_error!(self.gl);
     }
     fn get_nametable(&self, addr: usize, nes: &Nes) -> Vec<u8> {
         match nes.cartridge.nametable_arrangement {

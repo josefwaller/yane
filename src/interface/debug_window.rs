@@ -1,6 +1,7 @@
+use log::*;
 use std::cmp::{max, min};
 
-use crate::{check_error, utils::*, Cartridge, Nes};
+use crate::{check_error, set_uniform, utils::*, Cartridge, Nes};
 use glow::{HasContext, NativeFramebuffer, NativeProgram, NativeTexture, VertexArray};
 use imgui::Condition::FirstUseEver;
 use imgui_glow_renderer::AutoRenderer;
@@ -14,9 +15,10 @@ pub struct DebugWindow {
     palette: [[f32; 3]; 64],
     program: NativeProgram,
     // Stuff for rendering the single quad texture to screen
-    texture_program: NativeProgram,
-    texture_vao: VertexArray,
-    texture_framebuffer: NativeFramebuffer,
+    screen_fbo: NativeFramebuffer,
+    screen_program: NativeProgram,
+    screen_vao: VertexArray,
+    screen_texture: NativeTexture,
     chr_tex: NativeTexture,
     // Amount of rows/columns of tiles
     num_rows: usize,
@@ -38,7 +40,8 @@ impl DebugWindow {
         let num_tiles =
             (nes.cartridge.memory.chr_rom.len() + nes.cartridge.memory.chr_ram.len()) / 0x10;
         let num_columns = 0x10;
-        let num_rows = max(num_tiles / num_columns, 1);
+        // let num_rows = max(num_tiles / num_columns, 1);
+        let num_rows = 0x10;
         // Set window size
         let window_width = 4 * 8 * num_columns as u32;
         let window_height = 4 * 8 * num_rows as u32;
@@ -56,39 +59,42 @@ impl DebugWindow {
             check_error!(gl);
             let program = gl.create_program().unwrap();
             check_error!(gl);
-            let chr_tex = create_data_texture(&gl, &[]);
+            // let chr_tex = create_data_texture(&gl, &[]);
+            let chr_tex = gl.create_texture().unwrap();
             compile_and_link_shader(
                 &gl,
                 glow::VERTEX_SHADER,
-                include_str!("../shaders/pass_through.vert"),
-                &program,
-            );
-            compile_and_link_shader(
-                &gl,
-                glow::GEOMETRY_SHADER,
-                include_str!("../shaders/chr_rom_debug.geom"),
+                include_str!("../shaders/chr.vert"),
                 &program,
             );
             compile_and_link_shader(
                 &gl,
                 glow::FRAGMENT_SHADER,
-                include_str!("../shaders/old_tile.frag"),
+                include_str!("../shaders/tile.frag"),
                 &program,
             );
             gl.link_program(program);
             check_error!(gl);
+            if !gl.get_program_link_status(program) {
+                panic!(
+                    "Couldn't link program: {}",
+                    gl.get_program_info_log(program)
+                );
+            }
 
             gl.use_program(Some(program));
-            check_error!(gl, format!("Using program {:?}", program));
 
-            let verts: Vec<i32> = (0..num_tiles).map(|i| i as i32).collect();
-            let vao = buffer_data_slice(&gl, &program, verts.as_slice());
+            let vao = create_f32_slice_vao(
+                &gl,
+                [[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]].as_flattened(),
+                2,
+            );
             let palette_data: &[u8] = include_bytes!("../2C02G_wiki.pal");
             let palette: [[f32; 3]; 64] = core::array::from_fn(|i| {
                 core::array::from_fn(|j| palette_data[3 * i + j] as f32 / 255.0)
             });
             check_error!(gl);
-            let (texture_framebuffer, texture_vao, texture_program, _render_texture) =
+            let (screen_fbo, screen_vao, screen_program, screen_texture) =
                 create_screen_texture(&gl, (8 * num_columns, 8 * num_rows));
 
             let platform = SdlPlatform::new(&mut imgui);
@@ -99,9 +105,10 @@ impl DebugWindow {
                 vao,
                 palette,
                 program,
-                texture_program,
-                texture_vao,
-                texture_framebuffer,
+                screen_fbo,
+                screen_program,
+                screen_texture,
+                screen_vao,
                 chr_tex,
                 num_columns,
                 num_rows,
@@ -122,65 +129,110 @@ impl DebugWindow {
         unsafe {
             self.window.gl_make_current(&self.gl_context).unwrap();
             let gl = self.renderer.gl_context();
+            refresh_chr_texture(&gl, self.chr_tex, nes);
             // Render onto framebuffer
             gl.use_program(Some(self.program));
-            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(self.texture_framebuffer));
+            check_error!(gl);
+            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(self.screen_fbo));
+            check_error!(gl);
             gl.viewport(0, 0, 8 * self.num_columns as i32, 8 * self.num_rows as i32);
+            check_error!(gl);
+
             let clear_color = self.palette[(nes.ppu.palette_ram[0] & 0x3F) as usize];
             gl.clear_color(clear_color[0], clear_color[1], clear_color[2], 1.0);
-            gl.clear(glow::COLOR_BUFFER_BIT);
+            check_error!(gl);
+            gl.clear(glow::COLOR_BUFFER_BIT | glow::STENCIL_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+            check_error!(gl);
 
-            let palette: Vec<i32> = if self.debug_palette {
-                vec![0x1D, 0x16, 0x19, 0x1C]
+            // Set uniforms
+            let mut palette: Vec<f32> = if self.debug_palette {
+                [
+                    [0.0, 0.0, 0.0],
+                    [0.6, 0.0, 0.1],
+                    [0.1, 0.6, 0.1],
+                    [0.3, 0.3, 1.0],
+                ]
+                .as_flattened()
+                .to_vec()
             } else {
-                nes.ppu.palette_ram.iter().map(|p| *p as i32).collect()
+                nes.ppu
+                    .palette_ram
+                    .chunks(4)
+                    .nth(self.palette_index)
+                    .unwrap()
+                    .iter()
+                    .map(|p| self.palette[*p as usize])
+                    .collect::<Vec<[f32; 3]>>()
+                    .as_flattened()
+                    .to_vec()
             };
-            let palette_uni = gl.get_uniform_location(self.program, "palettes");
-            gl.uniform_1_i32_slice(palette_uni.as_ref(), palette.as_slice());
-            // Set colors
-            let colors = self.palette.as_flattened();
-            let color_uni = gl.get_uniform_location(self.program, "colors");
-            gl.uniform_3_f32_slice(color_uni.as_ref(), colors);
-            // Set tint uniforms
-            set_bool_uniform(&gl, &self.program, "redTint", false);
-            set_bool_uniform(&gl, &self.program, "blueTint", false);
-            set_bool_uniform(&gl, &self.program, "greenTint", false);
-            // Set greyscale mode
-            set_bool_uniform(&gl, &self.program, "greyscaleMode", false);
-            // Set number of columns
-            set_int_uniform(&gl, &self.program, "numColumns", self.num_columns as i32);
-            set_int_uniform(&gl, &self.program, "numRows", self.num_rows as i32);
-            set_int_uniform(
-                &gl,
-                &self.program,
-                "globalPaletteIndex",
-                if self.debug_palette {
-                    0
-                } else {
-                    self.palette_index as i32
-                },
+            // Pad with 0s
+            palette.resize(3 * 4 * 4 * 2, 0.0);
+            set_uniform!(
+                gl,
+                self.program,
+                "palette",
+                uniform_3_f32_slice,
+                palette.as_slice()
             );
-            let data = [
-                nes.cartridge.memory.chr_rom.as_slice(),
-                nes.cartridge.memory.chr_ram.as_slice(),
-            ]
-            .concat();
-            set_data_texture_data(gl, &self.chr_tex, &data);
-
+            set_uniform!(
+                gl,
+                self.program,
+                "numColumns",
+                uniform_1_i32,
+                self.num_columns as i32
+            );
+            set_uniform!(
+                gl,
+                self.program,
+                "numRows",
+                uniform_1_i32,
+                self.num_rows as i32
+            );
+            // Set CHR data
+            const TEX_NUM: i32 = 2;
+            gl.use_program(Some(self.program));
+            gl.bind_texture(glow::TEXTURE_2D, Some(self.chr_tex));
+            gl.active_texture(glow::TEXTURE0 + TEX_NUM as u32);
+            check_error!(gl);
+            gl.bind_texture(glow::TEXTURE_2D, Some(self.chr_tex));
+            check_error!(gl);
+            set_uniform!(gl, self.program, "chrTex", uniform_1_i32, TEX_NUM);
+            // Draw sprites
             gl.bind_vertex_array(Some(self.vao));
-            gl.draw_arrays(glow::POINTS, 0, data.len() as i32 / 0x10);
-
+            check_error!(gl);
+            gl.draw_arrays_instanced(
+                glow::TRIANGLE_STRIP,
+                0,
+                4,
+                (self.num_rows * self.num_columns) as i32,
+            );
+            check_error!(gl);
             // Render onto screen
             gl.bind_framebuffer(glow::FRAMEBUFFER, None);
-            gl.use_program(Some(self.texture_program));
+            gl.use_program(Some(self.screen_program));
             gl.viewport(
                 0,
                 0,
                 self.window.size().0 as i32,
                 self.window.size().1 as i32,
             );
-            gl.bind_vertex_array(Some(self.texture_vao));
+            // Use FBO texture now
+            let tex_num: i32 = 1;
+            gl.active_texture(glow::TEXTURE0 + tex_num as u32);
+            gl.bind_texture(glow::TEXTURE_2D, Some(self.screen_texture));
+            set_uniform!(
+                gl,
+                self.screen_program,
+                "renderedTexture",
+                uniform_1_i32,
+                tex_num
+            );
+
+            gl.bind_vertex_array(Some(self.screen_vao));
+            check_error!(gl);
             gl.draw_arrays(glow::TRIANGLES, 0, 6);
+            check_error!(gl);
 
             // Draw imgui
             self.platform
