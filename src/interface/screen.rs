@@ -251,24 +251,16 @@ impl Screen {
         let palette = nes.ppu.palette_ram.map(|i| self.palette[i as usize]);
 
         // We build a big table to tiles to render, and then render them all in one draw_arrays_instanced call
-        let tiles_pos: Vec<(i32, i32)> = (0..32)
+        let background_pos: Vec<(i32, i32)> = (0..32)
             .map(|i| (8 * i as i32, 8 * nametable_row_index as i32))
             .collect();
 
-        let tiles_pattern_num = (0..32)
+        let tiles_pattern_num: Vec<i32> = (0..32)
             .map(|i| {
                 nes.ppu.get_background_pattern_table_addr() as i32 / 0x10
                     + nametable[32 * nametable_row_index + i] as i32
             })
             .collect();
-
-        self.bulk_render_tiles(
-            tiles_pos,
-            tiles_pattern_num,
-            palette_indices.to_vec(),
-            &palette,
-            scanline,
-        );
 
         self.gl.use_program(Some(self.tile_program));
         check_error!(self.gl);
@@ -282,18 +274,53 @@ impl Screen {
             .oam
             .chunks(4)
             .filter(|obj| obj[0] as usize <= scanline && obj[0] as usize + 8 >= scanline)
+            .take(8)
             .collect();
         oam_to_render.iter().take(8).for_each(|obj| {
-            self.render_tile(
-                obj[3] as usize,
-                obj[0] as usize,
-                obj[1] as usize,
-                4 + (obj[2] & 0x03) as usize,
-                (obj[2] & 0x80) != 0,
-                (obj[2] & 0x40) != 0,
-                &palette,
-            );
+            // self.render_tile(
+            //     obj[3] as usize,
+            //     obj[0] as usize,
+            //     obj[1] as usize,
+            //     4 + (obj[2] & 0x03) as usize,
+            //     (obj[2] & 0x80) != 0,
+            //     (obj[2] & 0x40) != 0,
+            //     &palette,
+            // );
         });
+        let oam_pos: Vec<(i32, i32)> = oam_to_render
+            .iter()
+            .map(|obj| (obj[3] as i32, obj[0] as i32))
+            .collect();
+        let oam_pattern: Vec<i32> = oam_to_render
+            .iter()
+            .map(|obj| nes.ppu.get_spr_pattern_table_addr() as i32 / 0x10 + obj[1] as i32)
+            .collect();
+        let oam_palettes: Vec<i32> = oam_to_render
+            .iter()
+            .map(|obj| 4 + (obj[2] & 0x03) as i32)
+            .collect();
+        let background_depths: Vec<f32> = (0..background_pos.len()).map(|_| 0.5).collect();
+        let background_flip: Vec<i32> = (0..background_pos.len()).map(|_| 0).collect();
+        let oam_depths: Vec<f32> = (0..oam_to_render.len()).map(|_| 0.3).collect();
+        let oam_flip_horz = oam_to_render
+            .iter()
+            .map(|obj| if obj[2] & 0x80 != 0 { 1 } else { 0 })
+            .collect();
+        let oam_flip_vertz = oam_to_render
+            .iter()
+            .map(|obj| if obj[2] & 0x40 != 0 { 1 } else { 0 })
+            .collect();
+        self.bulk_render_tiles(
+            [background_pos, oam_pos].concat(),
+            [tiles_pattern_num, oam_pattern].concat(),
+            [palette_indices.to_vec(), oam_palettes].concat(),
+            &palette,
+            scanline,
+            [background_flip.clone(), oam_flip_horz].concat(),
+            [background_flip, oam_flip_vertz].concat(),
+            [background_depths, oam_depths].concat(),
+        );
+
         // Todo: Check for sprite overflow
     }
 
@@ -352,7 +379,27 @@ impl Screen {
         palette_indices: Vec<i32>,
         palette: &[[f32; 3]; 0x20],
         scanline: usize,
+        flip_vert: Vec<i32>,
+        flip_horz: Vec<i32>,
+        depths: Vec<f32>,
     ) {
+        #[cfg(debug_assertions)]
+        {
+            // Make sure everything is the same length
+            assert_eq!(pos.len(), pattern_nums.len());
+            assert_eq!(pattern_nums.len(), palette_indices.len());
+            assert_eq!(palette_indices.len(), flip_vert.len());
+            assert_eq!(flip_vert.len(), flip_horz.len());
+            // Make sure all the booleans are valid
+            [&flip_horz, &flip_vert].iter().for_each(|v| {
+                v.iter().for_each(|val| {
+                    assert!(
+                        *val == 0 || *val == 1,
+                        "Invalid boolean value passed to bulk_render_tiles"
+                    )
+                })
+            });
+        }
         self.gl.use_program(Some(self.background_program));
         let loc = self
             .gl
@@ -385,6 +432,20 @@ impl Screen {
             .get_uniform_location(self.background_program, "palette");
         self.gl
             .uniform_3_f32_slice(loc.as_ref(), palette.as_flattened());
+        let loc = self
+            .gl
+            .get_uniform_location(self.background_program, "depths");
+        self.gl.uniform_1_f32_slice(loc.as_ref(), &depths);
+        let loc = self
+            .gl
+            .get_uniform_location(self.background_program, "flipHorizontal");
+        self.gl
+            .uniform_1_i32_slice(loc.as_ref(), flip_horz.as_slice());
+        let loc = self
+            .gl
+            .get_uniform_location(self.background_program, "flipVertical");
+        self.gl
+            .uniform_1_i32_slice(loc.as_ref(), flip_vert.as_slice());
         self.gl
             .draw_arrays_instanced(glow::TRIANGLE_STRIP, 0, 4, pos.len() as i32);
     }
