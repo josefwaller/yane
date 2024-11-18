@@ -85,23 +85,23 @@ pub unsafe fn compile_and_link_shader(
     gl.delete_shader(shader);
     check_error!(gl);
 }
-// pub unsafe fn create_program(gl: &Context, vertex_src: &'static str, frag_src: &'static str) {
-//     let program = gl.create_program().unwrap();
-//     compile_and_link_shader(&gl, glow::VERTEX_SHADER, include_str!(vertex_src), &program);
-//     compile_and_link_shader(
-//         &gl,
-//         glow::FRAGMENT_SHADER,
-//         include_str!("../shaders/color.frag"),
-//         &wireframe_program,
-//     );
-//     gl.link_program(wireframe_program);
-//     if !gl.get_program_link_status(wireframe_program) {
-//         panic!(
-//             "Couldn't link program: {}",
-//             gl.get_program_info_log(wireframe_program)
-//         );
-//     }
-// }
+pub unsafe fn create_program(
+    gl: &Context,
+    vertex_src: &'static str,
+    frag_src: &'static str,
+) -> NativeProgram {
+    let program = gl.create_program().unwrap();
+    compile_and_link_shader(&gl, glow::VERTEX_SHADER, vertex_src, &program);
+    compile_and_link_shader(&gl, glow::FRAGMENT_SHADER, frag_src, &program);
+    gl.link_program(program);
+    if !gl.get_program_link_status(program) {
+        panic!(
+            "Couldn't link program: {}",
+            gl.get_program_info_log(program)
+        );
+    }
+    program
+}
 /// Bulk render a bunch of tiles in one single draw_arrays_instanced call
 pub unsafe fn bulk_render_tiles(
     gl: &Context,

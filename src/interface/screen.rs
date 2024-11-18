@@ -29,26 +29,11 @@ impl Screen {
             // Send CHR ROM/RAM data
             let chr_tex = gl.create_texture().unwrap();
             // Create tile program
-            let tile_program = gl.create_program().expect("Unable to create program!");
-            compile_and_link_shader(
+            let tile_program = create_program(
                 &gl,
-                glow::VERTEX_SHADER,
-                include_str!("../shaders/background.vert"),
-                &tile_program,
-            );
-            compile_and_link_shader(
-                &gl,
-                glow::FRAGMENT_SHADER,
+                include_str!("../shaders/tiles.vert"),
                 include_str!("../shaders/tile.frag"),
-                &tile_program,
             );
-            gl.link_program(tile_program);
-            if !gl.get_program_link_status(tile_program) {
-                panic!(
-                    "Couldn't link program: {}",
-                    gl.get_program_info_log(tile_program)
-                );
-            }
             // Create tile vertices
             let tile_vao = create_f32_slice_vao(
                 &gl,
@@ -64,49 +49,19 @@ impl Screen {
                 core::array::from_fn(|j| palette_data[3 * i + j] as f32 / 255.0)
             });
             // Create scanline program
-            let scanline_program = gl.create_program().unwrap();
-            compile_and_link_shader(
+            let scanline_program = create_program(
                 &gl,
-                glow::VERTEX_SHADER,
                 include_str!("../shaders/scanline.vert"),
-                &scanline_program,
-            );
-            compile_and_link_shader(
-                &gl,
-                glow::FRAGMENT_SHADER,
                 include_str!("../shaders/color.frag"),
-                &scanline_program,
             );
-            gl.link_program(scanline_program);
-            if !gl.get_program_link_status(scanline_program) {
-                panic!(
-                    "Couldn't link program: {}",
-                    gl.get_program_info_log(scanline_program)
-                );
-            }
             let scanline_vao =
                 create_f32_slice_vao(&gl, [[0.0, 0.0], [1.0, 0.0]].as_flattened(), 2);
 
-            let wireframe_program = gl.create_program().unwrap();
-            compile_and_link_shader(
+            let wireframe_program = create_program(
                 &gl,
-                glow::VERTEX_SHADER,
-                include_str!("../shaders/tile.vert"),
-                &wireframe_program,
-            );
-            compile_and_link_shader(
-                &gl,
-                glow::FRAGMENT_SHADER,
+                include_str!("../shaders/wireframe.vert"),
                 include_str!("../shaders/color.frag"),
-                &wireframe_program,
             );
-            gl.link_program(wireframe_program);
-            if !gl.get_program_link_status(wireframe_program) {
-                panic!(
-                    "Couldn't link program: {}",
-                    gl.get_program_info_log(wireframe_program)
-                );
-            }
             let wireframe_vao = create_f32_slice_vao(
                 &gl,
                 [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]].as_flattened(),
@@ -161,10 +116,13 @@ impl Screen {
             scanline as i32,
         );
         let clear_color = self.palette[(nes.ppu.palette_ram[0] & 0x3F) as usize];
-        let loc = self
-            .gl
-            .get_uniform_location(self.scanline_program, "inColor");
-        self.gl.uniform_3_f32_slice(loc.as_ref(), &clear_color);
+        set_uniform!(
+            self.gl,
+            self.scanline_program,
+            "inColor",
+            uniform_3_f32_slice,
+            &clear_color
+        );
         self.gl.bind_vertex_array(Some(self.scanline_vao));
         check_error!(self.gl);
         self.gl.draw_arrays(glow::LINES, 0, 2);

@@ -56,33 +56,13 @@ impl DebugWindow {
             .add_font(&[imgui::FontSource::DefaultFontData { config: None }]);
 
         unsafe {
-            check_error!(gl);
-            let program = gl.create_program().unwrap();
-            check_error!(gl);
-            // let chr_tex = create_data_texture(&gl, &[]);
             let chr_tex = gl.create_texture().unwrap();
-            compile_and_link_shader(
-                &gl,
-                glow::VERTEX_SHADER,
-                include_str!("../shaders/chr.vert"),
-                &program,
-            );
-            compile_and_link_shader(
-                &gl,
-                glow::FRAGMENT_SHADER,
-                include_str!("../shaders/tile.frag"),
-                &program,
-            );
-            gl.link_program(program);
             check_error!(gl);
-            if !gl.get_program_link_status(program) {
-                panic!(
-                    "Couldn't link program: {}",
-                    gl.get_program_info_log(program)
-                );
-            }
-
-            gl.use_program(Some(program));
+            let program = create_program(
+                &gl,
+                include_str!("../shaders/chr.vert"),
+                include_str!("../shaders/tile.frag"),
+            );
 
             let vao = create_f32_slice_vao(
                 &gl,
@@ -141,7 +121,7 @@ impl DebugWindow {
             let clear_color = self.palette[(nes.ppu.palette_ram[0] & 0x3F) as usize];
             gl.clear_color(clear_color[0], clear_color[1], clear_color[2], 1.0);
             check_error!(gl);
-            gl.clear(glow::COLOR_BUFFER_BIT | glow::STENCIL_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+            gl.clear(glow::COLOR_BUFFER_BIT);
             check_error!(gl);
 
             // Set uniforms
