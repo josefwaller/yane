@@ -135,31 +135,68 @@ impl Screen {
         self.gl.depth_func(glow::LESS);
         check_error!(self.gl);
 
+        // We build a big table to tiles to render, and then render them all in one draw_arrays_instanced call
         // Gather information for rendering background
-        let nametable = self.get_nametable(nes.ppu.get_base_nametable(), nes);
-        let nametable_row_index = scanline / 8;
-        let nametable_palettes: [i32; 32] = core::array::from_fn(|i| {
-            // Get the X,Y coords of the 4x4 tile area whose palette is controlled by a single byte
-            let area_x = i / 4;
-            let area_y = nametable_row_index / 4;
+        const NUM_NAMETABLE_TILES: usize = 33;
+        let y = (scanline + nes.ppu.scroll_y as usize) / 8;
+        let (left_nametable_addr, right_nametable_addr) = if y < 30 {
+            (
+                nes.ppu.top_left_nametable_addr(),
+                nes.ppu.top_right_nametable_addr(),
+            )
+        } else {
+            (
+                nes.ppu.bot_left_nametable_addr(),
+                nes.ppu.bot_right_nametable_addr(),
+            )
+        };
+        let nametable_row_index = if y < 30 { y } else { y - 30 };
+        // Get the left and right nametables
+        // We can account for the scroll Y offset when selecting the nametables
+        // But we need both in order to account for the scroll X
+        let left_nametable = self.get_nametable(left_nametable_addr, nes);
+        let right_nametable = self.get_nametable(right_nametable_addr, nes);
+        let nametable_patterns: Vec<i32> = (0..NUM_NAMETABLE_TILES)
+            .map(|i| {
+                let x = nes.ppu.scroll_x as usize / 8 + i;
+                let (nametable, index) = if x < 32 {
+                    (&left_nametable, x)
+                } else {
+                    (&right_nametable, x - 32)
+                };
+                nes.ppu.get_background_pattern_table_addr() as i32 / 0x10
+                    + nametable[32 * nametable_row_index + index] as i32
+            })
+            .collect();
+        let nametable_palettes: [i32; NUM_NAMETABLE_TILES] = core::array::from_fn(|i| {
+            let x = nes.ppu.scroll_x as usize / 8 + i;
             // Get the config byte
-            let config_byte = nametable[0x3C0 + (8 * area_y + area_x)];
+            let (nametable, index) = if x < 32 {
+                (&left_nametable, x)
+            } else {
+                (&right_nametable, x - 32)
+            };
+            // Get the X,Y coords of the 4x4 tile area whose palette is controlled by a single byte
+            let area_x = index / 4;
+            let area_y = nametable_row_index / 4;
+            let config_byte = nametable[0x3C0 + 8 * area_y + area_x];
             // Get the specific 2 bit value that controls this tile's palette
-            let x = (i / 2) % 2;
+            let x = (index / 2) % 2;
             let y = (nametable_row_index / 2) % 2;
             ((config_byte >> (2 * (2 * y + x))) & 0x03) as i32
         });
 
-        // We build a big table to tiles to render, and then render them all in one draw_arrays_instanced call
-        let nametable_pos: Vec<(i32, i32)> = (0..32)
-            .map(|i| (8 * i as i32, 8 * nametable_row_index as i32))
-            .collect();
-
-        let nametable_patterns: Vec<i32> = (0..32)
-            .map(|i| {
-                nes.ppu.get_background_pattern_table_addr() as i32 / 0x10
-                    + nametable[32 * nametable_row_index + i] as i32
-            })
+        // We need to wrap around the current scanline
+        // Basically draw the tile somewhere in [scanline - 7, scanline), wherever a tile aligned on the grid would be
+        let actual_tile_pos = 8 * (scanline as i32 / 8);
+        let fine_scroll_y = nes.ppu.scroll_y as i32 % 8;
+        let pos_y = if actual_tile_pos - fine_scroll_y < scanline as i32 - 7 {
+            actual_tile_pos + 8 - fine_scroll_y
+        } else {
+            actual_tile_pos - fine_scroll_y
+        };
+        let nametable_pos: Vec<(i32, i32)> = (0..NUM_NAMETABLE_TILES)
+            .map(|i| (8 * i as i32 - (nes.ppu.scroll_x % 8) as i32, pos_y))
             .collect();
 
         // Gether OAM to render
@@ -290,14 +327,23 @@ impl Screen {
             refresh_chr_texture(&self.gl, self.chr_tex, nes);
         }
     }
+    // This function should probably be moved into the PPU somewhere
+    // Or perhaps the cartridge
     fn get_nametable(&self, addr: usize, nes: &Nes) -> Vec<u8> {
         match nes.cartridge.nametable_arrangement {
-            NametableArrangement::Horizontal => nes.ppu.nametable_ram[(addr
-                % nes.ppu.nametable_ram.len())
-                ..((addr % nes.ppu.nametable_ram.len()) + 0x400)]
-                .to_vec(),
+            NametableArrangement::Horizontal => {
+                // 0x2000 = 0x2800 and 0x2400 = 0x2C00
+                nes.ppu.nametable_ram[(addr % nes.ppu.nametable_ram.len())
+                    ..((addr % nes.ppu.nametable_ram.len()) + 0x400)]
+                    .to_vec()
+            }
             NametableArrangement::Vertical => {
-                nes.ppu.nametable_ram[(addr % 0x800)..((addr % 0x800) + 0x400)].to_vec()
+                // 0x2000 = 0x2400, and 0x2800 = 0x2C00
+                if addr < 0x2800 {
+                    nes.ppu.nametable_ram[0x000..0x400].to_vec()
+                } else {
+                    nes.ppu.nametable_ram[0x400..0x800].to_vec()
+                }
             }
             _ => unimplemented!(
                 "Mapper {:?} not implemented",

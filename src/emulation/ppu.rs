@@ -121,9 +121,18 @@ impl Ppu {
                     self.nametable_ram[(self.addr - 0x2000) as usize % 0x800] = value
                 }
                 NametableArrangement::Vertical => {
-                    self.nametable_ram
-                        [(self.addr as usize - 0x2000) / 0x800 + self.addr as usize % 0x400] =
-                        value;
+                    // 0x2000 = 0x2400, 0x2800 = 0x2C00
+                    let addr = if self.addr < 0x2400 {
+                        self.addr % 0x400
+                    } else if self.addr < 0x2800 {
+                        // Should be mirrored
+                        self.addr % 0x400
+                    } else if self.addr < 0x2C00 {
+                        (self.addr % 0x400) + 0x400
+                    } else {
+                        (self.addr % 0x400) + 0x400
+                    };
+                    self.nametable_ram[addr as usize] = value;
                 }
                 _ => unimplemented!(
                     "Nametable \"{:?}\" unimplemented by PPU",
@@ -150,8 +159,17 @@ impl Ppu {
                     return self.nametable_ram[(self.addr - 0x2000) as usize % 0x800];
                 }
                 NametableArrangement::Vertical => {
-                    return self.nametable_ram
-                        [(self.addr as usize - 0x2000) / 0x800 + self.addr as usize % 0x400];
+                    // 0x2000 = 0x2400, 0x2800 = 0x2C00
+                    let addr = if self.addr < 0x2400 {
+                        self.addr % 0x400
+                    } else if self.addr < 0x2800 {
+                        self.addr % 0x400
+                    } else if self.addr < 0x2C00 {
+                        (self.addr % 0x400) + 0x400
+                    } else {
+                        (self.addr % 0x400) + 0x400
+                    };
+                    return self.nametable_ram[addr as usize];
                 }
             }
         }
@@ -226,5 +244,49 @@ impl Ppu {
     }
     pub fn get_base_nametable(&self) -> usize {
         0x400 * (self.ctrl as usize & 0x03)
+    }
+    /// Returns the base nametable number, a nubmer between 0 and 3.
+    /// * 0 means that the base nametable is top left (0x2000)
+    /// * 1 means that the base nametable is top right (0x2400)
+    /// * 2 means that the base nametable is bot left (0x2800)
+    /// * 3 means that the base nametable is bot right (0x2C00)
+    ///
+    /// The base nametable address can then be found by calculating `0x2000 + 0x400 * ppu.base_nametable_num()`
+    pub fn base_nametable_num(&self) -> usize {
+        (self.ctrl as usize) & 0x03
+    }
+    /// Get the address of the nametable at the top left of the current tilemap.
+    pub fn top_left_nametable_addr(&self) -> usize {
+        return 0x2000 + self.base_nametable_num() * 0x400;
+    }
+    /// Get the address of the nametable at the top right of the current tilemap.
+    pub fn top_right_nametable_addr(&self) -> usize {
+        match self.base_nametable_num() {
+            0 => 0x2400,
+            1 => 0x2000,
+            2 => 0x2C00,
+            3 => 0x2800,
+            _ => panic!("Invalid nametable num {}", self.base_nametable_num()),
+        }
+    }
+    /// Get the address of the nametable at the bottom left of the current tilemap.
+    pub fn bot_left_nametable_addr(&self) -> usize {
+        match self.base_nametable_num() {
+            0 => 0x2800,
+            1 => 0x2C00,
+            2 => 0x2000,
+            3 => 0x2400,
+            _ => panic!("Invalid nametable num {}", self.base_nametable_num()),
+        }
+    }
+    /// Get the address of the nametable at the bottom right of the current tilemap.
+    pub fn bot_right_nametable_addr(&self) -> usize {
+        match self.base_nametable_num() {
+            0 => 0x2C00,
+            1 => 0x2800,
+            2 => 0x2400,
+            3 => 0x2000,
+            _ => panic!("Invalid nametable num {}", self.base_nametable_num()),
+        }
     }
 }

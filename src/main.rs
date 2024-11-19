@@ -58,7 +58,7 @@ fn main() {
 
             let mut cycles = 0;
             if !debug_window.paused() {
-                (0..50).for_each(|_| cycles += nes.step().unwrap());
+                (0..55).for_each(|_| cycles += nes.step().unwrap());
                 // These functions will hopefully eventually be called from nes.step
                 if Instant::now().duration_since(s1) > Duration::from_millis(1000 / 240) {
                     nes.apu.on_quater_frame();
