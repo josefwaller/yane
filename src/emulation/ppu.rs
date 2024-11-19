@@ -116,29 +116,7 @@ impl Ppu {
         if self.addr < 0x2000 {
             cartridge.write_chr(self.addr as usize, value);
         } else if self.addr < 0x3000 {
-            match cartridge.nametable_arrangement {
-                NametableArrangement::Horizontal => {
-                    self.nametable_ram[(self.addr - 0x2000) as usize % 0x800] = value
-                }
-                NametableArrangement::Vertical => {
-                    // 0x2000 = 0x2400, 0x2800 = 0x2C00
-                    let addr = if self.addr < 0x2400 {
-                        self.addr % 0x400
-                    } else if self.addr < 0x2800 {
-                        // Should be mirrored
-                        self.addr % 0x400
-                    } else if self.addr < 0x2C00 {
-                        (self.addr % 0x400) + 0x400
-                    } else {
-                        (self.addr % 0x400) + 0x400
-                    };
-                    self.nametable_ram[addr as usize] = value;
-                }
-                _ => unimplemented!(
-                    "Nametable \"{:?}\" unimplemented by PPU",
-                    cartridge.nametable_arrangement
-                ),
-            }
+            self.nametable_ram[cartridge.transform_nametable_addr(self.addr as usize)] = value;
         } else if self.addr >= 0x3F00 {
             self.palette_ram[(self.addr - 0x3F00) as usize % 0x020] = value;
         }
@@ -152,26 +130,8 @@ impl Ppu {
         if self.addr < 0x2000 {
             return cartridge.read_ppu(addr as usize);
         }
-        // TODO: Deduplicate
         if self.addr < 0x3F00 {
-            match cartridge.nametable_arrangement {
-                NametableArrangement::Horizontal => {
-                    return self.nametable_ram[(self.addr - 0x2000) as usize % 0x800];
-                }
-                NametableArrangement::Vertical => {
-                    // 0x2000 = 0x2400, 0x2800 = 0x2C00
-                    let addr = if self.addr < 0x2400 {
-                        self.addr % 0x400
-                    } else if self.addr < 0x2800 {
-                        self.addr % 0x400
-                    } else if self.addr < 0x2C00 {
-                        (self.addr % 0x400) + 0x400
-                    } else {
-                        (self.addr % 0x400) + 0x400
-                    };
-                    return self.nametable_ram[addr as usize];
-                }
-            }
+            return self.nametable_ram[cartridge.transform_nametable_addr(self.addr as usize)];
         }
         self.palette_ram[(addr - 0x3F00) as usize % 0x020]
     }

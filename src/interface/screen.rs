@@ -1,4 +1,4 @@
-use crate::{check_error, set_uniform, utils::*, NametableArrangement, Nes};
+use crate::{check_error, set_uniform, utils::*, Nes};
 use glow::*;
 use log::*;
 
@@ -330,25 +330,8 @@ impl Screen {
     // This function should probably be moved into the PPU somewhere
     // Or perhaps the cartridge
     fn get_nametable(&self, addr: usize, nes: &Nes) -> Vec<u8> {
-        match nes.cartridge.nametable_arrangement {
-            NametableArrangement::Horizontal => {
-                // 0x2000 = 0x2800 and 0x2400 = 0x2C00
-                nes.ppu.nametable_ram[(addr % nes.ppu.nametable_ram.len())
-                    ..((addr % nes.ppu.nametable_ram.len()) + 0x400)]
-                    .to_vec()
-            }
-            NametableArrangement::Vertical => {
-                // 0x2000 = 0x2400, and 0x2800 = 0x2C00
-                if addr < 0x2800 {
-                    nes.ppu.nametable_ram[0x000..0x400].to_vec()
-                } else {
-                    nes.ppu.nametable_ram[0x400..0x800].to_vec()
-                }
-            }
-            _ => unimplemented!(
-                "Mapper {:?} not implemented",
-                nes.cartridge.nametable_arrangement
-            ),
-        }
+        nes.ppu.nametable_ram[nes.cartridge.transform_nametable_addr(addr)
+            ..=nes.cartridge.transform_nametable_addr(addr + 0x3FF)]
+            .to_vec()
     }
 }

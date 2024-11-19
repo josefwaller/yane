@@ -117,4 +117,24 @@ impl Cartridge {
         }
         return &self.memory.chr_ram;
     }
+    pub fn transform_nametable_addr(&self, addr: usize) -> usize {
+        match self.nametable_arrangement {
+            NametableArrangement::Horizontal => {
+                // 0x2000 = 0x2800, 0x2400 = 0x2C00
+                (addr - 0x2000) % 0x800
+            }
+            NametableArrangement::Vertical => {
+                // 0x2000 = 0x2400, 0x2800 = 0x2C00
+                if addr < 0x2400 {
+                    addr % 0x400
+                } else if addr < 0x2800 {
+                    addr % 0x400
+                } else if addr < 0x2C00 {
+                    (addr % 0x400) + 0x400
+                } else {
+                    (addr % 0x400) + 0x400
+                }
+            }
+        }
+    }
 }

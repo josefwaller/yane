@@ -174,21 +174,24 @@ impl Nes {
                 return Ok(cycles);
             }
             Err(s) => {
-                error!("Encountered an error, printing last 200 instructions",);
-                [
-                    &self.last_instructions[((self.last_inst_index + 1)
-                        % self.last_instructions.len())
-                        ..self.last_instructions.len()],
-                    &self.last_instructions[0..self.last_inst_index],
-                ]
-                .concat()
-                .iter()
-                .for_each(|inst| {
-                    error!(
-                        "\t OPCODE={:X} OPERANDS={:X} {:X}",
-                        inst[0], inst[1], inst[2]
-                    )
-                });
+                #[cfg(debug_assertions)]
+                {
+                    error!("Encountered an error, printing last 200 instructions",);
+                    [
+                        &self.last_instructions[((self.last_inst_index + 1)
+                            % self.last_instructions.len())
+                            ..self.last_instructions.len()],
+                        &self.last_instructions[0..self.last_inst_index],
+                    ]
+                    .concat()
+                    .iter()
+                    .for_each(|inst| {
+                        error!(
+                            "\t OPCODE={:X} OPERANDS={:X} {:X}",
+                            inst[0], inst[1], inst[2]
+                        )
+                    });
+                }
                 return Err(s);
             }
         }
