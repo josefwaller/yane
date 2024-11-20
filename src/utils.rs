@@ -205,7 +205,7 @@ pub unsafe fn bulk_render_tiles(
         uniform_1_i32_slice,
         heights.as_slice()
     );
-    gl.draw_arrays_instanced(glow::TRIANGLE_STRIP, 0, 4, pos.len() as i32);
+    gl.draw_arrays_instanced(glow::TRIANGLE_STRIP, 0, 4, pattern_nums.len() as i32);
 }
 /// Set the texture given to the CHR ROM/RAM in the nes given
 pub unsafe fn refresh_chr_texture(gl: &Context, chr_tex: NativeTexture, nes: &Nes) {
