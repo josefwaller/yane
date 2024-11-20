@@ -108,7 +108,7 @@ pub unsafe fn bulk_render_tiles(
     tile_program: NativeProgram,
     chr_tex: NativeTexture,
     tile_vao: NativeVertexArray,
-    pos: Vec<(i32, i32)>,
+    pos: Vec<i32>,
     pattern_nums: Vec<i32>,
     palette_indices: Vec<i32>,
     palette: &[[f32; 3]; 0x20],
@@ -122,7 +122,7 @@ pub unsafe fn bulk_render_tiles(
     #[cfg(debug_assertions)]
     {
         // Make sure everything is the same length
-        assert_eq!(pos.len(), pattern_nums.len());
+        assert_eq!(pos.len(), 2 * pattern_nums.len());
         assert_eq!(pattern_nums.len(), palette_indices.len());
         assert_eq!(palette_indices.len(), flip_vert.len());
         assert_eq!(flip_vert.len(), flip_horz.len());
@@ -155,13 +155,12 @@ pub unsafe fn bulk_render_tiles(
     );
 
     // Set position
-    let temp_pos: Vec<i32> = pos.iter().map(|a| [a.0, a.1]).flatten().collect();
     set_uniform!(
         gl,
         tile_program,
         "positions",
         uniform_2_i32_slice,
-        temp_pos.as_slice()
+        pos.as_slice()
     );
     set_int_uniform(&gl, &tile_program, "scanline", scanline as i32);
     set_uniform!(

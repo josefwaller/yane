@@ -145,12 +145,12 @@ impl Ppu {
     pub fn is_8x16_sprites(&self) -> bool {
         (self.ctrl & 0x20) != 0
     }
-    /// Return true if sprite endering is enabled
-    pub fn is_sprite_enabled(&self) -> bool {
+    /// Return true if OAM rendering is enabled, and false otherwise
+    pub fn is_oam_rendering_enabled(&self) -> bool {
         (self.mask & 0x10) != 0
     }
-    /// Return true if background rendering is enabledf
-    pub fn is_background_enabled(&self) -> bool {
+    /// Return true if background rendering is enabled, and false otherwise
+    pub fn is_background_rendering_enabled(&self) -> bool {
         (self.mask & 0x08) != 0
     }
     /// Return whether to hide the left 8 pixels when drawing sprites

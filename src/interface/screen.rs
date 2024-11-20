@@ -136,111 +136,130 @@ impl Screen {
         check_error!(self.gl);
 
         // We build a big table to tiles to render, and then render them all in one draw_arrays_instanced call
+        const MAX_NUM_TILES: usize = 33 + 8;
+        // The tiles' positions (each should have 2, X then Y)
+        let mut positions: Vec<i32> = Vec::with_capacity(MAX_NUM_TILES);
+        // The tiles' palette indices (each should have 1)
+        let mut palette_indices: Vec<i32> = Vec::with_capacity(MAX_NUM_TILES);
+        // The tiles' index, i.e. the index of the tile in the pattern table to draw
+        let mut tile_index: Vec<i32> = Vec::with_capacity(MAX_NUM_TILES);
+        // The tiles' depths, i.e. their Z index
+        // Used to draw sprites on top of background or vice versa
+        let mut depths: Vec<f32> = Vec::with_capacity(MAX_NUM_TILES);
+        // Whether to flip each tile along the X or Y axis
+        let mut flip_x: Vec<i32> = Vec::with_capacity(MAX_NUM_TILES);
+        let mut flip_y: Vec<i32> = Vec::with_capacity(MAX_NUM_TILES);
+        // The sprite height (1 = 8px, 2 = 16px)
+        // We can't have this be constant across all tiles since even in 8x16 mode, the background tiles are 8x8
+        let mut heights: Vec<i32> = Vec::with_capacity(MAX_NUM_TILES);
         // Gather information for rendering background
-        const NUM_NAMETABLE_TILES: usize = 33;
-        let y = (scanline + nes.ppu.scroll_y as usize) / 8;
-        let (left_nametable_addr, right_nametable_addr) = if y < 30 {
-            (
-                nes.ppu.top_left_nametable_addr(),
-                nes.ppu.top_right_nametable_addr(),
-            )
-        } else {
-            (
-                nes.ppu.bot_left_nametable_addr(),
-                nes.ppu.bot_right_nametable_addr(),
-            )
-        };
-        let nametable_row_index = if y < 30 { y } else { y - 30 };
-        // Get the left and right nametables
-        // We can account for the scroll Y offset when selecting the nametables
-        // But we need both in order to account for the scroll X
-        let left_nametable = self.get_nametable(left_nametable_addr, nes);
-        let right_nametable = self.get_nametable(right_nametable_addr, nes);
-        let nametable_patterns: Vec<i32> = (0..NUM_NAMETABLE_TILES)
-            .map(|i| {
+        if nes.ppu.is_background_rendering_enabled() {
+            const NUM_NAMETABLE_TILES: usize = 33;
+            let y = (scanline + nes.ppu.scroll_y as usize) / 8;
+            let (left_nametable_addr, right_nametable_addr) = if y < 30 {
+                (
+                    nes.ppu.top_left_nametable_addr(),
+                    nes.ppu.top_right_nametable_addr(),
+                )
+            } else {
+                (
+                    nes.ppu.bot_left_nametable_addr(),
+                    nes.ppu.bot_right_nametable_addr(),
+                )
+            };
+            let nametable_row_index = if y < 30 { y } else { y - 30 };
+            // Get the left and right nametables
+            // We can account for the scroll Y offset when selecting the nametables
+            // But we need both in order to account for the scroll X
+            let left_nametable = self.get_nametable(left_nametable_addr, nes);
+            let right_nametable = self.get_nametable(right_nametable_addr, nes);
+            // Add background positions
+            // We need to wrap around the current scanline
+            // Basically draw the tile somewhere in [scanline - 7, scanline), wherever a tile aligned on the grid would be
+            let actual_tile_pos = 8 * (scanline as i32 / 8);
+            let fine_scroll_y = nes.ppu.scroll_y as i32 % 8;
+            let pos_y = if actual_tile_pos - fine_scroll_y < scanline as i32 - 7 {
+                actual_tile_pos + 8 - fine_scroll_y
+            } else {
+                actual_tile_pos - fine_scroll_y
+            };
+            (0..NUM_NAMETABLE_TILES)
+                .map(|i| [8 * i as i32 - (nes.ppu.scroll_x % 8) as i32, pos_y])
+                .flatten()
+                .for_each(|p| positions.push(p));
+            // Add background patterns
+            (0..NUM_NAMETABLE_TILES).for_each(|i| {
                 let x = nes.ppu.scroll_x as usize / 8 + i;
                 let (nametable, index) = if x < 32 {
                     (&left_nametable, x)
                 } else {
                     (&right_nametable, x - 32)
                 };
-                nes.ppu.get_background_pattern_table_addr() as i32 / 0x10
-                    + nametable[32 * nametable_row_index + index] as i32
-            })
-            .collect();
-        let nametable_palettes: [i32; NUM_NAMETABLE_TILES] = core::array::from_fn(|i| {
-            let x = nes.ppu.scroll_x as usize / 8 + i;
-            // Get the config byte
-            let (nametable, index) = if x < 32 {
-                (&left_nametable, x)
-            } else {
-                (&right_nametable, x - 32)
-            };
-            // Get the X,Y coords of the 4x4 tile area whose palette is controlled by a single byte
-            let area_x = index / 4;
-            let area_y = nametable_row_index / 4;
-            let config_byte = nametable[0x3C0 + 8 * area_y + area_x];
-            // Get the specific 2 bit value that controls this tile's palette
-            let x = (index / 2) % 2;
-            let y = (nametable_row_index / 2) % 2;
-            ((config_byte >> (2 * (2 * y + x))) & 0x03) as i32
-        });
-
-        // We need to wrap around the current scanline
-        // Basically draw the tile somewhere in [scanline - 7, scanline), wherever a tile aligned on the grid would be
-        let actual_tile_pos = 8 * (scanline as i32 / 8);
-        let fine_scroll_y = nes.ppu.scroll_y as i32 % 8;
-        let pos_y = if actual_tile_pos - fine_scroll_y < scanline as i32 - 7 {
-            actual_tile_pos + 8 - fine_scroll_y
-        } else {
-            actual_tile_pos - fine_scroll_y
-        };
-        let nametable_pos: Vec<(i32, i32)> = (0..NUM_NAMETABLE_TILES)
-            .map(|i| (8 * i as i32 - (nes.ppu.scroll_x % 8) as i32, pos_y))
-            .collect();
-
+                tile_index.push(
+                    nes.ppu.get_background_pattern_table_addr() as i32 / 0x10
+                        + nametable[32 * nametable_row_index + index] as i32,
+                );
+            });
+            // Add pattern nums
+            (0..NUM_NAMETABLE_TILES).for_each(|i| {
+                let x = nes.ppu.scroll_x as usize / 8 + i;
+                // Get the config byte
+                let (nametable, index) = if x < 32 {
+                    (&left_nametable, x)
+                } else {
+                    (&right_nametable, x - 32)
+                };
+                // Get the X,Y coords of the 4x4 tile area whose palette is controlled by a single byte
+                let area_x = index / 4;
+                let area_y = nametable_row_index / 4;
+                let config_byte = nametable[0x3C0 + 8 * area_y + area_x];
+                // Get the specific 2 bit value that controls this tile's palette
+                let x = (index / 2) % 2;
+                let y = (nametable_row_index / 2) % 2;
+                palette_indices.push(((config_byte >> (2 * (2 * y + x))) & 0x03) as i32);
+            });
+            // Add misc, simple settings
+            (0..NUM_NAMETABLE_TILES).for_each(|_| {
+                depths.push(0.5);
+                flip_x.push(0);
+                flip_y.push(0);
+                heights.push(1);
+            });
+        }
         // Gether OAM to render
-        let sprite_height = if nes.ppu.is_8x16_sprites() { 16 } else { 8 };
-        let oam_to_render: Vec<&[u8]> = nes
-            .ppu
-            .oam
-            .chunks(4)
-            .filter(|obj| obj[0] as usize <= scanline && obj[0] as usize + sprite_height > scanline)
-            .take(8)
-            .collect();
-        let oam_pos: Vec<(i32, i32)> = oam_to_render
-            .iter()
-            .map(|obj| (obj[3] as i32, obj[0] as i32))
-            .collect();
-        let oam_patterns: Vec<i32> = oam_to_render
-            .iter()
-            .map(|obj| {
-                if nes.ppu.is_8x16_sprites() {
+        if nes.ppu.is_oam_rendering_enabled() {
+            let sprite_height = if nes.ppu.is_8x16_sprites() { 16 } else { 8 };
+            let oam_to_render: Vec<&[u8]> = nes
+                .ppu
+                .oam
+                .chunks(4)
+                .filter(|obj| {
+                    obj[0] as usize <= scanline && obj[0] as usize + sprite_height > scanline
+                })
+                .take(8)
+                .collect();
+            oam_to_render
+                .iter()
+                .map(|obj| [obj[3] as i32, obj[0] as i32])
+                .flatten()
+                .for_each(|p| positions.push(p));
+            oam_to_render.iter().for_each(|obj| {
+                tile_index.push(if nes.ppu.is_8x16_sprites() {
                     (obj[1] & 0x01) as i32 * 0x100 + (obj[1] & 0xFE) as i32
                 } else {
                     nes.ppu.get_spr_pattern_table_addr() as i32 / 0x10 + obj[1] as i32
-                }
-            })
-            .collect();
-        let oam_palettes: Vec<i32> = oam_to_render
-            .iter()
-            .map(|obj| 4 + (obj[2] & 0x03) as i32)
-            .collect();
-        let background_depths: Vec<f32> = (0..nametable_pos.len()).map(|_| 0.5).collect();
-        let background_flip: Vec<i32> = (0..nametable_pos.len()).map(|_| 0).collect();
-        let background_heights: Vec<i32> = (0..nametable_pos.len()).map(|_| 1).collect();
-        let oam_depths: Vec<f32> = (0..oam_to_render.len()).map(|_| 0.3).collect();
-        let oam_flip_horz = oam_to_render
-            .iter()
-            .map(|obj| if obj[2] & 0x80 != 0 { 1 } else { 0 })
-            .collect();
-        let oam_flip_vertz = oam_to_render
-            .iter()
-            .map(|obj| if obj[2] & 0x40 != 0 { 1 } else { 0 })
-            .collect();
-        let oam_heights: Vec<i32> = (0..oam_to_render.len())
-            .map(|_| if nes.ppu.is_8x16_sprites() { 2 } else { 1 })
-            .collect();
+                });
+            });
+            oam_to_render
+                .iter()
+                .for_each(|obj| palette_indices.push(4 + (obj[2] & 0x03) as i32));
+            oam_to_render.iter().for_each(|obj| {
+                depths.push(0.3);
+                flip_x.push(if obj[2] & 0x80 != 0 { 1 } else { 0 });
+                flip_y.push(if obj[2] & 0x40 != 0 { 1 } else { 0 });
+                heights.push(if nes.ppu.is_8x16_sprites() { 2 } else { 1 });
+            });
+        }
         // Get palette as RGB values
         let palette = nes.ppu.palette_ram.map(|i| self.palette[i as usize]);
         // Render tiles
@@ -249,15 +268,15 @@ impl Screen {
             self.tile_program,
             self.chr_tex,
             self.tile_vao,
-            [nametable_pos, oam_pos].concat(),
-            [nametable_patterns, oam_patterns].concat(),
-            [nametable_palettes.to_vec(), oam_palettes].concat(),
+            positions,
+            tile_index,
+            palette_indices,
             &palette,
             scanline,
-            [background_flip.clone(), oam_flip_horz].concat(),
-            [background_flip, oam_flip_vertz].concat(),
-            [background_depths, oam_depths].concat(),
-            [background_heights, oam_heights].concat(),
+            flip_x,
+            flip_y,
+            depths,
+            heights,
         );
 
         // Todo: Check for sprite overflow
