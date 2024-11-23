@@ -2,7 +2,7 @@
 
 in vec2 vertexPosition;
 
-const int TILE_COUNT = 33 + 8;
+const int TILE_COUNT = 33 + 64;
 
 uniform ivec2 positions[TILE_COUNT];
 uniform int patternIndices[TILE_COUNT];

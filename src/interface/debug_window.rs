@@ -253,6 +253,7 @@ impl DebugWindow {
                             }
                         );
                     }
+                    ui.checkbox("Scanline sprite limit", &mut settings.scanline_sprite_limit);
                     ui.slider("Volume", 0.0, 1.0, &mut settings.volume);
                 });
             let draw_data = self.imgui.render();

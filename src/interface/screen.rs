@@ -229,6 +229,11 @@ impl Screen {
         // Gether OAM to render
         if nes.ppu.is_oam_rendering_enabled() {
             let sprite_height = if nes.ppu.is_8x16_sprites() { 16 } else { 8 };
+            let sprite_limit = if settings.scanline_sprite_limit {
+                8
+            } else {
+                64
+            };
             let oam_to_render: Vec<&[u8]> = nes
                 .ppu
                 .oam
@@ -236,7 +241,7 @@ impl Screen {
                 .filter(|obj| {
                     obj[0] as usize <= scanline && obj[0] as usize + sprite_height > scanline
                 })
-                .take(8)
+                .take(sprite_limit)
                 .collect();
             oam_to_render
                 .iter()

@@ -8,6 +8,9 @@ pub struct Settings {
     pub paused: bool,
     // Set the volume multiplyer (between 0 and 1)
     pub volume: f32,
+    // Whether to limit each scanline to rendering at most 8 sprites
+    // Sprite 0 hit and sprite overflow flag setting behaviour will not be changed, this is only visual
+    pub scanline_sprite_limit: bool,
 }
 
 impl Default for Settings {
@@ -17,6 +20,7 @@ impl Default for Settings {
             palette_debug: false,
             paused: false,
             volume: 0.25,
+            scanline_sprite_limit: true,
         }
     }
 }
