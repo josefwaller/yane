@@ -1,7 +1,7 @@
 use log::*;
 use std::cmp::{max, min};
 
-use crate::{check_error, set_uniform, utils::*, Cartridge, Nes};
+use crate::{check_error, set_uniform, utils::*, Cartridge, Nes, Settings};
 use glow::{HasContext, NativeFramebuffer, NativeProgram, NativeTexture, VertexArray};
 use imgui::Condition::FirstUseEver;
 use imgui_glow_renderer::AutoRenderer;
@@ -24,18 +24,14 @@ pub struct DebugWindow {
     num_tiles: usize,
     num_rows: usize,
     num_columns: usize,
-    // Index of current page of tiles we are viewing
-    tile_page: usize,
     // Imgui stuff
     imgui: imgui::Context,
     platform: SdlPlatform,
     renderer: AutoRenderer,
     // Settings to change through imgui
     palette_index: usize,
-    debug_palette: bool,
-    debug_oam: bool,
-    paused: bool,
-    volume: f32,
+    // Index of current page of tiles we are viewing
+    tile_page: usize,
 }
 
 impl DebugWindow {
@@ -102,17 +98,13 @@ impl DebugWindow {
                 renderer,
                 imgui,
                 palette_index: 0,
-                debug_palette: false,
-                debug_oam: false,
-                paused: false,
-                volume: 0.00,
             }
         }
     }
     pub fn handle_event(&mut self, event: &Event) {
         self.platform.handle_event(&mut self.imgui, event);
     }
-    pub fn render(&mut self, nes: &Nes, event_pump: &EventPump) {
+    pub fn render(&mut self, nes: &Nes, event_pump: &EventPump, settings: &mut Settings) {
         unsafe {
             self.window.gl_make_current(&self.gl_context).unwrap();
             let gl = self.renderer.gl_context();
@@ -132,15 +124,8 @@ impl DebugWindow {
             check_error!(gl);
 
             // Set uniforms
-            let mut palette: Vec<f32> = if self.debug_palette {
-                [
-                    [0.0, 0.0, 0.0],
-                    [0.6, 0.0, 0.1],
-                    [0.1, 0.6, 0.1],
-                    [0.3, 0.3, 1.0],
-                ]
-                .as_flattened()
-                .to_vec()
+            let mut palette: Vec<f32> = if settings.palette_debug {
+                debug_palette().as_flattened().to_vec()
             } else {
                 nes.ppu
                     .palette_ram
@@ -243,7 +228,7 @@ impl DebugWindow {
                         });
                         c.end();
                     }
-                    ui.disabled(self.debug_palette, || {
+                    ui.disabled(settings.palette_debug, || {
                         if let Some(c) =
                             ui.begin_combo("Palette", format!("Palette {}", self.palette_index))
                         {
@@ -256,12 +241,19 @@ impl DebugWindow {
                             c.end();
                         }
                     });
-                    ui.checkbox("Debug palette", &mut self.debug_palette);
-                    ui.checkbox("Debug OAM", &mut self.debug_oam);
-                    if ui.button(if self.paused { "Unpause" } else { "Pause" }) {
-                        self.paused = !self.paused;
+                    ui.checkbox("Debug palette", &mut settings.palette_debug);
+                    ui.checkbox("Debug OAM", &mut settings.oam_debug);
+                    if ui.checkbox("Paused", &mut settings.paused) {
+                        info!(
+                            "Manual pause {}",
+                            if settings.paused {
+                                "checked"
+                            } else {
+                                "unchecked"
+                            }
+                        );
                     }
-                    ui.slider("Volume", 0.0, 1.0, &mut self.volume);
+                    ui.slider("Volume", 0.0, 1.0, &mut settings.volume);
                 });
             let draw_data = self.imgui.render();
             self.renderer
@@ -269,15 +261,5 @@ impl DebugWindow {
                 .expect("Error rendering DearImGui");
         }
         self.window.gl_swap_window();
-    }
-
-    pub fn paused(&self) -> bool {
-        self.paused
-    }
-    pub fn volume(&self) -> f32 {
-        self.volume
-    }
-    pub fn debug_oam(&self) -> bool {
-        self.debug_oam
     }
 }

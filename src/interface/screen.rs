@@ -1,4 +1,4 @@
-use crate::{check_error, set_uniform, utils::*, Nes};
+use crate::{check_error, set_uniform, utils::*, Nes, Settings};
 use glow::*;
 use log::*;
 
@@ -86,7 +86,7 @@ impl Screen {
         }
     }
 
-    pub unsafe fn render_scanline(&mut self, nes: &Nes, scanline: usize) {
+    pub unsafe fn render_scanline(&mut self, nes: &Nes, scanline: usize, settings: &Settings) {
         // Enable stencil test
         self.gl.enable(glow::STENCIL_TEST);
         self.gl.enable(glow::DEPTH_TEST);
@@ -200,7 +200,7 @@ impl Screen {
                         + nametable[32 * nametable_row_index + index] as i32,
                 );
             });
-            // Add pattern nums
+            // Add palette indexes
             (0..NUM_NAMETABLE_TILES).for_each(|i| {
                 let x = nes.ppu.scroll_x as usize / 8 + i;
                 // Get the config byte
@@ -261,28 +261,25 @@ impl Screen {
             });
         }
         // Get palette as RGB values
-        let palette = nes.ppu.palette_ram.map(|i| self.palette[i as usize]);
+        let palette = &nes.ppu.palette_ram.map(|i| self.palette[i as usize]);
         // Render tiles
-        bulk_render_tiles(
-            &self.gl,
-            self.tile_program,
-            self.chr_tex,
-            self.tile_vao,
+        self.bulk_render_tiles(
             positions,
             tile_index,
             palette_indices,
-            &palette,
+            palette,
             scanline,
             flip_x,
             flip_y,
             depths,
             heights,
+            settings,
         );
 
         // Todo: Check for sprite overflow
     }
 
-    pub fn render(&mut self, nes: &Nes, window_size: (u32, u32), debug_oam: bool) {
+    pub fn render(&mut self, nes: &Nes, window_size: (u32, u32), settings: &Settings) {
         unsafe {
             self.gl.disable(glow::STENCIL_TEST);
             self.gl.disable(glow::DEPTH_TEST);
@@ -310,7 +307,7 @@ impl Screen {
             check_error!(self.gl);
 
             // Render wireframe box around each OAM object
-            if debug_oam {
+            if settings.oam_debug {
                 self.gl.use_program(Some(self.wireframe_program));
                 self.gl.bind_vertex_array(Some(self.wireframe_vao));
                 check_error!(self.gl);
@@ -345,6 +342,120 @@ impl Screen {
             }
             refresh_chr_texture(&self.gl, self.chr_tex, nes);
         }
+    }
+    /// Bulk render a bunch of tiles in one single draw_arrays_instanced call
+    unsafe fn bulk_render_tiles(
+        &self,
+        pos: Vec<i32>,
+        pattern_nums: Vec<i32>,
+        palette_indices: Vec<i32>,
+        palette: &[[f32; 3]; 0x20],
+        scanline: usize,
+        flip_vert: Vec<i32>,
+        flip_horz: Vec<i32>,
+        depths: Vec<f32>,
+        // These should be either 1 or 2
+        heights: Vec<i32>,
+        settings: &Settings,
+    ) {
+        #[cfg(debug_assertions)]
+        {
+            // Make sure everything is the same length
+            assert_eq!(pos.len(), 2 * pattern_nums.len());
+            assert_eq!(pattern_nums.len(), palette_indices.len());
+            assert_eq!(palette_indices.len(), flip_vert.len());
+            assert_eq!(flip_vert.len(), flip_horz.len());
+            assert_eq!(flip_horz.len(), heights.len());
+            // Make sure all the booleans are valid
+            [&flip_horz, &flip_vert].iter().for_each(|v| {
+                v.iter().for_each(|val| {
+                    assert!(
+                        *val == 0 || *val == 1,
+                        "Invalid boolean value passed to bulk_render_tiles"
+                    )
+                })
+            });
+        }
+        self.gl.use_program(Some(self.tile_program));
+        self.gl.bind_vertex_array(Some(self.tile_vao));
+        // Set texture
+        const TEX_NUM: i32 = 2;
+        self.gl.active_texture(glow::TEXTURE0 + TEX_NUM as u32);
+        check_error!(self.gl);
+        self.gl.bind_texture(glow::TEXTURE_2D, Some(self.chr_tex));
+        check_error!(self.gl);
+        set_uniform!(self.gl, self.tile_program, "chrTex", uniform_1_i32, TEX_NUM);
+        set_uniform!(
+            self.gl,
+            self.tile_program,
+            "patternIndices",
+            uniform_1_i32_slice,
+            pattern_nums.as_slice()
+        );
+
+        // Set position
+        set_uniform!(
+            self.gl,
+            self.tile_program,
+            "positions",
+            uniform_2_i32_slice,
+            pos.as_slice()
+        );
+        set_int_uniform(&self.gl, &self.tile_program, "scanline", scanline as i32);
+        set_uniform!(
+            self.gl,
+            self.tile_program,
+            "paletteIndices",
+            uniform_1_i32_slice,
+            palette_indices.as_slice()
+        );
+        let debug_pal: Vec<f32> = (0..8)
+            .map(|_| debug_palette().into_flattened())
+            .flatten()
+            .collect();
+        let final_palette = if settings.palette_debug {
+            debug_pal.as_slice()
+        } else {
+            palette.as_flattened()
+        };
+
+        set_uniform!(
+            self.gl,
+            self.tile_program,
+            "palette",
+            uniform_3_f32_slice,
+            final_palette
+        );
+        set_uniform!(
+            self.gl,
+            self.tile_program,
+            "depths",
+            uniform_1_f32_slice,
+            depths.as_slice()
+        );
+        set_uniform!(
+            self.gl,
+            self.tile_program,
+            "flipHorizontal",
+            uniform_1_i32_slice,
+            flip_horz.as_slice()
+        );
+        set_uniform!(
+            self.gl,
+            self.tile_program,
+            "flipVertical",
+            uniform_1_i32_slice,
+            flip_vert.as_slice()
+        );
+        set_uniform!(
+            self.gl,
+            self.tile_program,
+            "heights",
+            uniform_1_i32_slice,
+            heights.as_slice()
+        );
+        self.gl
+            .draw_arrays_instanced(glow::TRIANGLE_STRIP, 0, 4, pattern_nums.len() as i32);
     }
     // This function should probably be moved into the PPU somewhere
     // Or perhaps the cartridge

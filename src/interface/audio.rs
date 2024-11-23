@@ -1,6 +1,6 @@
 use crate::{
     apu::{NoiseRegister, PulseRegister, TriangleRegister},
-    Nes,
+    Nes, Settings,
 };
 use sdl2::{
     audio::{AudioCallback, AudioDevice, AudioSpecDesired},
@@ -158,17 +158,17 @@ impl Audio {
             noise_device,
         }
     }
-    pub fn update_audio(&mut self, nes: &Nes, volume: f32) {
+    pub fn update_audio(&mut self, nes: &Nes, settings: &Settings) {
         self.pulse_devices
             .iter_mut()
             .enumerate()
             .for_each(|(i, d)| {
                 d.lock().register = nes.apu.pulse_registers[i];
-                d.lock().max_volume = volume;
+                d.lock().max_volume = settings.volume;
             });
         self.triangle_device.lock().register = nes.apu.triangle_register;
-        self.triangle_device.lock().max_volume = volume;
+        self.triangle_device.lock().max_volume = settings.volume;
         self.noise_device.lock().register = nes.apu.noise_register;
-        self.noise_device.lock().max_volume = volume;
+        self.noise_device.lock().max_volume = settings.volume;
     }
 }

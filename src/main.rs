@@ -5,7 +5,7 @@ use sdl2::{
 };
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use yane::{DebugWindow, Nes, Window};
+use yane::{DebugWindow, Nes, Settings, Window};
 
 fn main() {
     {
@@ -13,6 +13,7 @@ fn main() {
         let args: Vec<String> = std::env::args().collect();
         let data = std::fs::read(args[1].clone()).unwrap();
         let mut nes = Nes::from_cartridge(data.as_slice());
+        let mut settings = Settings::default();
 
         let sdl = sdl2::init().unwrap();
         // Setup video
@@ -74,15 +75,17 @@ fn main() {
                 .pressed_scancodes()
                 .filter_map(Keycode::from_scancode)
                 .collect();
-            window.update(&mut nes, keys, debug_window.volume());
+            window.update(&mut nes, keys, &settings);
             // Render debug window
             if Instant::now().duration_since(last_debug_window_render) >= DEBUG_WINDOW_REFRESH_RATE
             {
                 last_debug_window_render += DEBUG_WINDOW_REFRESH_RATE;
-                debug_window.render(&nes, &event_pump);
+                debug_window.render(&nes, &event_pump, &mut settings);
             }
             // Update CPU
-            if !debug_window.paused() {
+            if settings.paused {
+                delta = Instant::now();
+            } else {
                 while cycles < CPU_CYCLES_PER_SCANLINE {
                     cycles += nes.step().unwrap();
                 }
@@ -97,30 +100,29 @@ fn main() {
                     nes.apu.on_half_frame();
                     s2 = Instant::now();
                 }
-            }
-            if scanline < 240 {
-                window.render_scanline(&nes, scanline);
-            } else {
-                // Reset scanline
-                scanline = 0;
-                // Debug log FPS info
-                frame_count += 1;
-                if frame_count == 100 {
-                    frame_count = 0;
-                    let now = Instant::now();
-                    debug!(
-                        "Over last 100 frames: Avg FPS: {}, avg cycles: {}",
-                        100.0
-                            / (now.duration_since(last_hundred_frames).as_millis() as f32 / 1000.0),
-                        frame_cycles as f64 / 100.0
-                    );
-                    frame_cycles = 0;
-                    last_hundred_frames = now;
-                }
-                // Render window
-                window.render(&mut nes, debug_window.debug_oam());
-                // Do VBlank
-                if !debug_window.paused() {
+                if scanline < 240 {
+                    window.render_scanline(&nes, scanline, &settings);
+                } else {
+                    // Reset scanline
+                    scanline = 0;
+                    // Debug log FPS info
+                    frame_count += 1;
+                    if frame_count == 100 {
+                        frame_count = 0;
+                        let now = Instant::now();
+                        debug!(
+                            "Over last 100 frames: Avg FPS: {}, avg cycles: {}",
+                            100.0
+                                / (now.duration_since(last_hundred_frames).as_millis() as f32
+                                    / 1000.0),
+                            frame_cycles as f64 / 100.0
+                        );
+                        frame_cycles = 0;
+                        last_hundred_frames = now;
+                    }
+                    // Render window
+                    window.render(&mut nes, &settings);
+                    // Do VBlank
                     nes.ppu.on_vblank();
                     if nes.ppu.get_nmi_enabled() {
                         nes.on_nmi();
@@ -137,23 +139,23 @@ fn main() {
                     cycles -= CPU_CYCLES_PER_VBLANK;
                     cycles_to_wait += CPU_CYCLES_PER_VBLANK;
                 }
+                scanline += 1;
+                // Calculate how much time has passed in the emulation
+                let emu_elapsed = wait_time_per_cycle.saturating_mul(cycles_to_wait as u32);
+                // Calculate how much time has actually passed
+                let actual_elapsed = Instant::now().duration_since(delta);
+                // Wait for the difference
+                let wait_duration = emu_elapsed.saturating_sub(actual_elapsed);
+                // If we are going too fast, slow down
+                frame_cycles += cycles_to_wait;
+                // Check if we want to slow down first, since sleep is costly even if wait_duration is 0
+                if wait_duration != Duration::ZERO {
+                    sleep(wait_duration);
+                }
+                // Advance real time by amount of emulator time that will have passed
+                // Since sleep may overshoot, this will let us catch up next frame/scanline
+                delta += emu_elapsed;
             }
-            scanline += 1;
-            // Calculate how much time has passed in the emulation
-            let emu_elapsed = wait_time_per_cycle.saturating_mul(cycles_to_wait as u32);
-            // Calculate how much time has actually passed
-            let actual_elapsed = Instant::now().duration_since(delta);
-            // Wait for the difference
-            let wait_duration = emu_elapsed.saturating_sub(actual_elapsed);
-            // If we are going too fast, slow down
-            frame_cycles += cycles_to_wait;
-            // Check if we want to slow down first, since sleep is costly even if wait_duration is 0
-            if wait_duration != Duration::ZERO {
-                sleep(wait_duration);
-            }
-            // Advance real time by amount of emulator time that will have passed
-            // Since sleep may overshoot, this will let us catch up next frame/scanline
-            delta += emu_elapsed;
         }
     }
 }

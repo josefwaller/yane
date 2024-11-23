@@ -102,111 +102,7 @@ pub unsafe fn create_program(
     }
     program
 }
-/// Bulk render a bunch of tiles in one single draw_arrays_instanced call
-pub unsafe fn bulk_render_tiles(
-    gl: &Context,
-    tile_program: NativeProgram,
-    chr_tex: NativeTexture,
-    tile_vao: NativeVertexArray,
-    pos: Vec<i32>,
-    pattern_nums: Vec<i32>,
-    palette_indices: Vec<i32>,
-    palette: &[[f32; 3]; 0x20],
-    scanline: usize,
-    flip_vert: Vec<i32>,
-    flip_horz: Vec<i32>,
-    depths: Vec<f32>,
-    // These should be either 1 or 2
-    heights: Vec<i32>,
-) {
-    #[cfg(debug_assertions)]
-    {
-        // Make sure everything is the same length
-        assert_eq!(pos.len(), 2 * pattern_nums.len());
-        assert_eq!(pattern_nums.len(), palette_indices.len());
-        assert_eq!(palette_indices.len(), flip_vert.len());
-        assert_eq!(flip_vert.len(), flip_horz.len());
-        assert_eq!(flip_horz.len(), heights.len());
-        // Make sure all the booleans are valid
-        [&flip_horz, &flip_vert].iter().for_each(|v| {
-            v.iter().for_each(|val| {
-                assert!(
-                    *val == 0 || *val == 1,
-                    "Invalid boolean value passed to bulk_render_tiles"
-                )
-            })
-        });
-    }
-    gl.use_program(Some(tile_program));
-    gl.bind_vertex_array(Some(tile_vao));
-    // Set texture
-    const TEX_NUM: i32 = 2;
-    gl.active_texture(glow::TEXTURE0 + TEX_NUM as u32);
-    check_error!(gl);
-    gl.bind_texture(glow::TEXTURE_2D, Some(chr_tex));
-    check_error!(gl);
-    set_uniform!(gl, tile_program, "chrTex", uniform_1_i32, TEX_NUM);
-    set_uniform!(
-        gl,
-        tile_program,
-        "patternIndices",
-        uniform_1_i32_slice,
-        pattern_nums.as_slice()
-    );
 
-    // Set position
-    set_uniform!(
-        gl,
-        tile_program,
-        "positions",
-        uniform_2_i32_slice,
-        pos.as_slice()
-    );
-    set_int_uniform(&gl, &tile_program, "scanline", scanline as i32);
-    set_uniform!(
-        gl,
-        tile_program,
-        "paletteIndices",
-        uniform_1_i32_slice,
-        palette_indices.as_slice()
-    );
-    set_uniform!(
-        gl,
-        tile_program,
-        "palette",
-        uniform_3_f32_slice,
-        palette.as_flattened()
-    );
-    set_uniform!(
-        gl,
-        tile_program,
-        "depths",
-        uniform_1_f32_slice,
-        depths.as_slice()
-    );
-    set_uniform!(
-        gl,
-        tile_program,
-        "flipHorizontal",
-        uniform_1_i32_slice,
-        flip_horz.as_slice()
-    );
-    set_uniform!(
-        gl,
-        tile_program,
-        "flipVertical",
-        uniform_1_i32_slice,
-        flip_vert.as_slice()
-    );
-    set_uniform!(
-        gl,
-        tile_program,
-        "heights",
-        uniform_1_i32_slice,
-        heights.as_slice()
-    );
-    gl.draw_arrays_instanced(glow::TRIANGLE_STRIP, 0, 4, pattern_nums.len() as i32);
-}
 /// Set the texture given to the CHR ROM/RAM in the nes given
 pub unsafe fn refresh_chr_texture(gl: &Context, chr_tex: NativeTexture, nes: &Nes) {
     let pattern_table = nes.cartridge.get_pattern_table();
@@ -447,4 +343,14 @@ pub unsafe fn create_screen_texture(
         panic!("Error creating frame buffer: {:X}", status);
     }
     (texture_buffer, vao, texture_program, render_texture)
+}
+
+pub fn debug_palette() -> Vec<[f32; 3]> {
+    [
+        [0.0, 0.0, 0.0],
+        [0.6, 0.0, 0.1],
+        [0.1, 0.6, 0.1],
+        [0.3, 0.3, 1.0],
+    ]
+    .to_vec()
 }

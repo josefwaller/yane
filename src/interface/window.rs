@@ -1,6 +1,7 @@
-use crate::{utils, Audio, Controller, Nes, Screen};
+use crate::{utils, Audio, Controller, Nes, Screen, Settings};
 use sdl2::{keyboard::Keycode, video::GLContext, Sdl, VideoSubsystem};
 
+/// A wrapper around `Screen` that provides an SDL2 GL context, and handles input through SDL2.
 pub struct Window {
     window: sdl2::video::Window,
     // event_loop: sdl2::EventPump,
@@ -29,7 +30,7 @@ impl Window {
             screen,
         }
     }
-    pub fn update(&mut self, nes: &mut Nes, pressed_keys: Vec<Keycode>, volume: f32) {
+    pub fn update(&mut self, nes: &mut Nes, pressed_keys: Vec<Keycode>, settings: &Settings) {
         // Update inputs
 
         // P1
@@ -58,17 +59,17 @@ impl Window {
         nes.set_input(1, controller);
 
         // Update audio
-        self.audio.update_audio(nes, volume);
+        self.audio.update_audio(nes, settings);
     }
-    pub fn render_scanline(&mut self, nes: &Nes, scanline: usize) {
+    pub fn render_scanline(&mut self, nes: &Nes, scanline: usize, settings: &Settings) {
         self.window.gl_make_current(&self.gl_context).unwrap();
         unsafe {
-            self.screen.render_scanline(nes, scanline);
+            self.screen.render_scanline(nes, scanline, settings);
         }
     }
-    pub fn render(&mut self, nes: &mut Nes, debug_oam: bool) {
+    pub fn render(&mut self, nes: &mut Nes, settings: &Settings) {
         self.window.gl_make_current(&self.gl_context).unwrap();
-        self.screen.render(nes, self.window.size(), debug_oam);
+        self.screen.render(nes, self.window.size(), settings);
         self.window.gl_swap_window();
     }
 }
