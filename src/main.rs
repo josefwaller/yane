@@ -34,7 +34,7 @@ fn main() {
         let mut last_debug_window_render = Instant::now();
         // Various constants for keeping emulator time in check with real time
         const DEBUG_WINDOW_REFRESH_RATE: Duration = Duration::from_millis(1000 / 60);
-        const CPU_CYCLES_PER_SCANLINE: i64 = 113;
+        const CPU_CYCLES_PER_SCANLINE: i64 = 112;
         const CPU_CYCLES_PER_VBLANK: i64 = 2273;
         const CPU_CYCLES_PER_OAM: i64 = 513;
         const CPU_CYCLES_PER_FRAME: i64 = 240 * 113 + 2273;
@@ -102,6 +102,7 @@ fn main() {
                 }
                 if scanline < 240 {
                     window.render_scanline(&nes, scanline, &settings);
+                    scanline += 1;
                 } else {
                     // Reset scanline
                     scanline = 0;
@@ -139,7 +140,6 @@ fn main() {
                     cycles -= CPU_CYCLES_PER_VBLANK;
                     cycles_to_wait += CPU_CYCLES_PER_VBLANK;
                 }
-                scanline += 1;
                 // Calculate how much time has passed in the emulation
                 let emu_elapsed = wait_time_per_cycle.saturating_mul(cycles_to_wait as u32);
                 // Calculate how much time has actually passed

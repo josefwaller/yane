@@ -5,7 +5,7 @@ uniform int scanline;
 
 void main() {
     gl_Position = vec4(
-        1 - 2 * pos.x,// + vec2(0, float(scanline) / 240.0),
+        1 - 2 * pos.x,
         1.0 - 2.0 * (float(scanline) / 240.0),
         0.9,
         1.0
