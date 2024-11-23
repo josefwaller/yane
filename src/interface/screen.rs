@@ -253,8 +253,8 @@ impl Screen {
             oam_to_render
                 .iter()
                 .for_each(|obj| palette_indices.push(4 + (obj[2] & 0x03) as i32));
-            oam_to_render.iter().for_each(|obj| {
-                depths.push(if obj[2] & 0x20 != 0 { 0.7 } else { 0.3 });
+            oam_to_render.iter().enumerate().for_each(|(i, obj)| {
+                depths.push(if obj[2] & 0x20 != 0 { 0.7 } else { 0.3 } + (i as f32 / 64.0) / 100.0);
                 flip_x.push(if obj[2] & 0x80 != 0 { 1 } else { 0 });
                 flip_y.push(if obj[2] & 0x40 != 0 { 1 } else { 0 });
                 heights.push(if nes.ppu.is_8x16_sprites() { 2 } else { 1 });
