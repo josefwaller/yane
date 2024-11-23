@@ -4,27 +4,23 @@ use sdl2::{keyboard::Keycode, video::GLContext, Sdl, VideoSubsystem};
 /// A wrapper around `Screen` that provides an SDL2 GL context, and handles input through SDL2.
 pub struct Window {
     window: sdl2::video::Window,
-    // event_loop: sdl2::EventPump,
     gl_context: GLContext,
     audio: Audio,
     screen: Screen,
 }
 
 impl Window {
-    pub fn new(nes: &Nes, video: &VideoSubsystem, sdl: &Sdl) -> Window {
+    pub fn new(video: &VideoSubsystem, sdl: &Sdl) -> Window {
         // Init SDL window
         let window_width = 256 * 3;
         let window_height = 240 * 3;
         let (window, gl_context, gl) =
             utils::create_window(video, "Y.A.N.E.", window_width, window_height);
 
-        // let event_loop = sdl.event_pump().unwrap();
-
-        let screen = Screen::new(&nes, gl);
+        let screen = Screen::new(gl);
         let audio = Audio::new(&sdl);
         Window {
             window,
-            // event_loop,
             gl_context,
             audio,
             screen,
@@ -67,7 +63,7 @@ impl Window {
             self.screen.render_scanline(nes, scanline, settings);
         }
     }
-    pub fn render(&mut self, nes: &mut Nes, settings: &Settings) {
+    pub fn render(&mut self, nes: &Nes, settings: &Settings) {
         self.window.gl_make_current(&self.gl_context).unwrap();
         self.screen.render(nes, self.window.size(), settings);
         self.window.gl_swap_window();

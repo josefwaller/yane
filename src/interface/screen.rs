@@ -2,7 +2,9 @@ use crate::{check_error, set_uniform, utils::*, Nes, Settings};
 use glow::*;
 use log::*;
 
-// Renders the PPU
+/// An NES rendering implementation that uses OpenGL 3.3.
+/// Uses the `glow` library to render, so requires a `glow` `Context`.
+/// Can be paired with a `Window` to render to an SDL2 window.
 pub struct Screen {
     gl: Context,
     palette: [[f32; 3]; 0x40],
@@ -24,7 +26,7 @@ pub struct Screen {
 }
 impl Screen {
     // TODO: Rename
-    pub fn new(nes: &Nes, gl: Context) -> Screen {
+    pub fn new(gl: Context) -> Screen {
         unsafe {
             // Send CHR ROM/RAM data
             let chr_tex = gl.create_texture().unwrap();
