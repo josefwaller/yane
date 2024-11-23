@@ -124,12 +124,8 @@ impl Nes {
             0..0x2000 => self.mem[addr % 0x0800] = value,
             0x2000..0x4000 => self.ppu.write_byte(addr, value, &mut self.cartridge),
             0x4014 => {
-                // Perform DMA
-                // TODO: Make this better
-                let addr = (value as usize) << 8;
-                for i in 0..0x100 {
-                    self.ppu.oam[i] = self.read_byte(addr + i);
-                }
+                // Set PPU DMA register
+                self.ppu.oam_dma = Some(value);
             }
             // Input byte
             // Sets whether to poll or not
@@ -648,6 +644,20 @@ impl Nes {
                 ))
             }
         }
+    }
+    /// Check if the PPU's OAM DMA register has been set.
+    /// If it has been, execute the DMA and reset the regsiter to None.
+    /// Return `true` if the DMA is executed, and `false` otherwise.
+    pub fn check_oam_dma(&mut self) -> bool {
+        if let Some(dma_reg) = self.ppu.oam_dma {
+            let addr = (dma_reg as usize) << 8;
+            for i in 0..0x100 {
+                self.ppu.oam[i] = self.read_byte(addr + i);
+            }
+            self.ppu.oam_dma = None;
+            return true;
+        }
+        false
     }
 
     #[inline]

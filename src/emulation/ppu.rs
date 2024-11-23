@@ -22,7 +22,9 @@ pub struct Ppu {
     /// The PPUDATA register (actually the read buffer)
     pub data: u8,
     /// The OAMDMA register
-    pub oam_dma: u8,
+    /// This register is usually None, and is only set to Some(n) when written to.
+    /// It is then reset when the DMA is executed.
+    pub oam_dma: Option<u8>,
     /// VRAM
     pub palette_ram: [u8; 0x20],
     pub nametable_ram: [u8; 0x800],
@@ -43,7 +45,7 @@ impl Ppu {
             scroll_y: 0,
             addr: 0,
             data: 0,
-            oam_dma: 0,
+            oam_dma: None,
             palette_ram: [0; 0x20],
             nametable_ram: [0; 0x800],
             w: true,
