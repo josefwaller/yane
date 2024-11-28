@@ -129,7 +129,8 @@ impl Ppu {
             && self.is_background_rendering_enabled()
             && self.is_oam_rendering_enabled()
         {
-            let y = self.oam[0] as usize;
+            // Sprite rendering is delayed by 1 scanline
+            let y = self.oam[0] as usize + 1;
             let sprite_height = if self.is_8x16_sprites() { 16 } else { 8 };
             if y <= scanline && y + sprite_height > scanline {
                 // Get the tile
@@ -154,7 +155,7 @@ impl Ppu {
                             // Check if this pixel intersects the background
                             if !self.background_pixel_is_transparent(
                                 self.oam[3] as usize + (7 - i),
-                                y,
+                                scanline,
                                 cartridge,
                             ) {
                                 self.status |= 0x40;
