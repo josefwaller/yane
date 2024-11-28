@@ -28,7 +28,7 @@ pub struct Nes {
     controller_bits: [usize; 2],
     // Last 200 instructions executed, stored for debugging purposes
     #[cfg(debug_assertions)]
-    last_instructions: [[u8; 3]; 200],
+    pub last_instructions: [[u8; 3]; 200],
     #[cfg(debug_assertions)]
     last_inst_index: usize,
 }

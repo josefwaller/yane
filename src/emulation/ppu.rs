@@ -28,7 +28,7 @@ pub struct Ppu {
     /// VRAM
     pub palette_ram: [u8; 0x20],
     pub nametable_ram: [u8; 0x800],
-    // W register
+    // W register, false = 0
     w: bool,
 }
 
@@ -62,6 +62,8 @@ impl Ppu {
                 // VBLANK is cleared on read
                 let status = self.status;
                 self.status &= 0x7F;
+                // Clear W
+                self.w = false;
                 status
             }
             3 => self.oam_addr,
@@ -88,9 +90,9 @@ impl Ppu {
             4 => self.oam_data = value,
             5 => {
                 if self.w {
-                    self.scroll_x = value
-                } else {
                     self.scroll_y = value;
+                } else {
+                    self.scroll_x = value
                 }
                 self.w = !self.w;
             }
@@ -105,11 +107,108 @@ impl Ppu {
 
     pub fn write_to_addr(&mut self, value: u8) {
         if self.w {
-            self.addr = (self.addr & 0x00FF) + ((value as u16) << 8);
-        } else {
+            // Set LSB
             self.addr = (self.addr & 0x3F00) + value as u16;
+        } else {
+            // Set MSB
+            self.addr = (self.addr & 0x00FF) + ((value as u16) << 8);
         }
         self.w = !self.w;
+    }
+
+    /// Set the sprite zero hit flag and the sprite overflow flag
+    /// when rendering the scanline.
+    pub fn on_scanline(&mut self, cartridge: &Cartridge, scanline: usize) {
+        if scanline == 0 {
+            // Clear sprite zero and sprite overflow flags
+            self.status &= 0b1001_1111;
+        }
+        // Check for sprite 0 hit
+        if !self.sprite_zero_hit()
+            && self.is_background_rendering_enabled()
+            && self.is_oam_rendering_enabled()
+        {
+            let y = self.oam[0] as usize;
+            let sprite_height = if self.is_8x16_sprites() { 16 } else { 8 };
+            if y <= scanline && y + sprite_height > scanline {
+                // Get the tile
+                let tile_num = if self.is_8x16_sprites() {
+                    ((self.oam[1] as usize & 0x01) << 8) + (self.oam[1] as usize & 0xFE)
+                } else {
+                    self.get_spr_pattern_table_addr() + self.oam[1] as usize
+                };
+                let slice_index = scanline - y;
+                let slice = if self.is_8x16_sprites() && slice_index > 7 {
+                    // Get the next tile if we are in the bottom half of an 8x16 tile
+                    let tile = cartridge.get_tile(tile_num + 1);
+                    tile[slice_index - 8] | tile[slice_index]
+                } else {
+                    let tile = cartridge.get_tile(tile_num);
+                    tile[slice_index] | tile[slice_index + 8]
+                };
+                if slice != 0 {
+                    // Check all 8 pixels
+                    for i in 0..8 {
+                        if (slice >> i) & 0x01 != 0 {
+                            // Check if this pixel intersects the background
+                            if !self.background_pixel_is_transparent(
+                                self.oam[3] as usize + (7 - i),
+                                y,
+                                cartridge,
+                            ) {
+                                self.status |= 0x40;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Check for sprite overflow
+        if self
+            .oam
+            .chunks(4)
+            .filter(|obj| {
+                let y = obj[0] as usize;
+                y <= scanline && y < scanline + if self.is_8x16_sprites() { 8 } else { 16 }
+            })
+            .count()
+            > 8
+        {
+            self.status |= 0x20;
+        } else {
+            self.status &= !0x20;
+        }
+    }
+
+    // Return whether the background pixel index given an (x, y) coordinate in screen space is transparent
+    fn background_pixel_is_transparent(&self, x: usize, y: usize, cartridge: &Cartridge) -> bool {
+        // Get tile X Y coordinates
+        let tile_x = x / 8;
+        let tile_y = y / 8;
+        // Get nametable tile address by figuring out what nametable we're in
+        let tile_addr = if tile_x < 32 {
+            if tile_y < 30 {
+                self.top_left_nametable_addr() + 32 * tile_y + tile_x
+            } else {
+                self.bot_left_nametable_addr() + 32 * (tile_y - 30) + tile_x
+            }
+        } else {
+            if tile_y < 30 {
+                self.bot_left_nametable_addr() + 32 * tile_y + (tile_x - 32)
+            } else {
+                self.bot_right_nametable_addr() + 32 * (tile_y - 30) + (tile_x - 32)
+            }
+        };
+        let final_tile_addr = cartridge.transform_nametable_addr(tile_addr);
+        // Get tile
+        let tile_num = self.get_background_pattern_table_addr() / 0x10
+            + self.nametable_ram[final_tile_addr] as usize;
+        let tile = &cartridge.get_tile(tile_num);
+        // Get slice at this y index
+        let slice = tile[y % 8] | tile[8 + y % 8];
+        // Check pixel at slice
+        (slice >> (7 - (x % 8))) == 0
     }
 
     /// Write a single byte to VRAM at `PPUADDR`
@@ -175,6 +274,7 @@ impl Ppu {
         0x0000
     }
     /// Return where to read the backgronud patterns from
+    /// TODO: Rename
     pub fn get_background_pattern_table_addr(&self) -> usize {
         if self.ctrl & 0x10 != 0 {
             return 0x1000;
@@ -197,8 +297,15 @@ impl Ppu {
     pub fn get_nmi_enabled(&self) -> bool {
         return self.ctrl & 0x80 != 0;
     }
+    pub fn sprite_zero_hit(&self) -> bool {
+        (self.status & 0x40) != 0
+    }
+    pub fn sprite_overflow(&self) -> bool {
+        (self.status & 0x20) != 0
+    }
     // TODO: maybe remove, just do this in nes
     pub fn on_vblank(&mut self) {
+        // Set VBlank flag
         self.status |= 0x80;
     }
     pub fn get_nametable_addr(&self) -> usize {

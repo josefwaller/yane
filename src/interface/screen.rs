@@ -261,7 +261,13 @@ impl Screen {
                 .iter()
                 .for_each(|obj| palette_indices.push(4 + (obj[2] & 0x03) as i32));
             oam_to_render.iter().enumerate().for_each(|(i, obj)| {
-                depths.push(if obj[2] & 0x20 != 0 { 0.7 } else { 0.3 } + (i as f32 / 64.0) / 100.0);
+                depths.push(
+                    if obj[2] & 0x20 != 0 && !settings.always_sprites_on_top {
+                        0.7
+                    } else {
+                        0.3
+                    } + (i as f32 / 64.0) / 100.0,
+                );
                 flip_x.push(if obj[2] & 0x80 != 0 { 1 } else { 0 });
                 flip_y.push(if obj[2] & 0x40 != 0 { 1 } else { 0 });
                 heights.push(if nes.ppu.is_8x16_sprites() { 2 } else { 1 });
@@ -318,7 +324,7 @@ impl Screen {
                 self.gl.use_program(Some(self.wireframe_program));
                 self.gl.bind_vertex_array(Some(self.wireframe_vao));
                 check_error!(self.gl);
-                nes.ppu.oam.chunks(4).for_each(|obj| {
+                nes.ppu.oam.chunks(4).enumerate().for_each(|(i, obj)| {
                     set_uniform!(
                         self.gl,
                         self.wireframe_program,
@@ -327,14 +333,19 @@ impl Screen {
                         obj[3] as f32,
                         obj[0] as f32
                     );
+                    let color = if i == 0 {
+                        [0.0, 1.0, 0.0]
+                    } else {
+                        [1.0, 0.0, 0.0]
+                    };
                     set_uniform!(
                         self.gl,
                         self.wireframe_program,
                         "inColor",
                         uniform_3_f32,
-                        1.0,
-                        0.0,
-                        0.0
+                        color[0],
+                        color[1],
+                        color[2]
                     );
                     set_uniform!(
                         self.gl,

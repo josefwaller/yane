@@ -109,6 +109,7 @@ fn main() {
 
                 if scanline < 240 {
                     window.render_scanline(&nes, scanline, &settings);
+                    nes.ppu.on_scanline(&nes.cartridge, scanline);
                     scanline += 1;
                 } else {
                     pre_render = false;

@@ -11,6 +11,8 @@ pub struct Settings {
     // Whether to limit each scanline to rendering at most 8 sprites
     // Sprite 0 hit and sprite overflow flag setting behaviour will not be changed, this is only visual
     pub scanline_sprite_limit: bool,
+    // Whether to always draw sprites on top of the background
+    pub always_sprites_on_top: bool,
 }
 
 impl Default for Settings {
@@ -19,8 +21,9 @@ impl Default for Settings {
             oam_debug: false,
             palette_debug: false,
             paused: false,
-            volume: 0.6,
+            volume: 0.0,
             scanline_sprite_limit: true,
+            always_sprites_on_top: false,
         }
     }
 }

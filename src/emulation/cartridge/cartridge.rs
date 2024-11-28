@@ -137,4 +137,8 @@ impl Cartridge {
             }
         }
     }
+    // This always return 8x16 sprites
+    pub fn get_tile(&self, tile_num: usize) -> &[u8] {
+        &self.get_pattern_table()[(16 * tile_num)..(16 * (tile_num + 1))]
+    }
 }
