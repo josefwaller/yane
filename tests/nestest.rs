@@ -1,18 +1,18 @@
-extern crate yane;
+mod common;
 use std::{
     cmp::min,
     fs::{read, File},
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, Read},
     string,
 };
 
 use assert_hex::assert_eq_hex;
-use yane::{opcodes::*, Cartridge, Cpu, Nes};
+use yane::{Cartridge, Controller, Nes};
 
 // Runs the NES test CPU file and checks the state of the NES after each execution
 #[test]
-fn test_nestest() {
-    let rom: Vec<u8> = read("./tests/nestest.nes").unwrap();
+fn test_nestest_log() {
+    let rom = read("./tests/test_roms/nestest.nes").unwrap();
     let mut nes = Nes::from_cartridge(Cartridge::new(&rom));
     nes.cpu.p_c = 0xC000;
     let f = File::open("./tests/nestest.log").unwrap();
@@ -65,4 +65,20 @@ fn get_hex(s: &String, start: usize, len: usize) -> u8 {
 }
 fn get_hex_u16(s: &String, start: usize, len: usize) -> u16 {
     u16::from_str_radix(&s[start..min(start + len, s.len())], 16).unwrap()
+}
+
+// Check the background to verify the NES test results
+#[test]
+fn test_nestest_file() {
+    let mut nes = nes_with_rom!("./test_roms/nestest.nes");
+    advance_nes_frames!(nes, 100);
+    press_button!(nes, 0, start);
+    advance_nes_frames!(nes, 100);
+    release_button!(nes, 0, start);
+    assert_background_snapshot!("official_opcodes", nes);
+    press_button!(nes, 0, select);
+    advance_nes_frames!(nes, 100);
+    press_button!(nes, 0, start);
+    advance_nes_frames!(nes, 100);
+    assert_background_snapshot!("unofficial_opcodes", nes);
 }

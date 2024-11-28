@@ -1,9 +1,4 @@
-use std::fs::File;
-
 use log::*;
-use simplelog::{
-    ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger,
-};
 
 use crate::{opcodes::*, Apu, Cartridge, Controller, Cpu, Ppu};
 
@@ -20,7 +15,7 @@ pub struct Nes {
     // Cartridge inserted in the NES
     pub cartridge: Cartridge,
     // Play 1 and 2 controller states
-    controllers: [Controller; 2],
+    pub controllers: [Controller; 2],
     // Cached controller states, the ROM will need to poll to keep these up to date
     cached_controllers: [Controller; 2],
     // Current bit being read from the controller
@@ -55,21 +50,6 @@ impl Nes {
         }
     }
     pub fn from_cartridge(cartridge: Cartridge) -> Nes {
-        // Initialize logger
-        CombinedLogger::init(vec![
-            TermLogger::new(
-                LevelFilter::Debug,
-                Config::default(),
-                TerminalMode::Mixed,
-                ColorChoice::Auto,
-            ),
-            WriteLogger::new(
-                LevelFilter::Info,
-                Config::default(),
-                File::create("./yane.log").unwrap(),
-            ),
-        ])
-        .expect("Unable to create logger");
         let mut nes = Nes {
             cpu: Cpu::new(),
             ppu: Ppu::new(),

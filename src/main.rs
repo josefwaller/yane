@@ -3,12 +3,31 @@ use sdl2::{
     event::{Event, WindowEvent},
     keyboard::Keycode,
 };
+use simplelog::{
+    ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger,
+};
+use std::fs::File;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use yane::{Cartridge, DebugWindow, Nes, Settings, Window};
 
 fn main() {
     {
+        // Initialize logger
+        CombinedLogger::init(vec![
+            TermLogger::new(
+                LevelFilter::Debug,
+                Config::default(),
+                TerminalMode::Mixed,
+                ColorChoice::Auto,
+            ),
+            WriteLogger::new(
+                LevelFilter::Info,
+                Config::default(),
+                File::create("./yane.log").unwrap(),
+            ),
+        ])
+        .expect("Unable to create logger");
         // Read file and init NES
         let args: Vec<String> = std::env::args().collect();
         let data = std::fs::read(args[1].clone()).unwrap();
@@ -128,6 +147,20 @@ fn main() {
                             now.duration_since(last_hundred_frames),
                             frame_cycles as f64 / 100.0
                         );
+                        // Uncomment this to verify screenshot results
+                        let screen: Vec<String> = nes
+                            .ppu
+                            .nametable_ram
+                            .chunks(32)
+                            .map(|row| {
+                                row.iter()
+                                    .map(|r| format!("{:2X?}", r))
+                                    .collect::<Vec<String>>()
+                                    .join(" ")
+                            })
+                            .collect();
+                        info!("{:?}", screen);
+
                         frame_cycles = 0;
                         last_hundred_frames = now;
                     }
@@ -162,19 +195,6 @@ fn main() {
                 if wait_duration != Duration::ZERO {
                     sleep(wait_duration);
                 }
-                // Uncomment this to verify screenshot results
-                // let screen: Vec<String> = nes
-                //     .ppu
-                //     .nametable_ram
-                //     .chunks(32)
-                //     .map(|row| {
-                //         row.iter()
-                //             .map(|r| format!("{:2X?}", r))
-                //             .collect::<Vec<String>>()
-                //             .join(" ")
-                //     })
-                //     .collect();
-                // info!("{:?}", screen);
                 // Advance real time by amount of emulator time that will have passed
                 // Since sleep may overshoot, this will let us catch up next frame/scanline
                 delta += emu_elapsed;
