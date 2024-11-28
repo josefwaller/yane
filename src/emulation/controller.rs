@@ -1,5 +1,5 @@
 /// Struct that contains the state a controller is in
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Controller {
     pub up: bool,
     pub left: bool,

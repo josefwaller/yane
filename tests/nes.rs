@@ -7,13 +7,13 @@ use std::{
 };
 
 use assert_hex::assert_eq_hex;
-use yane::{opcodes::*, Cpu, Nes};
+use yane::{opcodes::*, Cartridge, Cpu, Nes};
 
 // Runs the NES test CPU file and checks the state of the NES after each execution
 #[test]
 fn test_nestest() {
     let rom: Vec<u8> = read("./tests/nestest.nes").unwrap();
-    let mut nes = Nes::from_cartridge(&rom);
+    let mut nes = Nes::from_cartridge(Cartridge::new(&rom));
     nes.cpu.p_c = 0xC000;
     let f = File::open("./tests/nestest.log").unwrap();
     let buf = BufReader::new(f);

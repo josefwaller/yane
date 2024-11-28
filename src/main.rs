@@ -5,14 +5,14 @@ use sdl2::{
 };
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use yane::{DebugWindow, Nes, Settings, Window};
+use yane::{Cartridge, DebugWindow, Nes, Settings, Window};
 
 fn main() {
     {
         // Read file and init NES
         let args: Vec<String> = std::env::args().collect();
         let data = std::fs::read(args[1].clone()).unwrap();
-        let mut nes = Nes::from_cartridge(data.as_slice());
+        let mut nes = Nes::from_cartridge(Cartridge::new(data.as_slice()));
         let mut settings = Settings::default();
 
         let sdl = sdl2::init().unwrap();
@@ -162,6 +162,19 @@ fn main() {
                 if wait_duration != Duration::ZERO {
                     sleep(wait_duration);
                 }
+                // Uncomment this to verify screenshot results
+                // let screen: Vec<String> = nes
+                //     .ppu
+                //     .nametable_ram
+                //     .chunks(32)
+                //     .map(|row| {
+                //         row.iter()
+                //             .map(|r| format!("{:2X?}", r))
+                //             .collect::<Vec<String>>()
+                //             .join(" ")
+                //     })
+                //     .collect();
+                // info!("{:?}", screen);
                 // Advance real time by amount of emulator time that will have passed
                 // Since sleep may overshoot, this will let us catch up next frame/scanline
                 delta += emu_elapsed;

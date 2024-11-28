@@ -1,11 +1,11 @@
 use std::cmp::max;
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 pub struct LengthCounter {
     pub halt: bool,
     pub load: usize,
 }
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 pub struct Envelope {
     /// Constant volume flag
     pub constant: bool,
@@ -16,7 +16,7 @@ pub struct Envelope {
     /// Current value of the volume decay
     pub decay: usize,
 }
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 pub struct PulseRegister {
     /// The index of the duty to use
     pub duty: u32,
@@ -44,7 +44,7 @@ const LENGTH_TABLE: [usize; 0x20] = [
     0x0C, 0x10, 0x18, 0x12, 0x30, 0x14, 0x60, 0x16, 0xC0, 0x18, 0x48, 0x1A, 0x10, 0x1C, 0x20, 0x1E,
 ];
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 pub struct TriangleRegister {
     pub length_counter: LengthCounter,
     pub linear_counter: usize,
@@ -54,12 +54,13 @@ pub struct TriangleRegister {
     pub timer: usize,
     pub enabled: bool,
 }
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 pub struct NoiseRegister {
     pub lenth_counter: LengthCounter,
     pub enabled: bool,
 }
 
+#[derive(Debug)]
 pub struct Apu {
     pub pulse_registers: [PulseRegister; 2],
     pub triangle_register: TriangleRegister,

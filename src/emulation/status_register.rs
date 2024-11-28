@@ -1,4 +1,6 @@
 /// The status register of the NES.
+
+#[derive(Debug)]
 pub struct StatusRegister {
     /// The carry flag, also known as the unsigned overflow flag
     pub c: bool,

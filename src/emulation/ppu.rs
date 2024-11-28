@@ -1,6 +1,7 @@
 use super::{cartridge, Cartridge, NametableArrangement};
 use log::*;
 
+#[derive(Debug)]
 pub struct Ppu {
     /// The Object Access Memory, or OAM
     pub oam: [u8; 0x100],

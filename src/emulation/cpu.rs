@@ -2,6 +2,7 @@ use crate::StatusRegister;
 
 /// The CPU of the NES.
 /// Contains all registers and is responsible for changing the flags when the values are set/unset.
+#[derive(Debug)]
 pub struct Cpu {
     /// Accumulator
     pub a: u8,

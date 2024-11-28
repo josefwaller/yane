@@ -2,8 +2,7 @@ use std::fs::File;
 
 use log::*;
 use simplelog::{
-    ColorChoice, CombinedLogger, Config, LevelFilter, SimpleLogger, TermLogger, TerminalMode,
-    WriteLogger,
+    ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger,
 };
 
 use crate::{opcodes::*, Apu, Cartridge, Controller, Cpu, Ppu};
@@ -55,7 +54,7 @@ impl Nes {
             last_inst_index: 0,
         }
     }
-    pub fn from_cartridge(bytes: &[u8]) -> Nes {
+    pub fn from_cartridge(cartridge: Cartridge) -> Nes {
         // Initialize logger
         CombinedLogger::init(vec![
             TermLogger::new(
@@ -76,7 +75,7 @@ impl Nes {
             ppu: Ppu::new(),
             apu: Apu::new(),
             mem: [0x00; 0x800],
-            cartridge: Cartridge::new(bytes),
+            cartridge,
             controllers: [Controller::new(); 2],
             cached_controllers: [Controller::new(); 2],
             controller_bits: [0; 2],
