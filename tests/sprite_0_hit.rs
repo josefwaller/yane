@@ -9,3 +9,11 @@ fn test_basic() {
 fn test_alignment() {
     rom_test!("./test_roms/spr0_alignment.nes", 300);
 }
+#[test]
+fn test_corners() {
+    rom_test!("./test_roms/spr0_corners.nes", 300);
+}
+#[test]
+fn test_flip() {
+    rom_test!("./test_roms/spr0_flip.nes", 300);
+}

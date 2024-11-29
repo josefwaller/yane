@@ -140,18 +140,26 @@ impl Ppu {
                     self.get_spr_pattern_table_addr() + self.oam[1] as usize
                 };
                 let slice_index = scanline - y;
+                let flip_vert = self.oam[2] & 0x80 != 0;
+                let final_index = if flip_vert {
+                    sprite_height - 1 - slice_index
+                } else {
+                    slice_index
+                };
                 let slice = if self.is_8x16_sprites() && slice_index > 7 {
                     // Get the next tile if we are in the bottom half of an 8x16 tile
                     let tile = cartridge.get_tile(tile_num + 1);
-                    tile[slice_index - 8] | tile[slice_index]
+                    tile[final_index - 8] | tile[final_index]
                 } else {
                     let tile = cartridge.get_tile(tile_num);
-                    tile[slice_index] | tile[slice_index + 8]
+
+                    tile[final_index] | tile[final_index + 8]
                 };
                 if slice != 0 {
                     // Check all 8 pixels
                     for i in 0..8 {
-                        if (slice >> i) & 0x01 != 0 {
+                        let shift = if (self.oam[2] & 0x40) != 0 { 7 - i } else { i };
+                        if (slice >> shift) & 0x01 != 0 {
                             // Check if this pixel intersects the background
                             if !self.background_pixel_is_transparent(
                                 self.oam[3] as usize + (7 - i),

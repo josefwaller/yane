@@ -9,7 +9,10 @@ use simplelog::{
 use std::fs::File;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use yane::{Cartridge, DebugWindow, Nes, Settings, Window};
+use yane::{
+    Cartridge, DebugWindow, Nes, Settings, Window, CPU_CYCLES_PER_OAM, CPU_CYCLES_PER_SCANLINE,
+    CPU_CYCLES_PER_VBLANK,
+};
 
 fn main() {
     {
@@ -50,9 +53,7 @@ fn main() {
         let mut last_debug_window_render = Instant::now();
         // Various constants for keeping emulator time in check with real time
         const DEBUG_WINDOW_REFRESH_RATE: Duration = Duration::from_millis(1000 / 60);
-        const CPU_CYCLES_PER_SCANLINE: i64 = 112;
-        const CPU_CYCLES_PER_VBLANK: i64 = 2273;
-        const CPU_CYCLES_PER_OAM: i64 = 513;
+
         const CPU_CYCLES_PER_FRAME: i64 = 240 * 113 + 2273;
         let wait_time_per_cycle =
             Duration::from_nanos(1_000_000_000 / 60 / CPU_CYCLES_PER_FRAME as u64);
@@ -148,18 +149,18 @@ fn main() {
                             frame_cycles as f64 / 100.0
                         );
                         // Uncomment this to verify screenshot results
-                        let screen: Vec<String> = nes
-                            .ppu
-                            .nametable_ram
-                            .chunks(32)
-                            .map(|row| {
-                                row.iter()
-                                    .map(|r| format!("{:2X?}", r))
-                                    .collect::<Vec<String>>()
-                                    .join(" ")
-                            })
-                            .collect();
-                        info!("{:?}", screen);
+                        // let screen: Vec<String> = nes
+                        //     .ppu
+                        //     .nametable_ram
+                        //     .chunks(32)
+                        //     .map(|row| {
+                        //         row.iter()
+                        //             .map(|r| format!("{:2X?}", r))
+                        //             .collect::<Vec<String>>()
+                        //             .join(" ")
+                        //     })
+                        //     .collect();
+                        // info!("{:?}", screen);
 
                         frame_cycles = 0;
                         last_hundred_frames = now;
