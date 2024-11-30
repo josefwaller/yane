@@ -630,9 +630,10 @@ impl Nes {
     pub fn check_oam_dma(&mut self) -> bool {
         if let Some(dma_reg) = self.ppu.oam_dma {
             let addr = (dma_reg as usize) << 8;
-            for i in 0..0x100 {
-                self.ppu.oam[i] = self.read_byte(addr + i);
-            }
+            (0..0x100).for_each(|i| {
+                let value = self.read_byte(addr + i);
+                self.ppu.write_oam(0, value);
+            });
             self.ppu.oam_dma = None;
             return true;
         }

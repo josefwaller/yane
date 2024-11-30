@@ -25,7 +25,7 @@ fn main() {
                 ColorChoice::Auto,
             ),
             WriteLogger::new(
-                LevelFilter::Info,
+                LevelFilter::Debug,
                 Config::default(),
                 File::create("./yane.log").unwrap(),
             ),
@@ -53,11 +53,7 @@ fn main() {
         let mut last_debug_window_render = Instant::now();
         // Various constants for keeping emulator time in check with real time
         const DEBUG_WINDOW_REFRESH_RATE: Duration = Duration::from_millis(1000 / 60);
-
         const CPU_CYCLES_PER_FRAME: i64 = 240 * 113 + 2273;
-        let wait_time_per_cycle =
-            Duration::from_nanos(1_000_000_000 / 60 / CPU_CYCLES_PER_FRAME as u64);
-
         let wait_time_per_cycle =
             Duration::from_nanos(1_000_000_000 / 60 / CPU_CYCLES_PER_FRAME as u64);
         info!(
@@ -152,18 +148,18 @@ fn main() {
                             frame_cycles as f64 / 100.0
                         );
                         // Uncomment this to verify screenshot results
-                        // let screen: Vec<String> = nes
-                        //     .ppu
-                        //     .nametable_ram
-                        //     .chunks(32)
-                        //     .map(|row| {
-                        //         row.iter()
-                        //             .map(|r| format!("{:2X?}", r))
-                        //             .collect::<Vec<String>>()
-                        //             .join(" ")
-                        //     })
-                        //     .collect();
-                        // info!("{:?}", screen);
+                        let screen: Vec<String> = nes
+                            .ppu
+                            .nametable_ram
+                            .chunks(32)
+                            .map(|row| {
+                                row.iter()
+                                    .map(|r| format!("{:2X?}", r))
+                                    .collect::<Vec<String>>()
+                                    .join(" ")
+                            })
+                            .collect();
+                        info!("{:?}", screen);
 
                         frame_cycles = 0;
                         last_hundred_frames = now;
@@ -186,6 +182,7 @@ fn main() {
                     }
                     cycles -= CPU_CYCLES_PER_VBLANK;
                     cycles_to_wait += CPU_CYCLES_PER_VBLANK;
+                    nes.ppu.on_prescanline();
                 }
                 // Calculate how much time has passed in the emulation
                 let emu_elapsed = wait_time_per_cycle.saturating_mul(cycles_to_wait as u32);

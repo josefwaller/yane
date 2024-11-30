@@ -13,8 +13,6 @@ pub struct Ppu {
     pub status: u8,
     /// The OAMADDR register
     pub oam_addr: u8,
-    /// The OAMDATA register
-    pub oam_data: u8,
     /// The PPUSCROLL register, split into its X/Y components
     pub scroll_x: u8,
     pub scroll_y: u8,
@@ -41,7 +39,6 @@ impl Ppu {
             mask: 0,
             status: 0xA0,
             oam_addr: 0,
-            oam_data: 0,
             scroll_x: 0,
             scroll_y: 0,
             addr: 0,
@@ -68,15 +65,11 @@ impl Ppu {
                 status
             }
             3 => self.oam_addr,
-            4 => self.oam_data,
+            4 => self.oam[self.oam_addr as usize % self.oam.len()],
             // SCROLL and ADDR shouldn't be read from
             5 => self.scroll_x,
             6 => self.addr as u8,
-            7 => {
-                let t = self.data;
-                self.data = self.read_vram(cartridge);
-                t
-            }
+            7 => self.read_vram(cartridge),
             _ => panic!("This should never happen. Addr is {:#X}", addr),
         }
     }
@@ -88,7 +81,7 @@ impl Ppu {
             1 => self.mask = value,
             2 => self.status = value,
             3 => self.oam_addr = value,
-            4 => self.oam_data = value,
+            4 => self.write_oam(0, value),
             5 => {
                 if self.w {
                     self.scroll_y = value;
@@ -98,12 +91,16 @@ impl Ppu {
                 self.w = !self.w;
             }
             6 => self.write_to_addr(value),
-            7 => {
-                self.write_vram(value, cartridge);
-                // self.data = value;
-            }
+            7 => self.write_vram(value, cartridge),
             _ => panic!("This should never happen. Addr is {:#X}", addr),
         }
+    }
+
+    /// Write to OAM using OAM_ADDR and the offset provided
+    /// Increments OAM_ADDR
+    pub fn write_oam(&mut self, offset: usize, value: u8) {
+        self.oam[(self.oam_addr as usize + offset) % self.oam.len()] = value;
+        self.oam_addr = self.oam_addr.wrapping_add(1);
     }
 
     pub fn write_to_addr(&mut self, value: u8) {
@@ -117,13 +114,14 @@ impl Ppu {
         self.w = !self.w;
     }
 
+    pub fn on_prescanline(&mut self) {
+        // Clear sprite zero, sprite overflow and vblank flags
+        self.status &= 0b0001_1111;
+    }
+
     /// Set the sprite zero hit flag and the sprite overflow flag
     /// when rendering the scanline.
     pub fn on_scanline(&mut self, cartridge: &Cartridge, scanline: usize) {
-        if scanline == 0 {
-            // Clear sprite zero and sprite overflow flags
-            self.status &= 0b1001_1111;
-        }
         // Check for sprite 0 hit
         if !self.sprite_zero_hit()
             && self.is_background_rendering_enabled()
@@ -229,7 +227,8 @@ impl Ppu {
         } else if self.addr < 0x3000 {
             self.nametable_ram[cartridge.transform_nametable_addr(self.addr as usize)] = value;
         } else if self.addr >= 0x3F00 {
-            self.palette_ram[(self.addr - 0x3F00) as usize % 0x020] = value;
+            let palette_index = Ppu::get_palette_index(self.addr);
+            self.palette_ram[palette_index] = value;
         }
         self.inc_addr();
     }
@@ -239,12 +238,32 @@ impl Ppu {
         let addr = self.addr;
         self.inc_addr();
         if self.addr < 0x2000 {
-            return cartridge.read_ppu(addr as usize);
+            // Set buffer to cartridge read value and return old buffer
+            let b = self.data;
+            self.data = cartridge.read_ppu(addr as usize);
+            return b;
         }
         if self.addr < 0x3F00 {
-            return self.nametable_ram[cartridge.transform_nametable_addr(self.addr as usize)];
+            // Update buffer to nametable value and return old buffer
+            let b = self.data;
+            self.data = self.nametable_ram[cartridge.transform_nametable_addr(addr as usize)];
+            return b;
         }
-        self.palette_ram[(addr - 0x3F00) as usize % 0x020]
+        // Palette ram updates the buffer but also returns the current value
+        let palette_index = Ppu::get_palette_index(addr);
+        let b = self.palette_ram[palette_index];
+        // Read the mirrored nametable byte into memory
+        self.data = self.nametable_ram[addr as usize % self.nametable_ram.len()];
+        b
+    }
+
+    fn get_palette_index(addr: u16) -> usize {
+        // The 0th (invisible) colors are shared between background and sprites
+        if addr % 4 == 0 {
+            addr as usize % 0x10
+        } else {
+            addr as usize % 0x20
+        }
     }
 
     fn inc_addr(&mut self) {

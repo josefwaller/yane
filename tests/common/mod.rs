@@ -15,8 +15,8 @@ macro_rules! advance_nes_frames {
         use yane::{CPU_CYCLES_PER_OAM, CPU_CYCLES_PER_SCANLINE, CPU_CYCLES_PER_VBLANK};
 
         // Run the emulator a bit
+        let mut cycles = 0;
         (0..($frames)).for_each(|_| {
-            let mut cycles = 0;
             (0..240).for_each(|scanline| {
                 while cycles < CPU_CYCLES_PER_SCANLINE {
                     cycles += $nes.step().unwrap();
@@ -37,6 +37,8 @@ macro_rules! advance_nes_frames {
                     cycles += CPU_CYCLES_PER_OAM;
                 }
             }
+            cycles -= CPU_CYCLES_PER_VBLANK;
+            $nes.ppu.on_prescanline();
         });
     }};
 }
@@ -51,6 +53,10 @@ macro_rules! rom_test {
         advance_nes_frames!(nes, $num_frames);
 
         assert_background_snapshot!(nes);
+    };
+    // Default to 300 frames
+    ($nes_file: literal) => {
+        rom_test!($nes_file, 300);
     };
 }
 
