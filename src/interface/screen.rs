@@ -358,7 +358,7 @@ impl Screen {
                         "position",
                         uniform_2_f32,
                         obj[3] as f32,
-                        obj[0] as f32
+                        obj[0] as f32 + 1.0
                     );
                     let color = if i == 0 {
                         [0.0, 1.0, 0.0]
