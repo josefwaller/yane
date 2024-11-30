@@ -197,10 +197,6 @@ impl Screen {
                 .iter()
                 .map(|obj| if obj[2] & 0x40 != 0 { 1 } else { 0 })
                 .collect();
-            let heights = oam_to_render
-                .iter()
-                .map(|_| if nes.ppu.is_8x16_sprites() { 2 } else { 1 })
-                .collect();
             // Now we use the 1st (not 0th) bit of the stencil buffer for sprite priority
             // If the sprites are behind the background but have priority over other sprites, we want to draw the background
             // So we draw all the sprites, using bit 1 of the stencil buffer as a mask to make sure we don't draw over existing sprites
@@ -222,7 +218,7 @@ impl Screen {
                 flip_x,
                 flip_y,
                 depths,
-                heights,
+                if nes.ppu.is_8x16_sprites() { 2 } else { 1 },
                 settings,
             );
         }
@@ -298,7 +294,6 @@ impl Screen {
             let depths = vec![0.5; NUM_NAMETABLE_TILES];
             // We never flip background tiles either horizontally or vertically
             let flip = vec![0; NUM_NAMETABLE_TILES];
-            let heights = vec![1; NUM_NAMETABLE_TILES];
             // Use the 0th bit as the mask for the background
             // This bit should be set on this scanline and unaffected by the sprite masking stuff we do above
             self.gl.stencil_func(glow::EQUAL, 1, 0x01);
@@ -313,7 +308,7 @@ impl Screen {
                 flip.clone(),
                 flip,
                 depths,
-                heights,
+                8,
                 settings,
             );
         }
@@ -405,11 +400,8 @@ impl Screen {
         // The tiles' depths, i.e. their Z index
         // Used to draw sprites on top of background or vice versa
         depths: Vec<f32>,
-        // These should be either 1 or 2
         // The sprite height (1 = 8px, 2 = 16px)
-        // We can't have this be constant across all tiles since even in 8x16 mode, the background tiles are 8x8
-        // TODO: ^ we can actually
-        heights: Vec<i32>,
+        height: i32,
         settings: &Settings,
     ) {
         #[cfg(debug_assertions)]
@@ -419,7 +411,6 @@ impl Screen {
             assert_eq!(pattern_nums.len(), palette_indices.len());
             assert_eq!(palette_indices.len(), flip_vert.len());
             assert_eq!(flip_vert.len(), flip_horz.len());
-            assert_eq!(flip_horz.len(), heights.len());
             // Make sure all the booleans are valid
             [&flip_horz, &flip_vert].iter().for_each(|v| {
                 v.iter().for_each(|val| {
@@ -501,13 +492,7 @@ impl Screen {
             uniform_1_i32_slice,
             flip_vert.as_slice()
         );
-        set_uniform!(
-            self.gl,
-            self.tile_program,
-            "heights",
-            uniform_1_i32_slice,
-            heights.as_slice()
-        );
+        set_uniform!(self.gl, self.tile_program, "height", uniform_1_i32, height);
         self.gl
             .draw_arrays_instanced(glow::TRIANGLE_STRIP, 0, 4, pattern_nums.len() as i32);
     }

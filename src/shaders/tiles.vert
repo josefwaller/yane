@@ -10,7 +10,7 @@ uniform int paletteIndices[TILE_COUNT];
 uniform float depths[TILE_COUNT];
 uniform bool flipHorizontal[TILE_COUNT];
 uniform bool flipVertical[TILE_COUNT];
-uniform int heights[TILE_COUNT];
+uniform int height;
 
 out vec2 UV;
 out float tileAddr;
@@ -28,7 +28,7 @@ const mat3 FLIP_Y = mat3(
     0, 0, 1
 );
 void main() {
-    mat2 heightMatrix = mat2(1, 0, 0, heights[gl_InstanceID]);
+    mat2 heightMatrix = mat2(1, 0, 0, height);
     vec2 pos = 8 * heightMatrix * vertexPosition + vec2(positions[gl_InstanceID]);
 
     gl_Position = vec4(
