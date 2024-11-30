@@ -185,7 +185,9 @@ fn main() {
                     nes.ppu.on_prescanline();
                 }
                 // Calculate how much time has passed in the emulation
-                let emu_elapsed = wait_time_per_cycle.saturating_mul(cycles_to_wait as u32);
+                let emu_elapsed = wait_time_per_cycle
+                    .saturating_mul(cycles_to_wait as u32)
+                    .div_f32(settings.speed);
                 // Calculate how much time has actually passed
                 let actual_elapsed = Instant::now().duration_since(delta);
                 // Wait for the difference
