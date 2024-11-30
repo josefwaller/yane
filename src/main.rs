@@ -57,6 +57,9 @@ fn main() {
         const CPU_CYCLES_PER_FRAME: i64 = 240 * 113 + 2273;
         let wait_time_per_cycle =
             Duration::from_nanos(1_000_000_000 / 60 / CPU_CYCLES_PER_FRAME as u64);
+
+        let wait_time_per_cycle =
+            Duration::from_nanos(1_000_000_000 / 60 / CPU_CYCLES_PER_FRAME as u64);
         info!(
             "FPS = 60, cycles/scanline={CPU_CYCLES_PER_SCANLINE}, cycles/vblank={CPU_CYCLES_PER_VBLANK}, cycles/frame={CPU_CYCLES_PER_FRAME}, wait time={wait_time_per_cycle:?}",
         );

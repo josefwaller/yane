@@ -34,7 +34,7 @@ void main() {
     gl_Position = vec4(
         -1 + 2 * float(pos.x) / 256.0,
         1 - 2 * float(pos.y) / 240.0,
-        0.8,
+        depths[gl_InstanceID],
         1);
     UV = vec2(vec3(vertexPosition, 1)
         * (flipHorizontal[gl_InstanceID] ? FLIP_X : mat3(1))

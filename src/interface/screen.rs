@@ -92,18 +92,19 @@ impl Screen {
         // Enable stencil test
         self.gl.enable(glow::STENCIL_TEST);
         self.gl.enable(glow::DEPTH_TEST);
+        // Initially set depth testing to always to write the scanline value
         self.gl.depth_func(glow::ALWAYS);
         self.gl.depth_mask(true);
         check_error!(self.gl);
+        // Render the background as a line, while also setting initial depth value and stencil value
         self.gl.viewport(0, 0, 256, 240);
         self.gl
             .bind_framebuffer(glow::FRAMEBUFFER, Some(self.screen_fbo));
         // Set stencil buffer to only the one line
-        self.gl.stencil_mask(0xFF);
         self.gl
             .clear(glow::STENCIL_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
         check_error!(self.gl);
-        self.gl.stencil_func(glow::ALWAYS, 1, 0xFF);
+        self.gl.stencil_func(glow::ALWAYS, 0x03, 0xFF);
         self.gl.stencil_mask(0xFF);
         check_error!(self.gl);
         self.gl.stencil_op(glow::KEEP, glow::KEEP, glow::REPLACE);
@@ -130,30 +131,101 @@ impl Screen {
         self.gl.draw_arrays(glow::LINES, 0, 2);
         check_error!(self.gl);
 
-        check_error!(self.gl);
-        self.gl.enable(glow::STENCIL_TEST);
-        self.gl.stencil_func(glow::EQUAL, 1, 0xFF);
-        self.gl.stencil_op(glow::KEEP, glow::KEEP, glow::KEEP);
+        // Enable depth testing
         self.gl.depth_func(glow::LESS);
         check_error!(self.gl);
 
-        // We build a big table to tiles to render, and then render them all in one draw_arrays_instanced call
-        const MAX_NUM_TILES: usize = 33 + 8;
-        // The tiles' positions (each should have 2, X then Y)
-        let mut positions: Vec<i32> = Vec::with_capacity(MAX_NUM_TILES);
-        // The tiles' palette indices (each should have 1)
-        let mut palette_indices: Vec<i32> = Vec::with_capacity(MAX_NUM_TILES);
-        // The tiles' index, i.e. the index of the tile in the pattern table to draw
-        let mut tile_index: Vec<i32> = Vec::with_capacity(MAX_NUM_TILES);
-        // The tiles' depths, i.e. their Z index
-        // Used to draw sprites on top of background or vice versa
-        let mut depths: Vec<f32> = Vec::with_capacity(MAX_NUM_TILES);
-        // Whether to flip each tile along the X or Y axis
-        let mut flip_x: Vec<i32> = Vec::with_capacity(MAX_NUM_TILES);
-        let mut flip_y: Vec<i32> = Vec::with_capacity(MAX_NUM_TILES);
-        // The sprite height (1 = 8px, 2 = 16px)
-        // We can't have this be constant across all tiles since even in 8x16 mode, the background tiles are 8x8
-        let mut heights: Vec<i32> = Vec::with_capacity(MAX_NUM_TILES);
+        // Get palette as RGB values
+        let palette = &nes.ppu.palette_ram.map(|i| self.palette[i as usize]);
+        // Gether OAM to render
+        if nes.ppu.is_oam_rendering_enabled() {
+            let sprite_height = if nes.ppu.is_8x16_sprites() { 16 } else { 8 };
+            let sprite_limit = if settings.scanline_sprite_limit {
+                8
+            } else {
+                64
+            };
+            let oam_to_render: Vec<&[u8]> = nes
+                .ppu
+                .oam
+                .chunks(4)
+                .filter(|obj| {
+                    // Sprite rendering is offset by 1px
+                    obj[0] as usize + 1 <= scanline
+                        && obj[0] as usize + 1 + sprite_height > scanline
+                })
+                .take(sprite_limit)
+                .collect();
+            let positions = oam_to_render
+                .iter()
+                .map(|obj| [obj[3] as i32, obj[0] as i32 + 1])
+                .flatten()
+                .collect();
+            let tile_index = oam_to_render
+                .iter()
+                .map(|obj| {
+                    if nes.ppu.is_8x16_sprites() {
+                        (obj[1] & 0x01) as i32 * 0x100 + (obj[1] & 0xFE) as i32
+                    } else {
+                        nes.ppu.get_spr_pattern_table_addr() as i32 / 0x10 + obj[1] as i32
+                    }
+                })
+                .collect();
+            let palette_indices = oam_to_render
+                .iter()
+                .map(|obj| 4 + (obj[2] & 0x03) as i32)
+                .collect();
+            let depths = oam_to_render
+                .iter()
+                .enumerate()
+                .map(|(i, obj)| {
+                    return if obj[2] & 0x20 != 0 && !settings.always_sprites_on_top {
+                        // Behind background
+                        0.7
+                    } else {
+                        // In front of background
+                        0.3
+                    };
+                    //+ ((64.0 - i as f32) / 64.0) / 10.0;
+                })
+                .collect();
+            let flip_x = oam_to_render
+                .iter()
+                .map(|obj| if obj[2] & 0x80 != 0 { 1 } else { 0 })
+                .collect();
+            let flip_y = oam_to_render
+                .iter()
+                .map(|obj| if obj[2] & 0x40 != 0 { 1 } else { 0 })
+                .collect();
+            let heights = oam_to_render
+                .iter()
+                .map(|_| if nes.ppu.is_8x16_sprites() { 2 } else { 1 })
+                .collect();
+            // Now we use the 1st (not 0th) bit of the stencil buffer for sprite priority
+            // If the sprites are behind the background but have priority over other sprites, we want to draw the background
+            // So we draw all the sprites, using bit 1 of the stencil buffer as a mask to make sure we don't draw over existing sprites
+            // And then use depth testing to draw the background in front/behind.
+            self.gl.stencil_func(glow::EQUAL, 3, 0x02);
+            check_error!(self.gl);
+            // On pass, write 0 but only write to the 1st bit
+            // So essentially clear the 1st bit
+            self.gl.stencil_op(glow::KEEP, glow::KEEP, glow::ZERO);
+            self.gl.stencil_mask(0x02);
+            check_error!(self.gl);
+            // Render tiles
+            self.bulk_render_tiles(
+                positions,
+                tile_index,
+                palette_indices,
+                palette,
+                scanline,
+                flip_x,
+                flip_y,
+                depths,
+                heights,
+                settings,
+            );
+        }
         // Gather information for rendering background
         if nes.ppu.is_background_rendering_enabled() {
             const NUM_NAMETABLE_TILES: usize = 33;
@@ -185,111 +257,66 @@ impl Screen {
             } else {
                 actual_tile_pos - fine_scroll_y
             };
-            (0..NUM_NAMETABLE_TILES)
+            let positions = (0..NUM_NAMETABLE_TILES)
                 .map(|i| [8 * i as i32 - (nes.ppu.scroll_x % 8) as i32, pos_y])
                 .flatten()
-                .for_each(|p| positions.push(p));
-            // Add background patterns
-            (0..NUM_NAMETABLE_TILES).for_each(|i| {
-                let x = nes.ppu.scroll_x as usize / 8 + i;
-                let (nametable, index) = if x < 32 {
-                    (&left_nametable, x)
-                } else {
-                    (&right_nametable, x - 32)
-                };
-                tile_index.push(
-                    nes.ppu.get_background_pattern_table_addr() as i32 / 0x10
-                        + nametable[32 * nametable_row_index + index] as i32,
-                );
-            });
-            // Add palette indexes
-            (0..NUM_NAMETABLE_TILES).for_each(|i| {
-                let x = nes.ppu.scroll_x as usize / 8 + i;
-                // Get the config byte
-                let (nametable, index) = if x < 32 {
-                    (&left_nametable, x)
-                } else {
-                    (&right_nametable, x - 32)
-                };
-                // Get the X,Y coords of the 4x4 tile area whose palette is controlled by a single byte
-                let area_x = index / 4;
-                let area_y = nametable_row_index / 4;
-                let config_byte = nametable[0x3C0 + 8 * area_y + area_x];
-                // Get the specific 2 bit value that controls this tile's palette
-                let x = (index / 2) % 2;
-                let y = (nametable_row_index / 2) % 2;
-                palette_indices.push(((config_byte >> (2 * (2 * y + x))) & 0x03) as i32);
-            });
-            // Add misc, simple settings
-            (0..NUM_NAMETABLE_TILES).for_each(|_| {
-                depths.push(0.5);
-                flip_x.push(0);
-                flip_y.push(0);
-                heights.push(1);
-            });
-        }
-        // Gether OAM to render
-        if nes.ppu.is_oam_rendering_enabled() {
-            let sprite_height = if nes.ppu.is_8x16_sprites() { 16 } else { 8 };
-            let sprite_limit = if settings.scanline_sprite_limit {
-                8
-            } else {
-                64
-            };
-            let oam_to_render: Vec<&[u8]> = nes
-                .ppu
-                .oam
-                .chunks(4)
-                .filter(|obj| {
-                    obj[0] as usize <= scanline && obj[0] as usize + sprite_height > scanline
-                })
-                .take(sprite_limit)
                 .collect();
-            oam_to_render
-                .iter()
-                .map(|obj| [obj[3] as i32, obj[0] as i32])
-                .flatten()
-                .for_each(|p| positions.push(p));
-            oam_to_render.iter().for_each(|obj| {
-                tile_index.push(if nes.ppu.is_8x16_sprites() {
-                    (obj[1] & 0x01) as i32 * 0x100 + (obj[1] & 0xFE) as i32
-                } else {
-                    nes.ppu.get_spr_pattern_table_addr() as i32 / 0x10 + obj[1] as i32
-                });
-            });
-            oam_to_render
-                .iter()
-                .for_each(|obj| palette_indices.push(4 + (obj[2] & 0x03) as i32));
-            oam_to_render.iter().enumerate().for_each(|(i, obj)| {
-                depths.push(
-                    if obj[2] & 0x20 != 0 && !settings.always_sprites_on_top {
-                        0.7
+            // Add background patterns
+            let tile_index = (0..NUM_NAMETABLE_TILES)
+                .map(|i| {
+                    let x = nes.ppu.scroll_x as usize / 8 + i;
+                    let (nametable, index) = if x < 32 {
+                        (&left_nametable, x)
                     } else {
-                        0.3
-                    } + (i as f32 / 64.0) / 100.0,
-                );
-                flip_x.push(if obj[2] & 0x80 != 0 { 1 } else { 0 });
-                flip_y.push(if obj[2] & 0x40 != 0 { 1 } else { 0 });
-                heights.push(if nes.ppu.is_8x16_sprites() { 2 } else { 1 });
-            });
+                        (&right_nametable, x - 32)
+                    };
+                    nes.ppu.get_background_pattern_table_addr() as i32 / 0x10
+                        + nametable[32 * nametable_row_index + index] as i32
+                })
+                .collect();
+            // Add palette indexes
+            let palette_indices = (0..NUM_NAMETABLE_TILES)
+                .map(|i| {
+                    let x = nes.ppu.scroll_x as usize / 8 + i;
+                    // Get the config byte
+                    let (nametable, index) = if x < 32 {
+                        (&left_nametable, x)
+                    } else {
+                        (&right_nametable, x - 32)
+                    };
+                    // Get the X,Y coords of the 4x4 tile area whose palette is controlled by a single byte
+                    let area_x = index / 4;
+                    let area_y = nametable_row_index / 4;
+                    let config_byte = nametable[0x3C0 + 8 * area_y + area_x];
+                    // Get the specific 2 bit value that controls this tile's palette
+                    let x = (index / 2) % 2;
+                    let y = (nametable_row_index / 2) % 2;
+                    ((config_byte >> (2 * (2 * y + x))) & 0x03) as i32
+                })
+                .collect();
+            // Add misc, simple settings
+            let depths = vec![0.5; NUM_NAMETABLE_TILES];
+            // We never flip background tiles either horizontally or vertically
+            let flip = vec![0; NUM_NAMETABLE_TILES];
+            let heights = vec![1; NUM_NAMETABLE_TILES];
+            // Use the 0th bit as the mask for the background
+            // This bit should be set on this scanline and unaffected by the sprite masking stuff we do above
+            self.gl.stencil_func(glow::EQUAL, 1, 0x01);
+            self.gl.stencil_mask(0xFF);
+            self.gl.stencil_op(glow::KEEP, glow::KEEP, glow::KEEP);
+            self.bulk_render_tiles(
+                positions,
+                tile_index,
+                palette_indices,
+                palette,
+                scanline,
+                flip.clone(),
+                flip,
+                depths,
+                heights,
+                settings,
+            );
         }
-        // Get palette as RGB values
-        let palette = &nes.ppu.palette_ram.map(|i| self.palette[i as usize]);
-        // Render tiles
-        self.bulk_render_tiles(
-            positions,
-            tile_index,
-            palette_indices,
-            palette,
-            scanline,
-            flip_x,
-            flip_y,
-            depths,
-            heights,
-            settings,
-        );
-
-        // Todo: Check for sprite overflow
     }
 
     pub fn render(&mut self, nes: &Nes, window_size: (u32, u32), settings: &Settings) {
@@ -364,15 +391,24 @@ impl Screen {
     /// Bulk render a bunch of tiles in one single draw_arrays_instanced call
     unsafe fn bulk_render_tiles(
         &self,
+        // The tiles' positions (each should have 2, X then Y)
         pos: Vec<i32>,
+        // The tiles' index, i.e. the index of the tile in the pattern table to draw
         pattern_nums: Vec<i32>,
+        // The tiles' palette indices (each should have 1)
         palette_indices: Vec<i32>,
         palette: &[[f32; 3]; 0x20],
         scanline: usize,
+        // Whether to flip each tile along the X or Y axis
         flip_vert: Vec<i32>,
         flip_horz: Vec<i32>,
+        // The tiles' depths, i.e. their Z index
+        // Used to draw sprites on top of background or vice versa
         depths: Vec<f32>,
         // These should be either 1 or 2
+        // The sprite height (1 = 8px, 2 = 16px)
+        // We can't have this be constant across all tiles since even in 8x16 mode, the background tiles are 8x8
+        // TODO: ^ we can actually
         heights: Vec<i32>,
         settings: &Settings,
     ) {
