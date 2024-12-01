@@ -148,24 +148,24 @@ fn main() {
                             frame_cycles as f64 / 100.0
                         );
                         // Uncomment this to verify screenshot results
-                        let screen: Vec<String> = nes
-                            .ppu
-                            .nametable_ram
-                            .chunks(32)
-                            .map(|row| {
-                                row.iter()
-                                    .map(|r| format!("{:2X?}", r))
-                                    .collect::<Vec<String>>()
-                                    .join(" ")
-                            })
-                            .collect();
-                        info!("{:?}", screen);
+                        // let screen: Vec<String> = nes
+                        //     .ppu
+                        //     .nametable_ram
+                        //     .chunks(32)
+                        //     .map(|row| {
+                        //         row.iter()
+                        //             .map(|r| format!("{:2X?}", r))
+                        //             .collect::<Vec<String>>()
+                        //             .join(" ")
+                        //     })
+                        //     .collect();
+                        // info!("{:?}", screen);
 
                         frame_cycles = 0;
                         last_hundred_frames = now;
                     }
                     // Render window
-                    window.render(&mut nes, &settings);
+                    window.render(&nes, &settings);
                     // Do VBlank
                     nes.ppu.on_vblank();
                     if nes.ppu.get_nmi_enabled() {

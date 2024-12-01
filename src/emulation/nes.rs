@@ -151,7 +151,10 @@ impl Nes {
             Err(s) => {
                 #[cfg(debug_assertions)]
                 {
-                    error!("Encountered an error, printing last 200 instructions",);
+                    error!(
+                        "Encountered an error \"{}\", printing last 200 instructions",
+                        s
+                    );
                     [
                         &self.last_instructions[((self.last_inst_index + 1)
                             % self.last_instructions.len())
@@ -324,8 +327,9 @@ impl Nes {
                 // Copy into stack
                 self.push_to_stack_u16(self.cpu.p_c.wrapping_add(2));
                 self.push_to_stack(self.cpu.s_r.to_byte());
-                self.cpu.p_c =
-                    ((self.read_byte(0xFFFE) as u16) << 8) + self.read_byte(0xFFFF) as u16 - 1;
+                self.cpu.p_c = (((self.read_byte(0xFFFE) as u16) << 8)
+                    + self.read_byte(0xFFFF) as u16)
+                    .wrapping_sub(1);
                 Ok((1, 7))
             }
             // Various flag clearing functions

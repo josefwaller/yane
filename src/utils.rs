@@ -104,9 +104,8 @@ pub unsafe fn create_program(
 }
 
 /// Set the texture given to the CHR ROM/RAM in the nes given
-pub unsafe fn refresh_chr_texture(gl: &Context, chr_tex: NativeTexture, nes: &Nes) {
-    let pattern_table = nes.cartridge.get_pattern_table();
-    let texture_data: Vec<u8> = pattern_table
+pub unsafe fn refresh_chr_texture(gl: &Context, chr_tex: NativeTexture, nes: &Nes, chr: Vec<u8>) {
+    let texture_data: Vec<u8> = chr
         .chunks(16)
         .map(|sprite_data| {
             (0..(8 * 8)).map(|i| {

@@ -1,6 +1,6 @@
 use crate::{emulation::cartridge::mapper::get_mapper, Mapper};
 use log::*;
-use std::cmp::{max, min};
+use std::cmp::max;
 
 #[derive(Debug, PartialEq)]
 pub enum NametableArrangement {
@@ -15,6 +15,17 @@ pub struct CartridgeMemory {
     pub prg_rom: Vec<u8>,
     pub chr_rom: Vec<u8>,
     pub chr_ram: Vec<u8>,
+}
+impl CartridgeMemory {
+    // Read from CHR ROM or CHR RAM, if CHR ROM is empty
+    // Used for cartridges that don't use both CHR ROM and CHR RAM
+    pub fn read_chr(&self, addr: usize) -> u8 {
+        if self.chr_rom.len() == 0 {
+            self.chr_ram[addr % self.chr_ram.len()]
+        } else {
+            self.chr_rom[addr % self.chr_rom.len()]
+        }
+    }
 }
 
 /// An NES cartridge, or perhaps more accurately, an iNES file.
@@ -40,7 +51,7 @@ impl Cartridge {
         let mut prg_ram_size = max(bytes[8] as usize, 1) * 8000;
         let chr_ram_size = if chr_rom_size == 0 { 0x2000 } else { 0x0 };
         if bytes[7] & 0x0C == 0x08 {
-            info!("iNES 2.0 file detected");
+            warn!("iNES 2.0 file detected");
         } else {
             info!("iNES file detected");
             info!("Header: {:X?}", &bytes[0..16]);
@@ -101,7 +112,7 @@ impl Cartridge {
     /// Read a byte in the cartridge's memory given an address in PPU memory space
     /// Usually reads from CHR ROM/RAM.
     pub fn read_ppu(&self, addr: usize) -> u8 {
-        self.get_pattern_table()[addr]
+        self.mapper.read_ppu(addr, &self.memory)
     }
     /// Write a byte to the cartridge's memory given an address in PPU memory space
     /// Usually writes tot CHR RAM.

@@ -108,7 +108,8 @@ impl DebugWindow {
         unsafe {
             self.window.gl_make_current(&self.gl_context).unwrap();
             let gl = self.renderer.gl_context();
-            refresh_chr_texture(&gl, self.chr_tex, nes);
+            let chr = nes.cartridge.get_pattern_table().to_vec();
+            // refresh_chr_texture(&gl, self.chr_tex, nes, chr);
             // Render onto framebuffer
             gl.use_program(Some(self.program));
             check_error!(gl);

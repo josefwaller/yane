@@ -144,7 +144,7 @@ impl Ppu {
                 } else {
                     slice_index
                 };
-                let slice = if self.is_8x16_sprites() && slice_index > 7 {
+                let slice = if self.is_8x16_sprites() && final_index > 7 {
                     // Get the next tile if we are in the bottom half of an 8x16 tile
                     let tile = cartridge.get_tile(tile_num + 1);
                     tile[final_index - 8] | tile[final_index]
