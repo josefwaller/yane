@@ -307,7 +307,7 @@ pub mod unofficial {
     /// AND and then LSR Immediate
     pub const ALR_I: u8 = 0x4B;
     /// AND and then copy N into C
-    pub const ANC_I: u8 = 0x0B;
+    pub const ANC_I: [u8; 2] = [0x0B, 0x2B];
     // AND and then ROR, with slightly differnent flags set
     pub const ARR_I: u8 = 0x6B;
     /// Sets X to (A AND X) - value

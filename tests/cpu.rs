@@ -82,3 +82,7 @@ fn test_nestest_file() {
     advance_nes_frames!(nes, 100);
     assert_background_snapshot!("nestest_unofficial", nes);
 }
+#[test]
+fn test_official() {
+    rom_test!("./test_roms/cpu_official.nes", 8_000);
+}

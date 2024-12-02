@@ -327,6 +327,7 @@ impl Nes {
                 // Copy into stack
                 self.push_to_stack_u16(self.cpu.p_c.wrapping_add(2));
                 self.push_to_stack(self.cpu.s_r.to_byte());
+                self.cpu.s_r.i = true;
                 self.cpu.p_c = (((self.read_byte(0xFFFE) as u16) << 8)
                     + self.read_byte(0xFFFF) as u16)
                     .wrapping_sub(1);
@@ -510,7 +511,7 @@ impl Nes {
                 self.cpu.a = self.cpu.lsr(self.cpu.a);
                 Ok((2, 2))
             }
-            unofficial::ANC_I => {
+            _ if unofficial::ANC_I.contains(opcode) => {
                 self.cpu.and(operands[0]);
                 self.cpu.s_r.c = self.cpu.s_r.n;
                 Ok((2, 2))
@@ -613,7 +614,10 @@ impl Nes {
             _ if unofficial::SKBS.contains(opcode) => Ok((2, 2)),
             _ if unofficial::IGN_ZP.contains(opcode) => Ok((2, 3)),
             _ if unofficial::IGN_ZP_X.contains(opcode) => Ok((2, 4)),
-            unofficial::IGN_ABS => Ok((3, 4)),
+            unofficial::IGN_ABS => {
+                self.read_abs(&operands);
+                Ok((3, 4))
+            }
             _ if unofficial::IGN_ABS_X.contains(opcode) => {
                 if self.pc_x(operands) {
                     return Ok((3, 5));
@@ -804,6 +808,12 @@ impl Nes {
         ];
         self.write_abs(&second_addr, value);
     }
+    fn indirect_indexed_addr(&mut self, addr: &[u8]) -> usize {
+        let first_addr = addr[0];
+        (self.read_byte(first_addr as usize) as u16
+            + ((self.read_byte(first_addr.wrapping_add(1) as usize) as u16) << 8))
+            .wrapping_add(self.cpu.y as u16) as usize
+    }
     /// Read a single byte from memory using indirect indexed addressing.
     /// A 2 byte value is read from the zero page address `addr`.
     /// The Y value is then added to this value, and the result is used as the little endian address of the actual value.
@@ -812,11 +822,8 @@ impl Nes {
     /// nes.read_indirect_indexed(&[0x18]);
     /// ```
     pub fn read_indirect_indexed(&mut self, addr: &[u8]) -> u8 {
-        let first_addr = addr[0];
-        let second_addr = (self.read_byte(first_addr as usize) as u16
-            + ((self.read_byte(first_addr.wrapping_add(1) as usize) as u16) << 8))
-            .wrapping_add(self.cpu.y as u16);
-        return self.read_byte(second_addr as usize);
+        let addr = self.indirect_indexed_addr(addr);
+        return self.read_byte(addr as usize);
     }
     /// Write a single byte to memory using indirect indexed addressing.
     /// ```
@@ -825,12 +832,8 @@ impl Nes {
     /// assert_eq!(nes.read_indirect_indexed(&[0x12]), 0x34);
     /// ```
     pub fn write_indirect_indexed(&mut self, addr: &[u8], value: u8) {
-        let first_addr = addr[0] as usize;
-        let second_addr = (self.read_byte(first_addr) as u16
-            + ((self.read_byte(first_addr.wrapping_add(1)) as u16) << 8))
-            .wrapping_add(self.cpu.y as u16)
-            .to_owned();
-        self.write_byte(second_addr as usize, value)
+        let addr = self.indirect_indexed_addr(addr);
+        self.write_byte(addr as usize, value)
     }
     // Return true if a page is crossed by an operation using the absolute address and offset given
     // addr is in little endian form

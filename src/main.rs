@@ -147,6 +147,7 @@ fn main() {
                             now.duration_since(last_hundred_frames),
                             frame_cycles as f64 / 100.0
                         );
+                        // debug!("{:X?}", nes.last_instructions);
                         // Uncomment this to verify screenshot results
                         // let screen: Vec<String> = nes
                         //     .ppu

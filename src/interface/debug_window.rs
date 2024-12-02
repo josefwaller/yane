@@ -109,7 +109,7 @@ impl DebugWindow {
             self.window.gl_make_current(&self.gl_context).unwrap();
             let gl = self.renderer.gl_context();
             let chr = nes.cartridge.get_pattern_table().to_vec();
-            // refresh_chr_texture(&gl, self.chr_tex, nes, chr);
+            refresh_chr_texture(&gl, self.chr_tex, nes, chr);
             // Render onto framebuffer
             gl.use_program(Some(self.program));
             check_error!(gl);
@@ -261,6 +261,10 @@ impl DebugWindow {
                     );
                     ui.slider("Volume", 0.0, 1.0, &mut settings.volume);
                     ui.slider("Speed", 0.1, 10.0, &mut settings.speed);
+                    ui.text(format!(
+                        "Scroll: ({:3}, {:3})",
+                        nes.ppu.scroll_x, nes.ppu.scroll_y
+                    ));
                 });
             let draw_data = self.imgui.render();
             self.renderer
