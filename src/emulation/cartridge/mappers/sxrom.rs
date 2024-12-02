@@ -1,7 +1,9 @@
-use crate::{emulation::cartridge::mapper::bank_addr, CartridgeMemory, Mapper};
+use crate::{
+    emulation::cartridge::mapper::bank_addr, CartridgeMemory, Mapper, NametableArrangement,
+};
 use log::*;
 
-pub struct ScRom {
+pub struct SxRom {
     shift: usize,
     chr_bank_0: usize,
     chr_bank_1: usize,
@@ -9,9 +11,9 @@ pub struct ScRom {
     control: usize,
 }
 
-impl Default for ScRom {
-    fn default() -> ScRom {
-        ScRom {
+impl Default for SxRom {
+    fn default() -> SxRom {
+        SxRom {
             shift: 0x10,
             chr_bank_0: 0,
             chr_bank_1: 0,
@@ -21,10 +23,11 @@ impl Default for ScRom {
     }
 }
 
-impl Mapper for ScRom {
+impl Mapper for SxRom {
     fn read_cpu(&self, cpu_addr: usize, mem: &CartridgeMemory) -> u8 {
         if cpu_addr < 0x8000 {
             if cpu_addr < 0x6000 {
+                warn!("Reading to {:X}", cpu_addr);
                 return 0;
             }
             mem.prg_ram[(cpu_addr - 0x6000) % mem.prg_ram.len()]
@@ -40,7 +43,8 @@ impl Mapper for ScRom {
                     let bank_num = self.prg_bank & 0x0F;
                     if cpu_addr < 0xC000 {
                         // First 16 KiB bank only
-                        cpu_addr % 0x4000
+                        // cpu_addr % 0x4000
+                        bank_addr(0x4000, 0, cpu_addr)
                     } else {
                         // Switchable 16 KiB bank
                         bank_addr(0x4000, bank_num, cpu_addr)
@@ -77,8 +81,12 @@ impl Mapper for ScRom {
     }
     fn write_cpu(&mut self, cpu_addr: usize, mem: &mut CartridgeMemory, value: u8) {
         if cpu_addr < 0x8000 {
-            let max = mem.prg_ram.len();
-            mem.prg_ram[(cpu_addr - 0x6000) % max] = value;
+            if cpu_addr < 0x6000 {
+                warn!("Writing to {:X}", cpu_addr);
+            } else {
+                let max = mem.prg_ram.len();
+                mem.prg_ram[(cpu_addr - 0x6000) % max] = value;
+            }
         } else {
             // If value high bit is not set
             if value & 0x80 == 0 {
@@ -113,5 +121,13 @@ impl Mapper for ScRom {
     }
     fn write_ppu(&mut self, ppu_addr: usize, mem: &mut CartridgeMemory, value: u8) {
         unimplemented!("Write PPU");
+    }
+    fn nametable_arrangement(&self) -> Option<NametableArrangement> {
+        Some(match self.control & 0x03 {
+            0 | 1 => NametableArrangement::OneScreen,
+            2 => NametableArrangement::Horizontal,
+            3 => NametableArrangement::Vertical,
+            _ => panic!("Should never happen"),
+        })
     }
 }

@@ -2,8 +2,9 @@ use crate::{emulation::cartridge::mapper::get_mapper, Mapper};
 use log::*;
 use std::cmp::max;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum NametableArrangement {
+    OneScreen,
     Horizontal,
     Vertical,
 }
@@ -33,7 +34,7 @@ impl CartridgeMemory {
 pub struct Cartridge {
     pub memory: CartridgeMemory,
     /// Nametable mirroring arrangement
-    pub nametable_arrangement: NametableArrangement,
+    nametable_arrangement: NametableArrangement,
     // Mapper
     mapper: Box<dyn Mapper>,
 }
@@ -129,7 +130,12 @@ impl Cartridge {
         return &self.memory.chr_ram;
     }
     pub fn transform_nametable_addr(&self, addr: usize) -> usize {
-        match self.nametable_arrangement {
+        let nametable = self
+            .mapper
+            .nametable_arrangement()
+            .unwrap_or(self.nametable_arrangement);
+        match nametable {
+            NametableArrangement::OneScreen => addr % 0x400,
             NametableArrangement::Horizontal => {
                 // 0x2000 = 0x2800, 0x2400 = 0x2C00
                 (addr - 0x2000) % 0x800
