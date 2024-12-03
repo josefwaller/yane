@@ -114,18 +114,19 @@ impl Ppu {
         self.w = !self.w;
     }
 
-    pub fn on_prescanline(&mut self) {
-        // Clear sprite zero, sprite overflow and vblank flags
-        self.status &= 0b0001_1111;
-    }
-
     /// Set the sprite zero hit flag and the sprite overflow flag
     /// when rendering the scanline.
     pub fn on_scanline(&mut self, cartridge: &Cartridge, scanline: i32) {
+        if scanline == -1 {
+            // Clear sprite zero, sprite overflow and vblank flags
+            self.status &= 0b0001_1111;
+        }
         // Check for sprite 0 hit
         if !self.sprite_zero_hit()
             && self.is_background_rendering_enabled()
             && self.is_oam_rendering_enabled()
+            && scanline >= 0
+            && scanline < 240
         {
             // Sprite rendering is delayed by 1 scanline
             let y = self.oam[0] as i32 + 1;
@@ -180,21 +181,26 @@ impl Ppu {
                     }
                 }
             }
+            // Check for sprite overflow
+            if self
+                .oam
+                .chunks(4)
+                .filter(|obj| {
+                    let y = obj[0] as i32;
+                    y <= scanline && y < scanline + if self.is_8x16_sprites() { 8 } else { 16 }
+                })
+                .count()
+                > 8
+            {
+                self.status |= 0x20;
+            } else {
+                self.status &= !0x20;
+            }
         }
-        // Check for sprite overflow
-        if self
-            .oam
-            .chunks(4)
-            .filter(|obj| {
-                let y = obj[0] as i32;
-                y <= scanline && y < scanline + if self.is_8x16_sprites() { 8 } else { 16 }
-            })
-            .count()
-            > 8
-        {
-            self.status |= 0x20;
-        } else {
-            self.status &= !0x20;
+        // Set VBlank
+        if scanline == 241 {
+            // Set VBlank flag
+            self.status |= 0x80;
         }
     }
 
@@ -340,11 +346,6 @@ impl Ppu {
     }
     pub fn sprite_overflow(&self) -> bool {
         (self.status & 0x20) != 0
-    }
-    // TODO: maybe remove, just do this in nes
-    pub fn on_vblank(&mut self) {
-        // Set VBlank flag
-        self.status |= 0x80;
     }
     pub fn get_nametable_addr(&self) -> usize {
         return 0x2000 + (self.status & 0x03) as usize * 0x400;

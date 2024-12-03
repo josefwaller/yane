@@ -1,4 +1,5 @@
 /// Various settings for rendering the emulator's output
+#[derive(Copy, Clone)]
 pub struct Settings {
     // Display OAM debug information on the screen
     pub oam_debug: bool,

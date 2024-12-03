@@ -23,6 +23,8 @@ pub struct Screen {
     // Program for rendering a primitve using wireframe
     wireframe_program: NativeProgram,
     wireframe_vao: NativeVertexArray,
+    // Render/misc settings
+    settings: Settings,
 }
 impl Screen {
     // TODO: Rename
@@ -84,11 +86,12 @@ impl Screen {
                 scanline_vao,
                 wireframe_program,
                 wireframe_vao,
+                settings: Settings::default(),
             }
         }
     }
 
-    pub unsafe fn render_scanline(&mut self, nes: &Nes, scanline: usize, settings: &Settings) {
+    pub unsafe fn render_scanline(&mut self, nes: &Nes, scanline: i32) {
         // Enable stencil test
         self.gl.enable(glow::STENCIL_TEST);
         self.gl.enable(glow::DEPTH_TEST);
@@ -140,7 +143,7 @@ impl Screen {
         // Gether OAM to render
         if nes.ppu.is_oam_rendering_enabled() {
             let sprite_height = if nes.ppu.is_8x16_sprites() { 16 } else { 8 };
-            let sprite_limit = if settings.scanline_sprite_limit {
+            let sprite_limit = if self.settings.scanline_sprite_limit {
                 8
             } else {
                 64
@@ -151,8 +154,7 @@ impl Screen {
                 .chunks(4)
                 .filter(|obj| {
                     // Sprite rendering is offset by 1px
-                    obj[0] as usize + 1 <= scanline
-                        && obj[0] as usize + 1 + sprite_height > scanline
+                    obj[0] as i32 + 1 <= scanline && obj[0] as i32 + 1 + sprite_height > scanline
                 })
                 .take(sprite_limit)
                 .collect();
@@ -179,7 +181,7 @@ impl Screen {
                 .iter()
                 .enumerate()
                 .map(|(i, obj)| {
-                    return if obj[2] & 0x20 != 0 && !settings.always_sprites_on_top {
+                    return if obj[2] & 0x20 != 0 && !self.settings.always_sprites_on_top {
                         // Behind background
                         0.7
                     } else {
@@ -219,13 +221,12 @@ impl Screen {
                 flip_y,
                 depths,
                 if nes.ppu.is_8x16_sprites() { 2 } else { 1 },
-                settings,
             );
         }
         // Gather information for rendering background
         if nes.ppu.is_background_rendering_enabled() {
             const NUM_NAMETABLE_TILES: usize = 33;
-            let y = (scanline + nes.ppu.scroll_y as usize) / 8;
+            let y = (scanline + nes.ppu.scroll_y as i32) / 8;
             let (left_nametable_addr, right_nametable_addr) = if y < 30 {
                 (
                     nes.ppu.top_left_nametable_addr(),
@@ -237,7 +238,7 @@ impl Screen {
                     nes.ppu.bot_right_nametable_addr(),
                 )
             };
-            let nametable_row_index = if y < 30 { y } else { y - 30 };
+            let nametable_row_index = if y < 30 { y } else { y - 30 } as usize;
             // Get the left and right nametables
             // We can account for the scroll Y offset when selecting the nametables
             // But we need both in order to account for the scroll X
@@ -309,7 +310,6 @@ impl Screen {
                 flip,
                 depths,
                 8,
-                settings,
             );
         }
     }
@@ -394,7 +394,7 @@ impl Screen {
         // The tiles' palette indices (each should have 1)
         palette_indices: Vec<i32>,
         palette: &[[f32; 3]; 0x20],
-        scanline: usize,
+        scanline: i32,
         // Whether to flip each tile along the X or Y axis
         flip_vert: Vec<i32>,
         flip_horz: Vec<i32>,
@@ -403,7 +403,6 @@ impl Screen {
         depths: Vec<f32>,
         // The sprite height (1 = 8px, 2 = 16px)
         height: i32,
-        settings: &Settings,
     ) {
         #[cfg(debug_assertions)]
         {
@@ -459,7 +458,7 @@ impl Screen {
             .map(|_| debug_palette().into_flattened())
             .flatten()
             .collect();
-        let final_palette = if settings.palette_debug {
+        let final_palette = if self.settings.palette_debug {
             debug_pal.as_slice()
         } else {
             palette.as_flattened()
@@ -503,5 +502,8 @@ impl Screen {
         nes.ppu.nametable_ram[nes.cartridge.transform_nametable_addr(addr)
             ..=nes.cartridge.transform_nametable_addr(addr + 0x3FF)]
             .to_vec()
+    }
+    pub fn set_settings(&mut self, settings: Settings) {
+        self.settings = settings;
     }
 }

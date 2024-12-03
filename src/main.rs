@@ -10,8 +10,8 @@ use std::fs::File;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use yane::{
-    Cartridge, DebugWindow, Nes, Settings, Window, CPU_CYCLES_PER_OAM, CPU_CYCLES_PER_SCANLINE,
-    CPU_CYCLES_PER_VBLANK,
+    Cartridge, DebugWindow, Nes, Screen, Settings, Window, CPU_CYCLES_PER_OAM,
+    CPU_CYCLES_PER_SCANLINE, CPU_CYCLES_PER_VBLANK,
 };
 
 fn main() {
@@ -53,7 +53,7 @@ fn main() {
         let mut last_debug_window_render = Instant::now();
         // Various constants for keeping emulator time in check with real time
         const DEBUG_WINDOW_REFRESH_RATE: Duration = Duration::from_millis(1000 / 60);
-        const CPU_CYCLES_PER_FRAME: i64 = 240 * 113 + 2273;
+        const CPU_CYCLES_PER_FRAME: f32 = 262.0 * CPU_CYCLES_PER_SCANLINE;
         let wait_time_per_cycle =
             Duration::from_nanos(1_000_000_000 / 60 / CPU_CYCLES_PER_FRAME as u64);
         info!(
@@ -62,22 +62,16 @@ fn main() {
         let fps =
             1_000_000_000.0 / (CPU_CYCLES_PER_FRAME as f64 * wait_time_per_cycle.as_nanos() as f64);
         info!("Calculated FPS: {fps}");
-        // Which scanline we are currently rendering
-        let mut scanline = 0;
-        // Current cycle count
-        let mut cycles = 0;
         // Used for logging information every 100 frames
         let mut last_hundred_frames = Instant::now();
         let mut frame_cycles = 0;
         let mut frame_count = 0;
+        let mut frame_wait_time = Duration::ZERO;
         let mut s1 = Instant::now();
         let mut s2 = Instant::now();
         let mut delta = Instant::now();
-        // Whether we are before the first render
-        let mut pre_render = true;
+        let mut leftover_cycles = 0.0;
         loop {
-            // How many cycles to wait, in this loop
-            let mut cycles_to_wait = 0;
             // Update IMGUI/Window input
             let mut should_exit = false;
             for event in event_pump.poll_iter() {
@@ -104,6 +98,7 @@ fn main() {
             {
                 last_debug_window_render += DEBUG_WINDOW_REFRESH_RATE;
                 debug_window.render(&nes, &event_pump, &mut settings);
+                window.screen().set_settings(settings.clone());
             }
             // Update audio
             if Instant::now().duration_since(s1) > Duration::from_millis(1000 / 240) {
@@ -120,71 +115,45 @@ fn main() {
             if settings.paused {
                 delta = Instant::now();
             } else {
-                while cycles < CPU_CYCLES_PER_SCANLINE {
-                    cycles += nes.step().unwrap();
-                }
-                cycles -= CPU_CYCLES_PER_SCANLINE;
-                cycles_to_wait += CPU_CYCLES_PER_SCANLINE;
+                // Advance 1 frame
+                window.make_gl_current();
+                let screen: Option<&mut Screen> = Some(window.screen());
+                leftover_cycles = nes.advance_frame(leftover_cycles, screen);
+                let cycles_to_wait = 262.0 * CPU_CYCLES_PER_SCANLINE;
+                // Debug log FPS info
+                frame_count += 1;
+                if frame_count == 100 {
+                    frame_count = 0;
+                    let now = Instant::now();
+                    debug!(
+                        "Over last 100 frames: Avg FPS: {}, duration: {:?}, avg cycles: {} (wait time {:#?})",
+                        100.0
+                            / (now.duration_since(last_hundred_frames).as_millis() as f32 / 1000.0),
+                        now.duration_since(last_hundred_frames),
+                        frame_cycles as f64 / 100.0,
+                        frame_wait_time
+                    );
+                    // debug!("{:X?}", nes.last_instructions);
+                    // Uncomment this to verify screenshot results
+                    // let screen: Vec<String> = nes
+                    //     .ppu
+                    //     .nametable_ram
+                    //     .chunks(32)
+                    //     .map(|row| {
+                    //         row.iter()
+                    //             .map(|r| format!("{:2X?}", r))
+                    //             .collect::<Vec<String>>()
+                    //             .join(" ")
+                    //     })
+                    //     .collect();
+                    // info!("{:?}", screen);
 
-                if scanline < 240 {
-                    window.render_scanline(&nes, scanline, &settings);
-                    nes.ppu.on_scanline(&nes.cartridge, scanline as i32);
-                    scanline += 1;
-                } else {
-                    pre_render = false;
-                    // Reset scanline
-                    scanline = 0;
-                    // Debug log FPS info
-                    frame_count += 1;
-                    if frame_count == 100 {
-                        frame_count = 0;
-                        let now = Instant::now();
-                        debug!(
-                            "Over last 100 frames: Avg FPS: {}, duration: {:?}, avg cycles: {}",
-                            100.0
-                                / (now.duration_since(last_hundred_frames).as_millis() as f32
-                                    / 1000.0),
-                            now.duration_since(last_hundred_frames),
-                            frame_cycles as f64 / 100.0
-                        );
-                        // debug!("{:X?}", nes.last_instructions);
-                        // Uncomment this to verify screenshot results
-                        // let screen: Vec<String> = nes
-                        //     .ppu
-                        //     .nametable_ram
-                        //     .chunks(32)
-                        //     .map(|row| {
-                        //         row.iter()
-                        //             .map(|r| format!("{:2X?}", r))
-                        //             .collect::<Vec<String>>()
-                        //             .join(" ")
-                        //     })
-                        //     .collect();
-                        // info!("{:?}", screen);
-
-                        frame_cycles = 0;
-                        last_hundred_frames = now;
-                    }
-                    // Render window
-                    window.render(&nes, &settings);
-                    // Do VBlank
-                    nes.ppu.on_vblank();
-                    if nes.ppu.get_nmi_enabled() {
-                        nes.on_nmi();
-                    }
-                    // Advance cycles
-                    while cycles < CPU_CYCLES_PER_VBLANK {
-                        cycles += nes.step().unwrap();
-                        // Check if DMA occurred
-                        // TODO: Decide whether this is the best way to do this
-                        if nes.check_oam_dma() {
-                            cycles += CPU_CYCLES_PER_OAM;
-                        }
-                    }
-                    cycles -= CPU_CYCLES_PER_VBLANK;
-                    cycles_to_wait += CPU_CYCLES_PER_VBLANK;
-                    nes.ppu.on_prescanline();
+                    frame_cycles = 0;
+                    frame_wait_time = Duration::ZERO;
+                    last_hundred_frames = now;
                 }
+                // Render window
+                window.render(&nes, &settings);
                 // Calculate how much time has passed in the emulation
                 let emu_elapsed = wait_time_per_cycle
                     .saturating_mul(cycles_to_wait as u32)
@@ -194,19 +163,14 @@ fn main() {
                 // Wait for the difference
                 let wait_duration = emu_elapsed.saturating_sub(actual_elapsed);
                 // If we are going too fast, slow down
-                frame_cycles += cycles_to_wait;
                 // Check if we want to slow down first, since sleep is costly even if wait_duration is 0
                 if wait_duration != Duration::ZERO {
+                    frame_wait_time += wait_duration;
                     sleep(wait_duration);
                 }
                 // Advance real time by amount of emulator time that will have passed
                 // Since sleep may overshoot, this will let us catch up next frame/scanline
                 delta += emu_elapsed;
-                // If we haven't rendered yet, just set delta to the current time
-                // This is because the first render will take a bit and can cause the time to get messed up
-                if pre_render {
-                    delta = Instant::now();
-                }
             }
         }
     }

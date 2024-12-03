@@ -5,6 +5,6 @@ mod utils;
 pub use emulation::*;
 pub use interface::*;
 pub use settings::*;
-pub const CPU_CYCLES_PER_SCANLINE: i64 = 112;
+pub const CPU_CYCLES_PER_SCANLINE: f32 = 113.67;
 pub const CPU_CYCLES_PER_VBLANK: i64 = 2260;
-pub const CPU_CYCLES_PER_OAM: i64 = 513;
+pub const CPU_CYCLES_PER_OAM: f32 = 513.0;

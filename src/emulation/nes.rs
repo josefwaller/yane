@@ -1,6 +1,9 @@
 use log::*;
 
-use crate::{opcodes::*, Apu, Cartridge, Controller, Cpu, Ppu};
+use crate::{
+    opcodes::*, Apu, Cartridge, Controller, Cpu, Ppu, Screen, Settings, CPU_CYCLES_PER_OAM,
+    CPU_CYCLES_PER_SCANLINE,
+};
 
 /// The NES.
 pub struct Nes {
@@ -631,6 +634,53 @@ impl Nes {
                 ))
             }
         }
+    }
+    /// Advance the NES by 1 frame, approx 29780 cycles.
+    /// Requires a `Screen` in order to render properly, as rendering
+    /// must be done after every scanline, not every frame.
+    /// If you need finer control over the NES timing, use
+    /// `Nes::advance_scanline` or `Nes::step`.
+    /// Returns the total number of cycles ran.
+    pub fn advance_frame(&mut self, leftover_cycles: f32, mut screen: Option<&mut Screen>) -> f32 {
+        let mut cycles = leftover_cycles;
+        (-1..261).for_each(|scanline| {
+            cycles = self.advance_scanline(scanline, cycles);
+            match screen.as_mut() {
+                Some(s) => unsafe {
+                    s.render_scanline(&self, scanline);
+                },
+                None => {}
+            }
+        });
+        cycles
+    }
+
+    /// Advance the NES by 1 scanline, or approximately 113 cycles.
+    /// * `scanline` should be the scanline index (between -1 and 260)
+    /// * `leftover_cycles` should be how many extra cycles the CPU has from the previous scanline
+    /// Returns the number of leftover cycles from this scanline
+    pub fn advance_scanline(&mut self, scanline: i32, leftover_cycles: f32) -> f32 {
+        let mut cycles = leftover_cycles;
+        // Advance PPU
+        self.ppu.on_scanline(&self.cartridge, scanline as i32);
+        // Check for NMI
+        if scanline == 241 {
+            if self.ppu.get_nmi_enabled() {
+                self.on_nmi();
+                cycles += 10.0; // - CPU_CYCLES_PER_SCANLINE;
+            }
+        }
+        while cycles < CPU_CYCLES_PER_SCANLINE {
+            cycles += self.step().unwrap() as f32;
+            // If we are in VBlank
+            if scanline > 241 {
+                if self.check_oam_dma() {
+                    cycles += CPU_CYCLES_PER_OAM;
+                }
+            }
+        }
+        cycles -= CPU_CYCLES_PER_SCANLINE;
+        (3.0 * cycles).round() / 3.0
     }
     /// Check if the PPU's OAM DMA register has been set.
     /// If it has been, execute the DMA and reset the regsiter to None.

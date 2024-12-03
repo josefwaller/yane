@@ -57,15 +57,15 @@ impl Window {
         // Update audio
         self.audio.update_audio(nes, settings);
     }
-    pub fn render_scanline(&mut self, nes: &Nes, scanline: usize, settings: &Settings) {
-        self.window.gl_make_current(&self.gl_context).unwrap();
-        unsafe {
-            self.screen.render_scanline(nes, scanline, settings);
-        }
-    }
     pub fn render(&mut self, nes: &Nes, settings: &Settings) {
         self.window.gl_make_current(&self.gl_context).unwrap();
         self.screen.render(nes, self.window.size(), settings);
         self.window.gl_swap_window();
+    }
+    pub fn screen(&mut self) -> &mut Screen {
+        &mut self.screen
+    }
+    pub fn make_gl_current(&mut self) {
+        self.window.gl_make_current(&self.gl_context).unwrap()
     }
 }
