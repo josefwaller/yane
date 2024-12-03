@@ -121,14 +121,14 @@ impl Ppu {
 
     /// Set the sprite zero hit flag and the sprite overflow flag
     /// when rendering the scanline.
-    pub fn on_scanline(&mut self, cartridge: &Cartridge, scanline: usize) {
+    pub fn on_scanline(&mut self, cartridge: &Cartridge, scanline: i32) {
         // Check for sprite 0 hit
         if !self.sprite_zero_hit()
             && self.is_background_rendering_enabled()
             && self.is_oam_rendering_enabled()
         {
             // Sprite rendering is delayed by 1 scanline
-            let y = self.oam[0] as usize + 1;
+            let y = self.oam[0] as i32 + 1;
             let sprite_height = if self.is_8x16_sprites() { 16 } else { 8 };
             if y <= scanline && y + sprite_height > scanline {
                 // Get the tile
@@ -137,10 +137,10 @@ impl Ppu {
                 } else {
                     self.get_spr_pattern_table_addr() + self.oam[1] as usize
                 };
-                let slice_index = scanline - y;
+                let slice_index = (scanline - y) as usize;
                 let flip_vert = self.oam[2] & 0x80 != 0;
                 let final_index = if flip_vert {
-                    sprite_height - 1 - slice_index
+                    sprite_height as usize - 1 - slice_index
                 } else {
                     slice_index
                 };
@@ -156,12 +156,21 @@ impl Ppu {
                 if slice != 0 {
                     // Check all 8 pixels
                     for i in 0..8 {
+                        let x = self.oam[3] as usize + (7 - i);
+                        if x >= 255 {
+                            continue;
+                        }
+                        if x < 8 && (self.sprite_left_clipping() || self.background_left_clipping())
+                        {
+                            // We can return here since X is only going to get smaller
+                            return;
+                        }
                         let shift = if (self.oam[2] & 0x40) != 0 { 7 - i } else { i };
                         if (slice >> shift) & 0x01 != 0 {
                             // Check if this pixel intersects the background
                             if !self.background_pixel_is_transparent(
-                                self.oam[3] as usize + (7 - i),
-                                scanline,
+                                x,
+                                scanline as usize,
                                 cartridge,
                             ) {
                                 self.status |= 0x40;
@@ -177,7 +186,7 @@ impl Ppu {
             .oam
             .chunks(4)
             .filter(|obj| {
-                let y = obj[0] as usize;
+                let y = obj[0] as i32;
                 y <= scanline && y < scanline + if self.is_8x16_sprites() { 8 } else { 16 }
             })
             .count()
@@ -283,13 +292,13 @@ impl Ppu {
     pub fn is_background_rendering_enabled(&self) -> bool {
         (self.mask & 0x08) != 0
     }
-    /// Return whether to hide the left 8 pixels when drawing sprites
-    pub fn should_hide_leftmost_sprites(&self) -> bool {
+    /// Whether rendering sprites in the 8 leftmost pixels is disabled.
+    pub fn sprite_left_clipping(&self) -> bool {
         (self.mask & 0x04) == 0
     }
-    /// Return whether to hide the left 8 pixels when drwaing background
-    pub fn should_hide_leftmost_background(&self) -> bool {
-        (self.mask & 0x08) == 0
+    /// Whether rendering the background in the 8 leftmost pixels is disabled.
+    pub fn background_left_clipping(&self) -> bool {
+        (self.mask & 0x02) == 0
     }
     /// Return whether greyscale mode is on
     pub fn is_greyscale_mode_on(&self) -> bool {
