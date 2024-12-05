@@ -86,3 +86,8 @@ fn test_nestest_file() {
 fn test_official() {
     rom_test!("./test_roms/cpu_official.nes", 8_000);
 }
+
+#[test]
+fn test_branch() {
+    rom_test!("./test_roms/cpu_branch.nes");
+}
