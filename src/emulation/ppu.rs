@@ -21,6 +21,8 @@ pub struct Ppu {
     pub scroll_y: u8,
     /// The PPUADDR register
     pub addr: u16,
+    // Temporary register holding most significant byte of the address
+    temp_addr_msb: u8,
     /// The PPUDATA register (actually the read buffer)
     pub data: u8,
     /// The OAMDMA register
@@ -47,6 +49,7 @@ impl Ppu {
             scroll_x: 0,
             scroll_y: 0,
             addr: 0,
+            temp_addr_msb: 0,
             data: 0,
             oam_dma: None,
             palette_ram: [0; 0x20],
@@ -111,11 +114,11 @@ impl Ppu {
 
     pub fn write_to_addr(&mut self, value: u8) {
         if self.w {
-            // Set LSB
-            self.addr = (self.addr & 0x3F00) + value as u16;
+            // Set address
+            self.addr = ((self.temp_addr_msb as u16) << 8) + value as u16;
         } else {
-            // Set MSB
-            self.addr = (self.addr & 0x00FF) + ((value as u16) << 8);
+            // Set the most significant byte to the temp register
+            self.temp_addr_msb = value;
         }
         self.w = !self.w;
     }

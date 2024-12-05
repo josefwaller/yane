@@ -30,9 +30,6 @@ impl Mapper for NRom {
                 return;
             }
             mem.prg_ram[(addr - 0x6000) % len] = value;
-        } else {
-            let len = mem.prg_rom.len();
-            mem.prg_rom[(addr - 0x8000) % len] = value;
         }
     }
     fn read_ppu(&self, ppu_addr: usize, mem: &CartridgeMemory) -> u8 {
@@ -42,6 +39,6 @@ impl Mapper for NRom {
         mem.chr_ram[ppu_addr % mem.chr_ram.len()]
     }
     fn write_ppu(&mut self, ppu_addr: usize, mem: &mut CartridgeMemory, value: u8) {
-        unimplemented!("Write PPU")
+        todo!("Write PPU")
     }
 }
