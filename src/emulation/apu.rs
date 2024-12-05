@@ -1,9 +1,22 @@
 use std::cmp::max;
 
+pub trait AudioRegister {
+    /// Return whether the register has been muted
+    fn muted(&self) -> bool;
+    /// Return the current amplitude output of the register
+    /// Phase should be between 0 and 1
+    fn amp(&self, phase: f32) -> f32;
+}
+
 #[derive(Clone, Copy, Default, Debug)]
 pub struct LengthCounter {
     pub halt: bool,
     pub load: usize,
+}
+impl LengthCounter {
+    fn muted(&self) -> bool {
+        self.load == 0
+    }
 }
 #[derive(Clone, Copy, Default, Debug)]
 pub struct Envelope {
@@ -39,6 +52,31 @@ pub struct PulseRegister {
     // Whether the register is enabled
     pub enabled: bool,
 }
+const DUTY_CYCLES: [[f32; 8]; 4] = [
+    [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    [0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    [0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+    [1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+];
+impl AudioRegister for PulseRegister {
+    fn muted(&self) -> bool {
+        !self.enabled
+            || self.sweep_target_period > 0x7FF
+            || self.length_counter.muted()
+            || self.timer < 8
+    }
+    fn amp(&self, phase: f32) -> f32 {
+        // Conditions for register being disabled
+        let duty_cycle = DUTY_CYCLES[self.duty as usize];
+        // Should be between 0 and 1
+        let volume = if self.envelope.constant {
+            self.envelope.volume as f32 / 0xF as f32
+        } else {
+            self.envelope.decay as f32 / 0xF as f32
+        };
+        duty_cycle[(phase * duty_cycle.len() as f32).floor() as usize % duty_cycle.len()] * volume
+    }
+}
 const LENGTH_TABLE: [usize; 0x20] = [
     0x0A, 0xFE, 0x14, 0x02, 0x28, 0x04, 0x50, 0x06, 0xA0, 0x08, 0x3C, 0x0A, 0x0E, 0x0C, 0x1A, 0x0E,
     0x0C, 0x10, 0x18, 0x12, 0x30, 0x14, 0x60, 0x16, 0xC0, 0x18, 0x48, 0x1A, 0x10, 0x1C, 0x20, 0x1E,
@@ -54,10 +92,32 @@ pub struct TriangleRegister {
     pub timer: usize,
     pub enabled: bool,
 }
+impl AudioRegister for TriangleRegister {
+    fn muted(&self) -> bool {
+        !self.enabled || self.length_counter.muted() || self.timer < 2 || self.linear_counter == 0
+    }
+    fn amp(&self, phase: f32) -> f32 {
+        // Simple triangle wave
+        if phase < 0.5 {
+            phase * 2.0
+        } else {
+            1.0 - (phase - 0.5) * 2.0
+        }
+    }
+}
 #[derive(Clone, Copy, Default, Debug)]
 pub struct NoiseRegister {
-    pub lenth_counter: LengthCounter,
+    pub length_counter: LengthCounter,
     pub enabled: bool,
+}
+
+impl AudioRegister for NoiseRegister {
+    fn muted(&self) -> bool {
+        !self.enabled || self.length_counter.muted()
+    }
+    fn amp(&self, _phase: f32) -> f32 {
+        rand::random::<f32>() % 2.0
+    }
 }
 
 #[derive(Debug)]
@@ -65,7 +125,7 @@ pub struct Apu {
     pub pulse_registers: [PulseRegister; 2],
     pub triangle_register: TriangleRegister,
     pub noise_register: NoiseRegister,
-    step: usize,
+    frame_count: u32,
 }
 
 impl Apu {
@@ -74,7 +134,7 @@ impl Apu {
             pulse_registers: [PulseRegister::default(); 2],
             triangle_register: TriangleRegister::default(),
             noise_register: NoiseRegister::default(),
-            step: 0,
+            frame_count: 0,
         }
     }
     /// Write a byte of data to the APU given its address in CPU memory space
@@ -99,10 +159,10 @@ impl Apu {
                 self.triangle_register.reload_flag = true;
             }
             0x400C => {
-                self.noise_register.lenth_counter.halt = (value & 0x20) != 0;
+                self.noise_register.length_counter.halt = (value & 0x20) != 0;
             }
             0x400F => {
-                self.noise_register.lenth_counter.load = (value as usize & 0xF8) >> 3;
+                self.noise_register.length_counter.load = (value as usize & 0xF8) >> 3;
             }
             0x4015 => {
                 self.pulse_registers[0].enabled = (value & 0x01) != 0;
@@ -141,14 +201,14 @@ impl Apu {
             _ => {} // _ => panic!("Invalid address given to APU"),
         }
     }
-    pub fn step(&mut self) {
-        if self.step % 3728 == 0 {
-            self.on_quater_frame();
-            if self.step % (2 * 3728) == 0 {
-                self.on_half_frame();
-            }
+    pub fn on_frame(&mut self) {
+        self.frame_count += 1;
+        if self.frame_count % 2 == 0 {
+            self.on_half_frame();
         }
-        self.step = (self.step + 1) % 141915;
+        if self.frame_count % 4 == 0 {
+            self.on_quater_frame();
+        }
     }
     pub fn on_quater_frame(&mut self) {
         self.pulse_registers.iter_mut().for_each(|reg| {
@@ -190,7 +250,12 @@ impl Apu {
                 // TODO: Slight difference between pulse 1 and 2
                 let sweep_change = reg.timer >> reg.sweep_shift;
                 reg.sweep_target_period = max(
-                    reg.timer as i32 + if reg.sweep_negate { -1 } else { 1 } * sweep_change as i32,
+                    reg.timer as i32
+                        + if reg.sweep_negate {
+                            -(sweep_change as i32) - 1
+                        } else {
+                            sweep_change as i32
+                        },
                     0,
                 ) as usize;
                 if reg.sweep_enabled

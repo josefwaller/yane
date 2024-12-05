@@ -1,5 +1,5 @@
 use crate::{
-    apu::{NoiseRegister, PulseRegister, TriangleRegister},
+    apu::{AudioRegister, NoiseRegister, PulseRegister, TriangleRegister},
     Nes, Settings,
 };
 use sdl2::{
@@ -7,12 +7,6 @@ use sdl2::{
     Sdl,
 };
 
-const DUTY_CYCLES: [[f32; 8]; 4] = [
-    [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    [0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    [0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0],
-    [1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0],
-];
 #[derive(Clone, Copy)]
 struct PulseWave {
     // The pulse register this device is attached to
@@ -29,29 +23,11 @@ impl AudioCallback for PulseWave {
     // Ouputs the amplitude
     fn callback(&mut self, out: &mut [f32]) {
         for x in out.iter_mut() {
-            // Conditions for register being disabled
-            let duty_cycle = DUTY_CYCLES[self.register.duty as usize];
-            // Should be between 0 and 1
-            let volume = if self.register.envelope.constant {
-                self.register.envelope.volume as f32 / 0xF as f32
-            } else {
-                self.register.envelope.decay as f32 / 0xF as f32
-            };
             // Output no sound if muted one way or another
-            if !self.register.enabled
-                || self.register.length_counter.load == 0
-                || self.register.timer < 8
-                || self.register.sweep_target_period > 0x7FF
-            {
+            if self.register.muted() {
                 *x = 0.0;
             } else {
-                *x = self.max_volume
-                    * 0.25
-                    * (1.0
-                        - 2.0
-                            * duty_cycle[(self.phase * duty_cycle.len() as f32).floor() as usize
-                                % duty_cycle.len()])
-                    * volume;
+                *x = self.max_volume * 0.25 * (1.0 - 2.0 * self.register.amp(self.phase));
             }
             // Advance phase
             let clock = 1_789_000.0;
@@ -72,16 +48,8 @@ impl AudioCallback for TriangleWave {
     type Channel = f32;
     fn callback(&mut self, out: &mut [f32]) {
         for x in out.iter_mut() {
-            let amp = if self.phase < 0.5 {
-                self.phase * 2.0
-            } else {
-                1.0 - (self.phase - 0.5) * 2.0
-            };
-            if !self.register.enabled
-                || self.register.length_counter.load == 0
-                || self.register.linear_counter == 0
-                || self.register.timer <= 1
-            {
+            let amp = self.register.amp(self.phase);
+            if self.register.muted() {
                 *x = 0.0;
             } else {
                 *x = self.max_volume * 0.25 * (2.0 * amp - 1.0);
@@ -99,11 +67,11 @@ impl AudioCallback for NoiseWave {
     type Channel = f32;
     fn callback(&mut self, out: &mut [f32]) {
         for x in out.iter_mut() {
-            if self.register.lenth_counter.load == 0 || !self.register.enabled {
+            if self.register.muted() {
                 *x = 0.0;
             } else {
                 // Generate random noise
-                *x = self.max_volume * 0.25 * (1.0 - rand::random::<f32>() % 2.0);
+                *x = self.max_volume * 0.25 * (1.0 - self.register.amp(0.0));
             }
         }
     }

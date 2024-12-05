@@ -1,6 +1,9 @@
 use super::{cartridge, Cartridge, NametableArrangement};
 use log::*;
 
+const DOTS_PER_SCANLINE: u32 = 341;
+const SCANLINES_PER_FRAME: u32 = 262;
+
 #[derive(Debug)]
 pub struct Ppu {
     /// The Object Access Memory, or OAM
@@ -29,6 +32,8 @@ pub struct Ppu {
     pub nametable_ram: [u8; 0x800],
     // W register, false = 0
     w: bool,
+    // (x, y) coordinate of dot (pixel) being processed
+    dot: (u32, u32),
 }
 
 impl Ppu {
@@ -47,6 +52,7 @@ impl Ppu {
             palette_ram: [0; 0x20],
             nametable_ram: [0; 0x800],
             w: true,
+            dot: (0, 0),
         }
     }
 
@@ -79,7 +85,7 @@ impl Ppu {
         match addr % 8 {
             0 => self.ctrl = value,
             1 => self.mask = value,
-            2 => self.status = value,
+            2 => {}
             3 => self.oam_addr = value,
             4 => self.write_oam(0, value),
             5 => {
@@ -113,97 +119,124 @@ impl Ppu {
         }
         self.w = !self.w;
     }
-
-    /// Set the sprite zero hit flag and the sprite overflow flag
-    /// when rendering the scanline.
-    pub fn on_scanline(&mut self, cartridge: &Cartridge, scanline: i32) {
-        if scanline == -1 {
-            // Clear sprite zero, sprite overflow and vblank flags
-            self.status &= 0b0001_1111;
-        }
-        // Check for sprite 0 hit
-        if !self.sprite_zero_hit()
-            && self.is_background_rendering_enabled()
-            && self.is_oam_rendering_enabled()
-            && scanline >= 0
-            && scanline < 240
-        {
-            // Sprite rendering is delayed by 1 scanline
-            let y = self.oam[0] as i32 + 1;
+    // Return whether to trigger an NMI
+    pub fn advance_dots(&mut self, dots: u32, cartridge: &Cartridge) -> bool {
+        // Todo: tidy
+        let mut to_return = false;
+        (0..dots).for_each(|_| {
+            self.dot = if self.dot.0 == DOTS_PER_SCANLINE - 1 {
+                if self.dot.1 == SCANLINES_PER_FRAME - 1 {
+                    (0, 0)
+                } else {
+                    (0, self.dot.1 + 1)
+                }
+            } else {
+                (self.dot.0 + 1, self.dot.1)
+            };
+            // Passes the timing test
+            if self.dot == (13, 241) {
+                // Set vblank
+                self.status |= 0x80;
+                to_return = true;
+            } else if self.dot == (1, 261) {
+                // Clear VBlank, sprite overflow and sprite 0 hit flags
+                self.status &= 0x1F;
+            }
             let sprite_height = if self.is_8x16_sprites() { 16 } else { 8 };
-            if y <= scanline && y + sprite_height > scanline {
-                // Get the tile
-                let tile_num = if self.is_8x16_sprites() {
-                    ((self.oam[1] as usize & 0x01) << 8) + (self.oam[1] as usize & 0xFE)
-                } else {
-                    self.get_spr_pattern_table_addr() + self.oam[1] as usize
-                };
-                let slice_index = (scanline - y) as usize;
-                let flip_vert = self.oam[2] & 0x80 != 0;
-                let final_index = if flip_vert {
-                    sprite_height as usize - 1 - slice_index
-                } else {
-                    slice_index
-                };
-                let slice = if self.is_8x16_sprites() && final_index > 7 {
-                    // Get the next tile if we are in the bottom half of an 8x16 tile
-                    let tile = cartridge.get_tile(tile_num + 1);
-                    tile[final_index - 8] | tile[final_index]
-                } else {
-                    let tile = cartridge.get_tile(tile_num);
-
-                    tile[final_index] | tile[final_index + 8]
-                };
-                if slice != 0 {
-                    // Check all 8 pixels
-                    for i in 0..8 {
-                        let x = self.oam[3] as usize + (7 - i);
-                        if x >= 255 {
-                            continue;
-                        }
-                        if x < 8 && (self.sprite_left_clipping() || self.background_left_clipping())
+            // Check for sprite 0 hit
+            if !self.sprite_zero_hit()
+                && self.is_background_rendering_enabled()
+                && self.is_oam_rendering_enabled()
+                && self.dot.1 > 0
+                && self.dot.1 < 240
+            {
+                let y = self.oam[0] as u32 + 1;
+                if y <= self.dot.1 && y + sprite_height > self.dot.1 {
+                    let x = self.oam[3] as u32;
+                    if x <= self.dot.0 && x + 8 > self.dot.0 && self.dot.0 < 255 {
+                        if self.dot.0 >= 8
+                            || !(self.sprite_left_clipping() || self.background_left_clipping())
                         {
-                            // We can return here since X is only going to get smaller
-                            return;
-                        }
-                        let shift = if (self.oam[2] & 0x40) != 0 { 7 - i } else { i };
-                        if (slice >> shift) & 0x01 != 0 {
-                            // Check if this pixel intersects the background
-                            if !self.background_pixel_is_transparent(
-                                x,
-                                scanline as usize,
+                            if !self.sprite_pixel_is_transparent(
+                                0,
+                                (self.dot.0 - x) as usize,
+                                (self.dot.1 - y) as usize,
                                 cartridge,
                             ) {
-                                self.status |= 0x40;
-                                break;
+                                if !self.background_pixel_is_transparent(
+                                    self.dot.0 as usize,
+                                    self.dot.1 as usize,
+                                    cartridge,
+                                ) {
+                                    self.status |= 0x40;
+                                }
                             }
                         }
                     }
                 }
             }
-            // Check for sprite overflow
-            if self
-                .oam
-                .chunks(4)
-                .filter(|obj| {
-                    let y = obj[0] as i32;
-                    y <= scanline && y < scanline + if self.is_8x16_sprites() { 8 } else { 16 }
-                })
-                .count()
-                > 8
-            {
-                self.status |= 0x20;
-            } else {
-                self.status &= !0x20;
+            if self.dot.0 == 0 {
+                // Set sprite overflow
+                if self
+                    .oam
+                    .chunks(4)
+                    .filter(|obj| {
+                        obj[0] as u32 <= self.dot.1 && obj[0] as u32 + sprite_height > self.dot.0
+                    })
+                    .count()
+                    > 8
+                {
+                    self.status |= 0x20;
+                }
             }
-        }
-        // Set VBlank
-        if scanline == 241 {
-            // Set VBlank flag
-            self.status |= 0x80;
-        }
+        });
+        to_return
     }
 
+    pub fn in_vblank(&self) -> bool {
+        self.dot.0 + DOTS_PER_SCANLINE * self.dot.1 > 1 + DOTS_PER_SCANLINE * 241
+    }
+
+    fn sprite_pixel_is_transparent(
+        &self,
+        spr_num: usize,
+        x: usize,
+        y: usize,
+        cartridge: &Cartridge,
+    ) -> bool {
+        // Get the tile
+        let obj = &self.oam[spr_num..(spr_num + 4)];
+        let tile_num = if self.is_8x16_sprites() {
+            ((obj[1] as usize & 0x01) << 8) + (obj[1] as usize & 0xFE)
+        } else {
+            self.get_spr_pattern_table_addr() + obj[1] as usize
+        };
+        let slice_index = y;
+        let flip_vert = obj[2] & 0x80 != 0;
+        let sprite_height = if self.is_8x16_sprites() { 16 } else { 8 };
+        let final_index = if flip_vert {
+            sprite_height as usize - 1 - slice_index
+        } else {
+            slice_index
+        };
+        let slice = if self.is_8x16_sprites() && final_index > 7 {
+            // Get the next tile if we are in the bottom half of an 8x16 tile
+            let tile = cartridge.get_tile(tile_num + 1);
+            tile[final_index - 8] | tile[final_index]
+        } else {
+            let tile = cartridge.get_tile(tile_num);
+            tile[final_index] | tile[final_index + 8]
+        };
+        if slice == 0 {
+            return true;
+        }
+        let flip_hor = (obj[2] & 0x40) != 0;
+        let shift = if flip_hor { x } else { 7 - x };
+        if (slice >> shift) & 0x01 != 0 {
+            return false;
+        }
+        true
+    }
     // Return whether the background pixel index given an (x, y) coordinate in screen space is transparent
     fn background_pixel_is_transparent(&self, x: usize, y: usize, cartridge: &Cartridge) -> bool {
         // Get tile X Y coordinates
@@ -396,5 +429,10 @@ impl Ppu {
             3 => 0x2000,
             _ => panic!("Invalid nametable num {}", self.base_nametable_num()),
         }
+    }
+    /// Get the index of the scanline currently being drawn.
+    /// Between [0, 261]
+    pub fn scanline(&self) -> u32 {
+        self.dot.1
     }
 }

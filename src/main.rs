@@ -67,10 +67,8 @@ fn main() {
         let mut frame_cycles = 0;
         let mut frame_count = 0;
         let mut frame_wait_time = Duration::ZERO;
-        let mut s1 = Instant::now();
-        let mut s2 = Instant::now();
+        let mut apu_timer = Instant::now();
         let mut delta = Instant::now();
-        let mut leftover_cycles = 0.0;
         loop {
             // Update IMGUI/Window input
             let mut should_exit = false;
@@ -101,13 +99,9 @@ fn main() {
                 window.screen().set_settings(settings.clone());
             }
             // Update audio
-            if Instant::now().duration_since(s1) > Duration::from_millis(1000 / 240) {
-                nes.apu.on_quater_frame();
-                s1 = Instant::now();
-            }
-            if Instant::now().duration_since(s2) > Duration::from_millis(1000 / 120) {
-                nes.apu.on_half_frame();
-                s2 = Instant::now();
+            if Instant::now().duration_since(apu_timer) > Duration::from_millis(1000 / 60) {
+                nes.apu.on_frame();
+                apu_timer += Duration::from_millis(1000 / 60);
             }
             // Update window
             window.update(&mut nes, keys, &settings);
@@ -118,8 +112,8 @@ fn main() {
                 // Advance 1 frame
                 window.make_gl_current();
                 let screen: Option<&mut Screen> = Some(window.screen());
-                leftover_cycles = nes.advance_frame(leftover_cycles, screen);
-                let cycles_to_wait = 262.0 * CPU_CYCLES_PER_SCANLINE;
+                let cycles_to_wait = nes.advance_frame(screen);
+                frame_cycles += cycles_to_wait;
                 // Debug log FPS info
                 frame_count += 1;
                 if frame_count == 100 {

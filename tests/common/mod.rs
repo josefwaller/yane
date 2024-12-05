@@ -12,33 +12,9 @@ macro_rules! nes_with_rom {
 #[macro_export]
 macro_rules! advance_nes_frames {
     ($nes: ident, $frames: literal) => {{
-        use yane::{CPU_CYCLES_PER_OAM, CPU_CYCLES_PER_SCANLINE, CPU_CYCLES_PER_VBLANK};
-
         // Run the emulator a bit
-        let mut cycles = 0;
         (0..($frames)).for_each(|_| {
-            (0..240).for_each(|scanline| {
-                while cycles < CPU_CYCLES_PER_SCANLINE {
-                    cycles += $nes.step().unwrap();
-                    $nes.check_oam_dma();
-                }
-                $nes.ppu.on_scanline(&$nes.cartridge, scanline);
-            });
-            cycles -= CPU_CYCLES_PER_SCANLINE;
-            $nes.ppu.on_vblank();
-            if $nes.ppu.get_nmi_enabled() {
-                $nes.on_nmi();
-            }
-            while cycles < CPU_CYCLES_PER_VBLANK {
-                cycles += $nes.step().unwrap();
-                // Check if DMA occurred
-                // TODO: Decide whether this is the best way to do this
-                if $nes.check_oam_dma() {
-                    cycles += CPU_CYCLES_PER_OAM;
-                }
-            }
-            cycles -= CPU_CYCLES_PER_VBLANK;
-            $nes.ppu.on_prescanline();
+            $nes.advance_frame(None);
         });
     }};
 }

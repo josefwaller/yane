@@ -636,52 +636,44 @@ impl Nes {
         }
     }
     /// Advance the NES by 1 frame, approx 29780 cycles.
+    /// Just finishes rendering the frame if the NES is halfway done rendering one.
     /// Requires a `Screen` in order to render properly, as rendering
     /// must be done after every scanline, not every frame.
-    /// If you need finer control over the NES timing, use
-    /// `Nes::advance_scanline` or `Nes::step`.
     /// Returns the total number of cycles ran.
-    pub fn advance_frame(&mut self, leftover_cycles: f32, mut screen: Option<&mut Screen>) -> f32 {
-        let mut cycles = leftover_cycles;
-        (-1..261).for_each(|scanline| {
-            cycles = self.advance_scanline(scanline, cycles);
-            match screen.as_mut() {
-                Some(s) => unsafe {
-                    s.render_scanline(&self, scanline);
-                },
-                None => {}
+    pub fn advance_frame(&mut self, mut screen: Option<&mut Screen>) -> u32 {
+        let mut cycles = 0;
+        loop {
+            let scanline = self.ppu.scanline();
+            let mut c = self.step().unwrap() as u32;
+            // If we are in VBlank
+            if self.ppu.in_vblank() {
+                if self.check_oam_dma() {
+                    c += CPU_CYCLES_PER_OAM as u32;
+                }
             }
-        });
+            cycles += c;
+            if self.ppu.advance_dots(3 * c as u32, &self.cartridge) && self.ppu.get_nmi_enabled() {
+                self.on_nmi();
+                cycles += 7;
+                self.ppu.advance_dots(21, &self.cartridge);
+            }
+            // Render if we are in the visible screen area
+            if scanline != self.ppu.scanline() && scanline <= 240 {
+                match screen.as_mut() {
+                    Some(s) => unsafe {
+                        s.render_scanline(&self, scanline as i32);
+                    },
+                    None => {}
+                }
+            }
+            // If we have finished VBlank and are rendering the next frame
+            if scanline != 0 && self.ppu.scanline() == 0 {
+                break;
+            }
+        }
         cycles
     }
 
-    /// Advance the NES by 1 scanline, or approximately 113 cycles.
-    /// * `scanline` should be the scanline index (between -1 and 260)
-    /// * `leftover_cycles` should be how many extra cycles the CPU has from the previous scanline
-    /// Returns the number of leftover cycles from this scanline
-    pub fn advance_scanline(&mut self, scanline: i32, leftover_cycles: f32) -> f32 {
-        let mut cycles = leftover_cycles;
-        // Advance PPU
-        self.ppu.on_scanline(&self.cartridge, scanline as i32);
-        // Check for NMI
-        if scanline == 241 {
-            if self.ppu.get_nmi_enabled() {
-                self.on_nmi();
-                cycles += 10.0; // - CPU_CYCLES_PER_SCANLINE;
-            }
-        }
-        while cycles < CPU_CYCLES_PER_SCANLINE {
-            cycles += self.step().unwrap() as f32;
-            // If we are in VBlank
-            if scanline > 241 {
-                if self.check_oam_dma() {
-                    cycles += CPU_CYCLES_PER_OAM;
-                }
-            }
-        }
-        cycles -= CPU_CYCLES_PER_SCANLINE;
-        (3.0 * cycles).round() / 3.0
-    }
     /// Check if the PPU's OAM DMA register has been set.
     /// If it has been, execute the DMA and reset the regsiter to None.
     /// Return `true` if the DMA is executed, and `false` otherwise.
