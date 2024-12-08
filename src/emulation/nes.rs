@@ -149,6 +149,8 @@ impl Nes {
         match self.decode_and_execute(&inst) {
             Ok((bytes, cycles)) => {
                 self.cpu.p_c = self.cpu.p_c.wrapping_add(bytes);
+                // todo move this
+                self.apu.advance_cycles(cycles as u32 / 2);
                 return Ok(cycles);
             }
             Err(s) => {

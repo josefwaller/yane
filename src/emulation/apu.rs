@@ -1,11 +1,23 @@
 use std::cmp::max;
 
+use log::*;
+use rand::seq::index::sample;
+
+// Todo move
+const CPU_CLOCK_SPEED_HZ: u32 = 1_789_000;
+
 pub trait AudioRegister {
     /// Return whether the register has been muted
     fn muted(&self) -> bool;
-    /// Return the current amplitude output of the register
+    /// Return the current amplitude output of the register, i.e. what is sent ot the mixer
     /// Phase should be between 0 and 1
-    fn amp(&self, phase: f32) -> f32;
+    fn amp(&self, phase: f32) -> u32;
+    fn period_ns(&self) -> f32 {
+        0.0
+    }
+    fn value(&self) -> u32 {
+        0
+    }
 }
 
 #[derive(Clone, Copy, Default, Debug)]
@@ -16,6 +28,11 @@ pub struct LengthCounter {
 impl LengthCounter {
     fn muted(&self) -> bool {
         self.load == 0
+    }
+    fn clock(&mut self) {
+        if !self.halt && self.load > 0 {
+            self.load -= 1;
+        }
     }
 }
 #[derive(Clone, Copy, Default, Debug)]
@@ -29,12 +46,40 @@ pub struct Envelope {
     /// Current value of the volume decay
     pub decay: usize,
 }
+impl Envelope {
+    pub fn clock(&mut self, restart: bool) {
+        // Clock volume divider
+        if self.divider == 0 {
+            self.divider = self.volume;
+            // Clock volume decay
+            if self.decay == 0 {
+                // Reset if loop flag is set
+                if restart {
+                    self.decay = 0xF;
+                }
+            } else {
+                self.decay -= 1;
+            }
+        } else {
+            self.divider -= 1;
+        }
+    }
+    pub fn value(&self) -> u32 {
+        if self.constant {
+            self.volume as u32
+        } else {
+            self.decay as u32
+        }
+    }
+}
 #[derive(Clone, Copy, Default, Debug)]
 pub struct PulseRegister {
     /// The index of the duty to use
     pub duty: u32,
     /// The period of the pulse wave
     pub timer: usize,
+    // The amount to reload the timer with when it hits 0
+    pub timer_reload: usize,
     /// The envelope
     pub envelope: Envelope,
     pub length_counter: LengthCounter,
@@ -51,30 +96,51 @@ pub struct PulseRegister {
     pub sweep_shift: usize,
     // Whether the register is enabled
     pub enabled: bool,
+    // Sequencer, i.e. the index of the pulse value currently being sent ot the mixer
+    pub sequencer: usize,
 }
-const DUTY_CYCLES: [[f32; 8]; 4] = [
-    [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    [0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    [0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0],
-    [1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+const DUTY_CYCLES: [[u32; 8]; 4] = [
+    [0, 1, 0, 0, 0, 0, 0, 0],
+    [0, 1, 1, 0, 0, 0, 0, 0],
+    [0, 1, 1, 1, 0, 0, 0, 0],
+    [1, 0, 0, 1, 1, 1, 1, 1],
 ];
 impl AudioRegister for PulseRegister {
     fn muted(&self) -> bool {
+        // Conditions for register being disabled
         !self.enabled
             || self.sweep_target_period > 0x7FF
             || self.length_counter.muted()
-            || self.timer < 8
+            || self.timer_reload < 8
     }
-    fn amp(&self, phase: f32) -> f32 {
-        // Conditions for register being disabled
+    fn amp(&self, phase: f32) -> u32 {
+        if phase < 0.0 || phase > 1.0 {
+            warn!("Invalid phase {}, silencing", phase);
+            return 0;
+        }
         let duty_cycle = DUTY_CYCLES[self.duty as usize];
         // Should be between 0 and 1
         let volume = if self.envelope.constant {
-            self.envelope.volume as f32 / 0xF as f32
+            self.envelope.volume
         } else {
-            self.envelope.decay as f32 / 0xF as f32
-        };
+            self.envelope.decay
+        } as u32;
         duty_cycle[(phase * duty_cycle.len() as f32).floor() as usize % duty_cycle.len()] * volume
+    }
+    fn period_ns(&self) -> f32 {
+        16.0 * (self.timer_reload + 1) as f32 * 1_000_000_000.0 / (CPU_CLOCK_SPEED_HZ as f32)
+    }
+    fn value(&self) -> u32 {
+        if !self.enabled
+            || self.sweep_target_period > 0x7FF
+            || self.length_counter.muted()
+            || self.timer_reload < 8
+            || DUTY_CYCLES[self.duty as usize][self.sequencer] == 0
+        {
+            0
+        } else {
+            self.envelope.value()
+        }
     }
 }
 const LENGTH_TABLE: [usize; 0x20] = [
@@ -89,43 +155,96 @@ pub struct TriangleRegister {
     // Linear counter reload value
     pub linear_counter_reload: usize,
     pub reload_flag: bool,
-    pub timer: usize,
+    pub timer_reload: u32,
     pub enabled: bool,
+    pub sequencer: u32,
+    pub timer: u32,
 }
 impl AudioRegister for TriangleRegister {
     fn muted(&self) -> bool {
-        !self.enabled || self.length_counter.muted() || self.timer < 2 || self.linear_counter == 0
+        !self.enabled
+            || self.length_counter.muted()
+            || self.timer_reload < 2
+            || self.linear_counter == 0
     }
-    fn amp(&self, phase: f32) -> f32 {
+    fn amp(&self, phase: f32) -> u32 {
         // Simple triangle wave
         if phase < 0.5 {
-            phase * 2.0
+            (15.0 * 2.0 * phase).floor() as u32
         } else {
-            1.0 - (phase - 0.5) * 2.0
+            15 - (15.0 * 2.0 * (phase - 0.5)).floor() as u32
+        }
+    }
+    fn period_ns(&self) -> f32 {
+        32.0 * (self.timer_reload + 1) as f32 * 1_000_000_000.0 / (CPU_CLOCK_SPEED_HZ as f32)
+    }
+    fn value(&self) -> u32 {
+        if self.muted() {
+            0
+        } else {
+            if self.sequencer <= 15 {
+                15 - self.sequencer
+            } else {
+                self.sequencer - 16
+            }
         }
     }
 }
-#[derive(Clone, Copy, Default, Debug)]
+
+const NOISE_TIMER_PERIODS: [u32; 16] = [
+    4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068,
+];
+#[derive(Clone, Copy, Debug)]
 pub struct NoiseRegister {
     pub length_counter: LengthCounter,
     pub enabled: bool,
+    pub timer: u32,
+    pub timer_reload: u32,
+    pub envelope: Envelope,
+    // false = 0, true = 1
+    pub mode: bool,
+    // This is actually 15 bits wide
+    pub shift: u16,
+}
+
+impl Default for NoiseRegister {
+    fn default() -> Self {
+        NoiseRegister {
+            length_counter: LengthCounter::default(),
+            enabled: false,
+            timer: 0,
+            timer_reload: 0,
+            envelope: Envelope::default(),
+            mode: false,
+            shift: 1,
+        }
+    }
 }
 
 impl AudioRegister for NoiseRegister {
     fn muted(&self) -> bool {
-        !self.enabled || self.length_counter.muted()
+        !self.enabled || self.length_counter.muted() || self.shift & 0x01 == 1
     }
-    fn amp(&self, _phase: f32) -> f32 {
-        rand::random::<f32>() % 2.0
+    fn amp(&self, _phase: f32) -> u32 {
+        // rand::random::<f32>() % 2.0
+        0
+    }
+    fn value(&self) -> u32 {
+        if self.muted() {
+            0
+        } else {
+            self.envelope.value()
+        }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Apu {
     pub pulse_registers: [PulseRegister; 2],
     pub triangle_register: TriangleRegister,
     pub noise_register: NoiseRegister,
     frame_count: u32,
+    cycles: u32,
 }
 
 impl Apu {
@@ -135,6 +254,7 @@ impl Apu {
             triangle_register: TriangleRegister::default(),
             noise_register: NoiseRegister::default(),
             frame_count: 0,
+            cycles: 0,
         }
     }
     /// Write a byte of data to the APU given its address in CPU memory space
@@ -148,18 +268,24 @@ impl Apu {
             }
             0x4009 => {}
             0x400A => {
-                self.triangle_register.timer =
-                    (self.triangle_register.timer & 0x700) + value as usize;
+                self.triangle_register.timer_reload =
+                    (self.triangle_register.timer_reload & 0x700) + value as u32;
             }
             0x400B => {
-                self.triangle_register.timer =
-                    (self.triangle_register.timer & 0x0FF) + ((value as usize & 0x07) << 8);
+                self.triangle_register.timer_reload =
+                    (self.triangle_register.timer_reload & 0x0FF) + ((value as u32 & 0x07) << 8);
                 self.triangle_register.length_counter.load =
                     LENGTH_TABLE[(value as usize & 0xF8) >> 3];
                 self.triangle_register.reload_flag = true;
             }
             0x400C => {
                 self.noise_register.length_counter.halt = (value & 0x20) != 0;
+                self.noise_register.envelope.constant = (value & 0x10) != 0;
+                self.noise_register.envelope.divider = (value & 0x0F) as usize;
+            }
+            0x400E => {
+                self.noise_register.mode = (value & 0x80) != 0;
+                self.noise_register.timer_reload = NOISE_TIMER_PERIODS[(value & 0x0F) as usize];
             }
             0x400F => {
                 self.noise_register.length_counter.load = (value as usize & 0xF8) >> 3;
@@ -168,8 +294,9 @@ impl Apu {
                 self.pulse_registers[0].enabled = (value & 0x01) != 0;
                 self.pulse_registers[1].enabled = (value & 0x02) != 0;
                 self.triangle_register.enabled = (value & 0x04) != 0;
+                self.noise_register.enabled = (value & 0x08) != 0;
             }
-            _ => {} // _ => panic!("Invalid address given to APU"),
+            _ => warn!("Trying to write {:X} to APU address {:X}", value, addr),
         }
     }
     fn set_pulse_byte(&mut self, pulse_index: usize, addr: usize, value: u8) {
@@ -188,10 +315,10 @@ impl Apu {
                 reg.sweep_shift = (value & 0x07) as usize;
             }
             2 => {
-                reg.timer = (reg.timer & 0x0700) | value as usize;
+                reg.timer_reload = (reg.timer_reload & 0x0700) | value as usize;
             }
             3 => {
-                reg.timer = (reg.timer & 0x00FF) | ((value as usize & 0x07) << 8);
+                reg.timer_reload = (reg.timer_reload & 0x00FF) | ((value as usize & 0x07) << 8);
                 let length = (value & 0xF8) as usize >> 3;
                 reg.length_counter.load = LENGTH_TABLE[length];
                 // Mimic setting volume start flag
@@ -201,33 +328,51 @@ impl Apu {
             _ => {} // _ => panic!("Invalid address given to APU"),
         }
     }
-    pub fn on_frame(&mut self) {
-        self.frame_count += 1;
-        if self.frame_count % 2 == 0 {
-            self.on_half_frame();
-        }
-        if self.frame_count % 4 == 0 {
-            self.on_quater_frame();
-        }
+    pub fn advance_cycles(&mut self, apu_cycles: u32) {
+        const frame_cycles: u32 = 3728;
+        (0..apu_cycles).for_each(|_| {
+            self.cycles = (self.cycles + 1) % (4 * frame_cycles);
+            if self.cycles % (2 * frame_cycles) == 0 {
+                self.on_quater_frame();
+                if self.cycles % frame_cycles == 0 {
+                    self.on_half_frame();
+                }
+            }
+            self.pulse_registers.iter_mut().for_each(|p| {
+                if p.timer == 0 {
+                    if p.sequencer == 0 {
+                        p.sequencer = 7;
+                    } else {
+                        p.sequencer -= 1;
+                    }
+                    p.timer = p.timer_reload;
+                } else {
+                    p.timer -= 1;
+                }
+            });
+            (0..2).for_each(|_| {
+                self.triangle_register.timer = (self.triangle_register.timer + 1)
+                    % max(self.triangle_register.timer_reload as u32, 1);
+                if self.triangle_register.timer == 0 {
+                    self.triangle_register.sequencer = (self.triangle_register.sequencer + 1) % 32;
+                }
+                let n = &mut self.noise_register;
+                n.timer = (n.timer + 1) % max(n.timer_reload, 1);
+                if n.timer == 0 {
+                    // XOR bit 0 with bit 1 in mode 1 and with bit 6 in mode 0
+                    let feedback = (n.shift ^ (n.shift >> if n.mode { 6 } else { 1 })) & 0x01;
+                    n.shift = (n.shift >> 1) | (feedback << 14);
+                }
+            });
+        });
     }
     pub fn on_quater_frame(&mut self) {
         self.pulse_registers.iter_mut().for_each(|reg| {
-            // Clock volume divider
-            if reg.envelope.divider == 0 {
-                reg.envelope.divider = reg.envelope.volume;
-                // Clock volume decay
-                if reg.envelope.decay == 0 {
-                    // Reset if loop flag is set
-                    if reg.length_counter.halt {
-                        reg.envelope.decay = 0xF;
-                    }
-                } else {
-                    reg.envelope.decay -= 1;
-                }
-            } else {
-                reg.envelope.divider -= 1;
-            }
+            reg.envelope.clock(reg.length_counter.halt);
         });
+        self.noise_register
+            .envelope
+            .clock(self.noise_register.length_counter.halt);
         if self.triangle_register.reload_flag {
             self.triangle_register.linear_counter = self.triangle_register.linear_counter_reload;
         }
@@ -241,38 +386,54 @@ impl Apu {
     pub fn on_half_frame(&mut self) {
         self.pulse_registers.iter_mut().for_each(|reg| {
             // Clock length halt counter
-            if !reg.length_counter.halt && reg.length_counter.load > 0 {
-                reg.length_counter.load -= 1;
-            }
+            reg.length_counter.clock();
             // Clock sweep divider
             if reg.sweep_divider == 0 {
                 // Compute sweep change
-                // TODO: Slight difference between pulse 1 and 2
-                let sweep_change = reg.timer >> reg.sweep_shift;
+                let sweep_change = reg.timer_reload >> reg.sweep_shift;
                 reg.sweep_target_period = max(
-                    reg.timer as i32
+                    reg.timer_reload as i32
                         + if reg.sweep_negate {
                             -(sweep_change as i32) - 1
                         } else {
-                            sweep_change as i32
+                            -(sweep_change as i32)
                         },
                     0,
                 ) as usize;
                 if reg.sweep_enabled
-                    && reg.timer >= 8
+                    && reg.timer_reload >= 8
                     && reg.sweep_shift > 0
                     && reg.sweep_target_period < 0x7FF
                 {
-                    reg.timer = reg.sweep_target_period;
+                    reg.timer_reload = reg.sweep_target_period;
                 }
             } else {
                 reg.sweep_divider -= 1;
             }
         });
-        if !self.triangle_register.length_counter.halt {
-            if self.triangle_register.length_counter.load > 0 {
-                self.triangle_register.length_counter.load -= 1;
-            }
+        self.triangle_register.length_counter.clock();
+    }
+    // The current output from the mixer
+    pub fn mixer_output(&self) -> f32 {
+        // Add up the pulse registers
+        let pulse: u32 = self
+            .pulse_registers
+            .iter()
+            // .take(1)
+            // .skip(1)
+            .map(|p| p.value())
+            .sum();
+        if pulse > 30 {
+            warn!("Pulse is higher than 30 ({})", pulse);
         }
+        let pulse_out = 95.88 / ((8128.9 / pulse as f32) + 100.0);
+        let t = self.triangle_register.value();
+        let n = self.noise_register.value();
+        let tnd_out = if t + n == 0 {
+            0.0
+        } else {
+            159.79 / (1.0 / (t as f32 / 8227.0 + n as f32 / 12241.0) + 100.0)
+        };
+        tnd_out + pulse_out
     }
 }

@@ -67,7 +67,6 @@ fn main() {
         let mut frame_cycles = 0;
         let mut frame_count = 0;
         let mut frame_wait_time = Duration::ZERO;
-        let mut apu_timer = Instant::now();
         let mut delta = Instant::now();
         loop {
             // Update IMGUI/Window input
@@ -97,11 +96,6 @@ fn main() {
                 last_debug_window_render += DEBUG_WINDOW_REFRESH_RATE;
                 debug_window.render(&nes, &event_pump, &mut settings);
                 window.screen().set_settings(settings.clone());
-            }
-            // Update audio
-            if Instant::now().duration_since(apu_timer) > Duration::from_millis(1000 / 60) {
-                nes.apu.on_frame();
-                apu_timer += Duration::from_millis(1000 / 60);
             }
             // Update window
             window.update(&mut nes, keys, &settings);
