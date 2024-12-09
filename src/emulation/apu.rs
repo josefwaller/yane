@@ -251,11 +251,7 @@ impl AudioRegister for DmcRegister {
         false
     }
     fn value(&self) -> u32 {
-        if self.enabled {
-            self.output
-        } else {
-            0
-        }
+        self.output
     }
     fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
@@ -315,13 +311,20 @@ impl Apu {
             0x400C => {
                 self.noise_register.length_counter.halt = (value & 0x20) != 0;
                 self.noise_register.envelope.constant = (value & 0x10) != 0;
-                self.noise_register.envelope.divider = (value & 0x0F) as usize;
+                self.noise_register.envelope.volume = (value & 0x0F) as usize;
             }
             0x400E => {
                 self.noise_register.mode = (value & 0x80) != 0;
                 self.noise_register.timer_reload = NOISE_TIMER_PERIODS[(value & 0x0F) as usize];
             }
-            0x400F => self.noise_register.length_counter.load = (value as usize & 0xF8) >> 3,
+            0x400F => {
+                if self.noise_register.enabled {
+                    self.noise_register.length_counter.load =
+                        LENGTH_TABLE[(value as usize & 0xF8) >> 3];
+                }
+                self.noise_register.envelope.decay = 0xF;
+                self.noise_register.envelope.divider = self.noise_register.envelope.volume;
+            }
             0x4010 => {
                 self.dmc_register.irq_enabled = (value & 0x80) != 0;
                 self.dmc_register.repeat = (value & 0x40) != 0;
@@ -524,6 +527,7 @@ impl Apu {
             }
         });
         self.triangle_register.length_counter.clock();
+        self.noise_register.length_counter.clock();
     }
     // The current output from the mixer
     pub fn mixer_output(&self) -> f32 {
