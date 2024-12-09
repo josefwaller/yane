@@ -268,7 +268,13 @@ pub struct Apu {
     pub triangle_register: TriangleRegister,
     pub noise_register: NoiseRegister,
     pub dmc_register: DmcRegister,
+    irq_inhibit: bool,
+    // false = 0, true = 1
+    mode: bool,
+    // Timer to get to next step
     cycles: u32,
+    // Step in either a 4 or 5 step sequence, depending on mode
+    step: u32,
 }
 
 impl Apu {
@@ -278,7 +284,10 @@ impl Apu {
             triangle_register: TriangleRegister::default(),
             noise_register: NoiseRegister::default(),
             dmc_register: DmcRegister::default(),
+            irq_inhibit: true,
+            mode: false,
             cycles: 0,
+            step: 0,
         }
     }
     /// Write a byte of data to the APU given its address in CPU memory space
@@ -331,7 +340,6 @@ impl Apu {
                 } else {
                     d.sample_full[0]
                 };
-                // debug!("Read full sample {:X?}", d.sample_full);
             }
             0x4013 => {
                 let d = &mut self.dmc_register;
@@ -345,7 +353,6 @@ impl Apu {
                     d.sample_full[0]
                 };
                 d.bytes_remaining = d.sample_len;
-                // debug!("Read full sample {:X?}", d.sample_full);
             }
             0x4015 => {
                 self.pulse_registers[0].set_enabled((value & 0x01) != 0);
@@ -353,6 +360,10 @@ impl Apu {
                 self.triangle_register.set_enabled((value & 0x04) != 0);
                 self.noise_register.set_enabled((value & 0x08) != 0);
                 self.dmc_register.set_enabled((value & 0x10) != 0);
+            }
+            0x4017 => {
+                self.mode = (value & 0x80) != 0;
+                self.irq_inhibit = (value & 0x40) != 0;
             }
             _ => warn!("Trying to write {:X} to APU address {:X}", value, addr),
         }
@@ -387,13 +398,26 @@ impl Apu {
         }
     }
     pub fn advance_cycles(&mut self, apu_cycles: u32) {
-        const frame_cycles: u32 = 3728;
+        const FRAME_CYCLES: u32 = 3728;
         (0..apu_cycles).for_each(|_| {
-            self.cycles = (self.cycles + 1) % (4 * frame_cycles);
-            if self.cycles % (2 * frame_cycles) == 0 {
-                self.on_quater_frame();
-                if self.cycles % frame_cycles == 0 {
-                    self.on_half_frame();
+            self.cycles = (self.cycles + 1) % FRAME_CYCLES;
+            if self.cycles == 0 {
+                if self.mode == false {
+                    // 4 step sequence
+                    self.step = (self.step + 1) % 4;
+                    self.on_quater_frame();
+                    if self.step % 2 == 0 {
+                        self.on_half_frame();
+                    }
+                } else {
+                    // 5 step sequence
+                    self.step = (self.step + 1) % 5;
+                    if self.step != 4 {
+                        self.on_quater_frame();
+                    }
+                    if self.step == 2 || self.step == 0 {
+                        self.on_half_frame();
+                    }
                 }
             }
             self.pulse_registers.iter_mut().for_each(|p| {

@@ -19,7 +19,7 @@ struct ApuChannel {
 impl AudioCallback for ApuChannel {
     type Channel = f32;
     fn callback(&mut self, out: &mut [f32]) {
-        let apu_cycle_duration = Duration::from_secs(1) / (1_789_000 / 2);
+        let apu_cycle_duration = Duration::from_secs(1) / (1_789_773 / 2);
         for x in out.iter_mut() {
             let v = self.apu.mixer_output();
             if v > 1.0 || v < -1.0 {
