@@ -11,15 +11,10 @@ const CPU_CLOCK_SPEED_HZ: u32 = 1_789_000;
 pub trait AudioRegister {
     /// Return whether the register has been muted
     fn muted(&self) -> bool;
-    /// Return the current amplitude output of the register, i.e. what is sent ot the mixer
-    /// Phase should be between 0 and 1
-    fn amp(&self, phase: f32) -> u32;
-    fn period_ns(&self) -> f32 {
-        0.0
-    }
     fn value(&self) -> u32 {
         0
     }
+    fn set_enabled(&mut self, enabled: bool);
 }
 
 #[derive(Clone, Copy, Default, Debug)]
@@ -115,23 +110,6 @@ impl AudioRegister for PulseRegister {
             || self.length_counter.muted()
             || self.timer_reload < 8
     }
-    fn amp(&self, phase: f32) -> u32 {
-        if phase < 0.0 || phase > 1.0 {
-            warn!("Invalid phase {}, silencing", phase);
-            return 0;
-        }
-        let duty_cycle = DUTY_CYCLES[self.duty as usize];
-        // Should be between 0 and 1
-        let volume = if self.envelope.constant {
-            self.envelope.volume
-        } else {
-            self.envelope.decay
-        } as u32;
-        duty_cycle[(phase * duty_cycle.len() as f32).floor() as usize % duty_cycle.len()] * volume
-    }
-    fn period_ns(&self) -> f32 {
-        16.0 * (self.timer_reload + 1) as f32 * 1_000_000_000.0 / (CPU_CLOCK_SPEED_HZ as f32)
-    }
     fn value(&self) -> u32 {
         if !self.enabled
             || self.sweep_target_period > 0x7FF
@@ -142,6 +120,12 @@ impl AudioRegister for PulseRegister {
             0
         } else {
             self.envelope.value()
+        }
+    }
+    fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+        if !self.enabled {
+            self.length_counter.load = 0;
         }
     }
 }
@@ -169,17 +153,6 @@ impl AudioRegister for TriangleRegister {
             || self.timer_reload < 2
             || self.linear_counter == 0
     }
-    fn amp(&self, phase: f32) -> u32 {
-        // Simple triangle wave
-        if phase < 0.5 {
-            (15.0 * 2.0 * phase).floor() as u32
-        } else {
-            15 - (15.0 * 2.0 * (phase - 0.5)).floor() as u32
-        }
-    }
-    fn period_ns(&self) -> f32 {
-        32.0 * (self.timer_reload + 1) as f32 * 1_000_000_000.0 / (CPU_CLOCK_SPEED_HZ as f32)
-    }
     fn value(&self) -> u32 {
         if self.muted() {
             0
@@ -189,6 +162,12 @@ impl AudioRegister for TriangleRegister {
             } else {
                 self.sequencer - 16
             }
+        }
+    }
+    fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+        if !self.enabled {
+            self.length_counter.load = 0;
         }
     }
 }
@@ -227,15 +206,17 @@ impl AudioRegister for NoiseRegister {
     fn muted(&self) -> bool {
         !self.enabled || self.length_counter.muted() || self.shift & 0x01 == 1
     }
-    fn amp(&self, _phase: f32) -> u32 {
-        // rand::random::<f32>() % 2.0
-        0
-    }
     fn value(&self) -> u32 {
         if self.muted() {
             0
         } else {
             self.envelope.value()
+        }
+    }
+    fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+        if !self.enabled {
+            self.length_counter.load = 0;
         }
     }
 }
@@ -269,15 +250,15 @@ impl AudioRegister for DmcRegister {
     fn muted(&self) -> bool {
         false
     }
-    fn amp(&self, phase: f32) -> u32 {
-        0
-    }
     fn value(&self) -> u32 {
         if self.enabled {
             self.output
         } else {
             0
         }
+    }
+    fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
     }
 }
 
@@ -367,11 +348,11 @@ impl Apu {
                 // debug!("Read full sample {:X?}", d.sample_full);
             }
             0x4015 => {
-                self.pulse_registers[0].enabled = (value & 0x01) != 0;
-                self.pulse_registers[1].enabled = (value & 0x02) != 0;
-                self.triangle_register.enabled = (value & 0x04) != 0;
-                self.noise_register.enabled = (value & 0x08) != 0;
-                self.dmc_register.enabled = (value & 0x10) != 0;
+                self.pulse_registers[0].set_enabled((value & 0x01) != 0);
+                self.pulse_registers[1].set_enabled((value & 0x02) != 0);
+                self.triangle_register.set_enabled((value & 0x04) != 0);
+                self.noise_register.set_enabled((value & 0x08) != 0);
+                self.dmc_register.set_enabled((value & 0x10) != 0);
             }
             _ => warn!("Trying to write {:X} to APU address {:X}", value, addr),
         }
