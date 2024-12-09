@@ -119,7 +119,7 @@ impl Nes {
             }
             // 0x4017 => self.controller_bit = 0,
             // APU Registers
-            0x4000..0x4020 => self.apu.write_byte(addr, value),
+            0x4000..0x4020 => self.apu.write_byte(addr, value, &self.cartridge),
             0x4020..0x10000 => self.cartridge.write_cpu(addr, value),
             _ => panic!("Invalid write address provided: {:#X}", addr),
         };

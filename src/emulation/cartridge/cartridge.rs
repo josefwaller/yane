@@ -11,6 +11,7 @@ pub enum NametableArrangement {
 
 /// Holds all the memory in the cartridge
 // Todo: Maybe rename (get rid of cartridge)
+#[derive(Clone)]
 pub struct CartridgeMemory {
     pub prg_ram: Vec<u8>,
     pub prg_rom: Vec<u8>,

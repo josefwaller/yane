@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use crate::{
     apu::{AudioRegister, NoiseRegister, PulseRegister, TriangleRegister},
-    Apu, Nes, Settings,
+    Apu, Cartridge, Nes, Settings,
 };
 use log::*;
 use sdl2::{
@@ -81,7 +81,7 @@ impl Audio {
             .map(|p| (p.sequencer, p.timer));
         let t = self.device.lock().apu.triangle_register.timer;
         let s = self.device.lock().apu.triangle_register.sequencer;
-        self.device.lock().apu = nes.apu;
+        self.device.lock().apu = nes.apu.clone();
         v.iter().enumerate().for_each(|(i, (s, t))| {
             self.device.lock().apu.pulse_registers[i].sequencer = *s;
             self.device.lock().apu.pulse_registers[i].timer = *t;

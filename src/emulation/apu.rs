@@ -3,6 +3,8 @@ use std::cmp::max;
 use log::*;
 use rand::seq::index::sample;
 
+use super::Cartridge;
+
 // Todo move
 const CPU_CLOCK_SPEED_HZ: u32 = 1_789_000;
 
@@ -238,12 +240,53 @@ impl AudioRegister for NoiseRegister {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+const DMC_RATES: [u32; 16] = [
+    428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54,
+];
+
+#[derive(Clone, Debug, Default)]
+pub struct DmcRegister {
+    enabled: bool,
+    irq_enabled: bool,
+    repeat: bool,
+    rate: u32,
+    timer: u32,
+    time_reload: u32,
+    // Address of the sample, in CPU memory space
+    sample_addr: usize,
+    // Length of hte sample in bytes
+    sample_len: usize,
+    // Number of bytes remaining in the sample
+    bytes_remaining: usize,
+    // Byte of the sample currently in buffer
+    sample: u8,
+    // todo maybe remove
+    sample_full: Vec<u8>,
+    bits_left: u32,
+    output: u32,
+}
+impl AudioRegister for DmcRegister {
+    fn muted(&self) -> bool {
+        false
+    }
+    fn amp(&self, phase: f32) -> u32 {
+        0
+    }
+    fn value(&self) -> u32 {
+        if self.enabled {
+            self.output
+        } else {
+            0
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Apu {
     pub pulse_registers: [PulseRegister; 2],
     pub triangle_register: TriangleRegister,
     pub noise_register: NoiseRegister,
-    frame_count: u32,
+    pub dmc_register: DmcRegister,
     cycles: u32,
 }
 
@@ -253,12 +296,13 @@ impl Apu {
             pulse_registers: [PulseRegister::default(); 2],
             triangle_register: TriangleRegister::default(),
             noise_register: NoiseRegister::default(),
-            frame_count: 0,
+            dmc_register: DmcRegister::default(),
             cycles: 0,
         }
     }
     /// Write a byte of data to the APU given its address in CPU memory space
-    pub fn write_byte(&mut self, addr: usize, value: u8) {
+    //TODO : Remove cartridge from here and solve the audio cartridge issue
+    pub fn write_byte(&mut self, addr: usize, value: u8, cartridge: &Cartridge) {
         match addr {
             0x4000..0x4004 => self.set_pulse_byte(0, addr, value),
             0x4004..0x4008 => self.set_pulse_byte(1, addr, value),
@@ -287,14 +331,47 @@ impl Apu {
                 self.noise_register.mode = (value & 0x80) != 0;
                 self.noise_register.timer_reload = NOISE_TIMER_PERIODS[(value & 0x0F) as usize];
             }
-            0x400F => {
-                self.noise_register.length_counter.load = (value as usize & 0xF8) >> 3;
+            0x400F => self.noise_register.length_counter.load = (value as usize & 0xF8) >> 3,
+            0x4010 => {
+                self.dmc_register.irq_enabled = (value & 0x80) != 0;
+                self.dmc_register.repeat = (value & 0x40) != 0;
+                self.dmc_register.rate = DMC_RATES[(value & 0x0F) as usize];
+                self.dmc_register.time_reload = self.dmc_register.rate;
+            }
+            0x4011 => self.dmc_register.output = (value & 0x7F) as u32,
+            0x4012 => {
+                let d = &mut self.dmc_register;
+                d.sample_addr = (value as usize * 64) + 0xC000;
+                d.sample_full = (0..d.sample_len)
+                    .map(|i| cartridge.read_cpu(d.sample_addr + i))
+                    .collect();
+                d.sample = if d.sample_full.len() == 0 {
+                    0
+                } else {
+                    d.sample_full[0]
+                };
+                // debug!("Read full sample {:X?}", d.sample_full);
+            }
+            0x4013 => {
+                let d = &mut self.dmc_register;
+                d.sample_len = (value as usize) * 16 + 1;
+                d.sample_full = (0..d.sample_len)
+                    .map(|i| cartridge.read_cpu(d.sample_addr + i))
+                    .collect();
+                d.sample = if d.sample_full.len() == 0 {
+                    0
+                } else {
+                    d.sample_full[0]
+                };
+                d.bytes_remaining = d.sample_len;
+                // debug!("Read full sample {:X?}", d.sample_full);
             }
             0x4015 => {
                 self.pulse_registers[0].enabled = (value & 0x01) != 0;
                 self.pulse_registers[1].enabled = (value & 0x02) != 0;
                 self.triangle_register.enabled = (value & 0x04) != 0;
                 self.noise_register.enabled = (value & 0x08) != 0;
+                self.dmc_register.enabled = (value & 0x10) != 0;
             }
             _ => warn!("Trying to write {:X} to APU address {:X}", value, addr),
         }
@@ -363,6 +440,36 @@ impl Apu {
                     let feedback = (n.shift ^ (n.shift >> if n.mode { 6 } else { 1 })) & 0x01;
                     n.shift = (n.shift >> 1) | (feedback << 14);
                 }
+                let d = &mut self.dmc_register;
+                if d.enabled {
+                    d.timer = (d.timer + 1) % max(d.time_reload, 1);
+                    if d.timer == 0 {
+                        if d.bits_left == 0 {
+                            // Go to next byte
+                            if d.bytes_remaining == 1 {
+                                if d.repeat {
+                                    d.bytes_remaining = d.sample_len - 1;
+                                    d.sample = d.sample_full[0];
+                                    d.bits_left = 8;
+                                } else {
+                                    d.enabled = false;
+                                }
+                            } else if d.bytes_remaining > 0 {
+                                d.bytes_remaining -= 1;
+                                d.bits_left = 8;
+                                d.sample = d.sample_full[d.sample_len - 1 - d.bytes_remaining];
+                            }
+                        } else {
+                            // Todo: Don't just clamp, check range
+                            d.output = (d.output as i32
+                                + if (d.sample & 0x01) == 1 { 2 } else { -2 })
+                            .clamp(0, 127) as u32;
+                            d.sample = d.sample >> 1;
+                            d.bits_left -= 1;
+                        }
+                        d.timer = d.time_reload;
+                    }
+                }
             });
         });
     }
@@ -416,23 +523,18 @@ impl Apu {
     // The current output from the mixer
     pub fn mixer_output(&self) -> f32 {
         // Add up the pulse registers
-        let pulse: u32 = self
-            .pulse_registers
-            .iter()
-            // .take(1)
-            // .skip(1)
-            .map(|p| p.value())
-            .sum();
+        let pulse: u32 = self.pulse_registers.iter().map(|p| p.value()).sum();
         if pulse > 30 {
             warn!("Pulse is higher than 30 ({})", pulse);
         }
         let pulse_out = 95.88 / ((8128.9 / pulse as f32) + 100.0);
         let t = self.triangle_register.value();
         let n = self.noise_register.value();
-        let tnd_out = if t + n == 0 {
+        let d = self.dmc_register.value();
+        let tnd_out = if t + n + d == 0 {
             0.0
         } else {
-            159.79 / (1.0 / (t as f32 / 8227.0 + n as f32 / 12241.0) + 100.0)
+            159.79 / (1.0 / (t as f32 / 8227.0 + n as f32 / 12241.0 + d as f32 / 22638.0) + 100.0)
         };
         tnd_out + pulse_out
     }
