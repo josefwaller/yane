@@ -22,20 +22,22 @@ impl AudioCallback for ApuChannel {
         let apu_cycle_duration = Duration::from_secs(1) / (1_789_773 / 2);
         for x in out.iter_mut() {
             let v = self.apu.mixer_output();
-            if v > 1.0 || v < -1.0 {
+            if v > 1.0 || v < 0.0 {
                 warn!("V is wrong {}", v);
                 *x = 0.0;
             } else {
                 // Set new value
-                let val = (v + 1.0) / 2.0;
+                let val = 2.0 * v - 1.0;
                 *x = val;
                 self.last_output = val;
             }
             self.last_cycle += Duration::from_secs(1) / self.sample_rate;
+            let mut c = 0;
             while self.last_cycle >= apu_cycle_duration {
-                self.apu.advance_cycles(1);
+                c += 1;
                 self.last_cycle -= apu_cycle_duration;
             }
+            self.apu.advance_cycles(c);
         }
     }
 }

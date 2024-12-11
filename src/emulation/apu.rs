@@ -318,10 +318,8 @@ impl Apu {
                 self.noise_register.timer_reload = NOISE_TIMER_PERIODS[(value & 0x0F) as usize];
             }
             0x400F => {
-                if self.noise_register.enabled {
-                    self.noise_register.length_counter.load =
-                        LENGTH_TABLE[(value as usize & 0xF8) >> 3];
-                }
+                self.noise_register.length_counter.load =
+                    LENGTH_TABLE[(value as usize & 0xF8) >> 3];
                 self.noise_register.envelope.decay = 0xF;
                 self.noise_register.envelope.divider = self.noise_register.envelope.volume;
             }
@@ -378,7 +376,7 @@ impl Apu {
                 reg.duty = ((value & 0xC0) >> 6) as u32;
                 reg.length_counter.halt = (value & 0x20) != 0;
                 reg.envelope.constant = (value & 0x10) != 0;
-                reg.envelope.volume = value as usize & 0x0F;
+                reg.envelope.volume = (value & 0x0F) as usize;
             }
             1 => {
                 reg.sweep_enabled = (value & 0x80) != 0;
@@ -536,7 +534,11 @@ impl Apu {
         if pulse > 30 {
             warn!("Pulse is higher than 30 ({})", pulse);
         }
-        let pulse_out = 95.88 / ((8128.9 / pulse as f32) + 100.0);
+        let pulse_out = if pulse == 0 {
+            0.0
+        } else {
+            95.88 / ((8128.0 / pulse as f32) + 100.0)
+        };
         let t = self.triangle_register.value();
         let n = self.noise_register.value();
         let d = self.dmc_register.value();
