@@ -53,7 +53,6 @@ impl Window {
             select: pressed_keys.contains(&Keycode::H),
         };
         nes.set_input(1, controller);
-
         // Update audio
         self.audio.update_audio(nes, settings);
     }

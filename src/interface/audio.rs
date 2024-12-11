@@ -6,44 +6,13 @@ use crate::{
 };
 use log::*;
 use sdl2::{
-    audio::{AudioCallback, AudioDevice, AudioSpecDesired},
+    audio::{AudioCallback, AudioDevice, AudioQueue, AudioSpecDesired, AudioStatus},
     Sdl,
 };
 
-struct ApuChannel {
-    apu: Apu,
-    last_cycle: Duration,
-    sample_rate: u32,
-    last_output: f32,
-}
-impl AudioCallback for ApuChannel {
-    type Channel = f32;
-    fn callback(&mut self, out: &mut [f32]) {
-        let apu_cycle_duration = Duration::from_secs(1) / (1_789_773 / 2);
-        for x in out.iter_mut() {
-            let v = self.apu.mixer_output();
-            if v > 1.0 || v < 0.0 {
-                warn!("V is wrong {}", v);
-                *x = 0.0;
-            } else {
-                // Set new value
-                let val = 2.0 * v - 1.0;
-                *x = val;
-                self.last_output = val;
-            }
-            self.last_cycle += Duration::from_secs(1) / self.sample_rate;
-            let mut c = 0;
-            while self.last_cycle >= apu_cycle_duration {
-                c += 1;
-                self.last_cycle -= apu_cycle_duration;
-            }
-            self.apu.advance_cycles(c);
-        }
-    }
-}
-
 pub struct Audio {
-    device: AudioDevice<ApuChannel>,
+    // device: AudioDevice<ApuChannel>,
+    queue: AudioQueue<f32>,
 }
 
 impl Audio {
@@ -55,40 +24,33 @@ impl Audio {
             channels: Some(1),
             samples: None,
         };
-        let device = audio
-            .open_playback(None, &spec, |spec| ApuChannel {
-                apu: Apu::new(),
-                last_cycle: Duration::ZERO,
-                sample_rate: spec.freq as u32,
-                last_output: 0.0,
-            })
-            .unwrap();
-        device.resume();
+        let queue = audio.open_queue(None, &spec).unwrap();
+        queue.resume();
         info!(
-            "Device samples={}, freq={}",
-            device.spec().samples,
-            device.spec().freq
+            "Created queue, samples={}, freq={}",
+            queue.spec().samples,
+            queue.spec().freq
         );
-        Audio { device }
+        Audio { queue }
     }
-    pub fn update_audio(&mut self, nes: &Nes, settings: &Settings) {
-        // This is farily messy right now, but basically to avoid skipping in the sound
-        // We want to preserve the timer and sequencer
-        // So if the wave doesn't change the sound doesn't change
-        let v = self
-            .device
-            .lock()
-            .apu
-            .pulse_registers
-            .map(|p| (p.sequencer, p.timer));
-        let t = self.device.lock().apu.triangle_register.timer;
-        let s = self.device.lock().apu.triangle_register.sequencer;
-        self.device.lock().apu = nes.apu.clone();
-        v.iter().enumerate().for_each(|(i, (s, t))| {
-            self.device.lock().apu.pulse_registers[i].sequencer = *s;
-            self.device.lock().apu.pulse_registers[i].timer = *t;
-        });
-        self.device.lock().apu.triangle_register.timer = t;
-        self.device.lock().apu.triangle_register.sequencer = s;
+    pub fn update_audio(&mut self, nes: &mut Nes, settings: &Settings) {
+        // Clear queue if it's too big
+        if self.queue.size() > 8 * 2000 {
+            debug!("Clear queue");
+            self.queue.clear();
+        }
+        // Get and transform data
+        let data = nes.apu.sample_queue();
+        let sample = data
+            .chunks(1_789_000 / 2 / 44_100)
+            .map(|x| 0.1 * (-1.0 + 2.0 * x.iter().fold(0.0, |a, e| a + *e)))
+            .into_iter()
+            .collect::<Vec<f32>>();
+        // Add to queue
+        self.queue
+            .queue_audio(
+                sample.as_slice(), // data.as_slice()
+            )
+            .unwrap();
     }
 }

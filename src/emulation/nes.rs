@@ -150,7 +150,7 @@ impl Nes {
             Ok((bytes, cycles)) => {
                 self.cpu.p_c = self.cpu.p_c.wrapping_add(bytes);
                 // todo move this
-                self.apu.advance_cycles(cycles as u32 / 2);
+                self.apu.advance_cpu_cycles(cycles as u32);
                 return Ok(cycles);
             }
             Err(s) => {
@@ -914,9 +914,6 @@ impl Nes {
     }
     fn pull_from_stack_u16(&mut self) -> u16 {
         (self.pull_from_stack() as u16) + ((self.pull_from_stack() as u16) << 8)
-    }
-    fn to_bytes(v: u16) -> [u8; 2] {
-        [(v & 0xFF) as u8, (v >> 8) as u8]
     }
 }
 

@@ -1,12 +1,8 @@
 use std::cmp::max;
 
 use log::*;
-use rand::seq::index::sample;
 
 use super::Cartridge;
-
-// Todo move
-const CPU_CLOCK_SPEED_HZ: u32 = 1_789_000;
 
 pub trait AudioRegister {
     /// Return whether the register has been muted
@@ -271,6 +267,8 @@ pub struct Apu {
     cycles: u32,
     // Step in either a 4 or 5 step sequence, depending on mode
     step: u32,
+    // Queue of audio samples
+    queue: Vec<f32>,
 }
 
 impl Apu {
@@ -284,6 +282,7 @@ impl Apu {
             mode: false,
             cycles: 0,
             step: 0,
+            queue: Vec::new(),
         }
     }
     /// Write a byte of data to the APU given its address in CPU memory space
@@ -398,9 +397,9 @@ impl Apu {
             _ => {} // _ => panic!("Invalid address given to APU"),
         }
     }
-    pub fn advance_cycles(&mut self, apu_cycles: u32) {
-        const FRAME_CYCLES: u32 = 3728;
-        (0..apu_cycles).for_each(|_| {
+    pub fn advance_cpu_cycles(&mut self, cpu_cycles: u32) {
+        const FRAME_CYCLES: u32 = 2 * 3728;
+        (0..cpu_cycles).for_each(|_| {
             self.cycles = (self.cycles + 1) % FRAME_CYCLES;
             if self.cycles == 0 {
                 if self.mode == false {
@@ -421,62 +420,62 @@ impl Apu {
                     }
                 }
             }
-            self.pulse_registers.iter_mut().for_each(|p| {
-                if p.timer == 0 {
-                    if p.sequencer == 0 {
-                        p.sequencer = 7;
-                    } else {
-                        p.sequencer -= 1;
-                    }
-                    p.timer = p.timer_reload;
-                } else {
-                    p.timer -= 1;
-                }
-            });
-            (0..2).for_each(|_| {
-                self.triangle_register.timer = (self.triangle_register.timer + 1)
-                    % max(self.triangle_register.timer_reload as u32, 1);
-                if self.triangle_register.timer == 0 {
-                    self.triangle_register.sequencer = (self.triangle_register.sequencer + 1) % 32;
-                }
-                let n = &mut self.noise_register;
-                n.timer = (n.timer + 1) % max(n.timer_reload, 1);
-                if n.timer == 0 {
-                    // XOR bit 0 with bit 1 in mode 1 and with bit 6 in mode 0
-                    let feedback = (n.shift ^ (n.shift >> if n.mode { 6 } else { 1 })) & 0x01;
-                    n.shift = (n.shift >> 1) | (feedback << 14);
-                }
-                let d = &mut self.dmc_register;
-                if d.enabled {
-                    d.timer = (d.timer + 1) % max(d.time_reload, 1);
-                    if d.timer == 0 {
-                        if d.bits_left == 0 {
-                            // Go to next byte
-                            if d.bytes_remaining == 1 {
-                                if d.repeat {
-                                    d.bytes_remaining = d.sample_len - 1;
-                                    d.sample = d.sample_full[0];
-                                    d.bits_left = 8;
-                                } else {
-                                    d.enabled = false;
-                                }
-                            } else if d.bytes_remaining > 0 {
-                                d.bytes_remaining -= 1;
-                                d.bits_left = 8;
-                                d.sample = d.sample_full[d.sample_len - 1 - d.bytes_remaining];
-                            }
+            if self.cycles % 2 == 0 {
+                self.pulse_registers.iter_mut().for_each(|p| {
+                    if p.timer == 0 {
+                        if p.sequencer == 0 {
+                            p.sequencer = 7;
                         } else {
-                            // Todo: Don't just clamp, check range
-                            d.output = (d.output as i32
-                                + if (d.sample & 0x01) == 1 { 2 } else { -2 })
-                            .clamp(0, 127) as u32;
-                            d.sample = d.sample >> 1;
-                            d.bits_left -= 1;
+                            p.sequencer -= 1;
                         }
-                        d.timer = d.time_reload;
+                        p.timer = p.timer_reload;
+                    } else {
+                        p.timer -= 1;
                     }
+                });
+                self.queue.push(self.mixer_output());
+            }
+            self.triangle_register.timer = (self.triangle_register.timer + 1)
+                % max(self.triangle_register.timer_reload as u32, 1);
+            if self.triangle_register.timer == 0 {
+                self.triangle_register.sequencer = (self.triangle_register.sequencer + 1) % 32;
+            }
+            let n = &mut self.noise_register;
+            n.timer = (n.timer + 1) % max(n.timer_reload, 1);
+            if n.timer == 0 {
+                // XOR bit 0 with bit 1 in mode 1 and with bit 6 in mode 0
+                let feedback = (n.shift ^ (n.shift >> if n.mode { 6 } else { 1 })) & 0x01;
+                n.shift = (n.shift >> 1) | (feedback << 14);
+            }
+            let d = &mut self.dmc_register;
+            if d.enabled {
+                d.timer = (d.timer + 1) % max(d.time_reload, 1);
+                if d.timer == 0 {
+                    if d.bits_left == 0 {
+                        // Go to next byte
+                        if d.bytes_remaining == 1 {
+                            if d.repeat {
+                                d.bytes_remaining = d.sample_len - 1;
+                                d.sample = d.sample_full[0];
+                                d.bits_left = 8;
+                            } else {
+                                d.enabled = false;
+                            }
+                        } else if d.bytes_remaining > 0 {
+                            d.bytes_remaining -= 1;
+                            d.bits_left = 8;
+                            d.sample = d.sample_full[d.sample_len - 1 - d.bytes_remaining];
+                        }
+                    } else {
+                        // Todo: Don't just clamp, check range
+                        d.output = (d.output as i32 + if (d.sample & 0x01) == 1 { 2 } else { -2 })
+                            .clamp(0, 127) as u32;
+                        d.sample = d.sample >> 1;
+                        d.bits_left -= 1;
+                    }
+                    d.timer = d.time_reload;
                 }
-            });
+            }
         });
     }
     pub fn on_quater_frame(&mut self) {
@@ -548,5 +547,10 @@ impl Apu {
             159.79 / (1.0 / (t as f32 / 8227.0 + n as f32 / 12241.0 + d as f32 / 22638.0) + 100.0)
         };
         tnd_out + pulse_out
+    }
+    pub fn sample_queue(&mut self) -> Vec<f32> {
+        let mut v = Vec::new();
+        std::mem::swap(&mut self.queue, &mut v);
+        v
     }
 }
