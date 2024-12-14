@@ -154,15 +154,18 @@ impl AudioRegister for TriangleRegister {
             0
         } else {
             if self.sequencer <= 15 {
-                15 - self.sequencer
+                self.sequencer
             } else {
-                self.sequencer - 16
+                31 - self.sequencer
             }
         }
     }
     fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
-        if !self.enabled {
+        if self.enabled {
+            self.sequencer = 0;
+            self.timer = 0;
+        } else {
             self.length_counter.load = 0;
         }
     }
@@ -241,13 +244,18 @@ pub struct DmcRegister {
     sample_full: Vec<u8>,
     bits_left: u32,
     output: u32,
+    silent: bool,
 }
 impl AudioRegister for DmcRegister {
     fn muted(&self) -> bool {
         false
     }
     fn value(&self) -> u32 {
-        self.output
+        if self.silent {
+            0
+        } else {
+            self.output
+        }
     }
     fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
@@ -327,6 +335,7 @@ impl Apu {
                 self.dmc_register.repeat = (value & 0x40) != 0;
                 self.dmc_register.rate = DMC_RATES[(value & 0x0F) as usize];
                 self.dmc_register.time_reload = self.dmc_register.rate;
+                self.dmc_register.silent = false;
             }
             0x4011 => self.dmc_register.output = (value & 0x7F) as u32,
             0x4012 => {
@@ -340,6 +349,7 @@ impl Apu {
                 } else {
                     d.sample_full[0]
                 };
+                self.dmc_register.silent = false;
             }
             0x4013 => {
                 let d = &mut self.dmc_register;
@@ -393,6 +403,8 @@ impl Apu {
                 // Mimic setting volume start flag
                 reg.envelope.decay = 0xF;
                 reg.envelope.divider = reg.envelope.volume;
+                // Restart sequencer
+                reg.sequencer = 0;
             }
             _ => {} // _ => panic!("Invalid address given to APU"),
         }
@@ -400,6 +412,7 @@ impl Apu {
     pub fn advance_cpu_cycles(&mut self, cpu_cycles: u32) {
         const FRAME_CYCLES: u32 = 2 * 3728;
         (0..cpu_cycles).for_each(|_| {
+            self.queue.push(self.mixer_output());
             self.cycles = (self.cycles + 1) % FRAME_CYCLES;
             if self.cycles == 0 {
                 if self.mode == false {
@@ -433,12 +446,13 @@ impl Apu {
                         p.timer -= 1;
                     }
                 });
-                self.queue.push(self.mixer_output());
             }
-            self.triangle_register.timer = (self.triangle_register.timer + 1)
-                % max(self.triangle_register.timer_reload as u32, 1);
-            if self.triangle_register.timer == 0 {
-                self.triangle_register.sequencer = (self.triangle_register.sequencer + 1) % 32;
+            if self.triangle_register.enabled {
+                self.triangle_register.timer = (self.triangle_register.timer + 1)
+                    % max(self.triangle_register.timer_reload as u32, 1);
+                if self.triangle_register.timer == 0 {
+                    self.triangle_register.sequencer = (self.triangle_register.sequencer + 1) % 32;
+                }
             }
             let n = &mut self.noise_register;
             n.timer = (n.timer + 1) % max(n.timer_reload, 1);
@@ -459,7 +473,7 @@ impl Apu {
                                 d.sample = d.sample_full[0];
                                 d.bits_left = 8;
                             } else {
-                                d.enabled = false;
+                                d.silent = true;
                             }
                         } else if d.bytes_remaining > 0 {
                             d.bytes_remaining -= 1;
@@ -546,7 +560,14 @@ impl Apu {
         } else {
             159.79 / (1.0 / (t as f32 / 8227.0 + n as f32 / 12241.0 + d as f32 / 22638.0) + 100.0)
         };
-        tnd_out + pulse_out
+        let v = tnd_out + pulse_out;
+        // let v = t as f32 / 15.0;
+        if v > 1.0 || v < 0.0 {
+            error!("Invalid mixer output: {}", v);
+            0.0
+        } else {
+            v
+        }
     }
     pub fn sample_queue(&mut self) -> Vec<f32> {
         let mut v = Vec::new();

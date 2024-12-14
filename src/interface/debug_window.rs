@@ -259,7 +259,7 @@ impl DebugWindow {
                         "Always draw sprites on top of background",
                         &mut settings.always_sprites_on_top,
                     );
-                    ui.slider("Volume", 0.0, 1.0, &mut settings.volume);
+                    ui.slider("Volume", 0.0, 10.0, &mut settings.volume);
                     ui.slider("Speed", 0.1, 10.0, &mut settings.speed);
                     ui.text(format!(
                         "Scroll: ({:3}, {:3})",

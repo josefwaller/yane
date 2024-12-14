@@ -24,7 +24,7 @@ impl Default for Settings {
             oam_debug: false,
             palette_debug: false,
             paused: false,
-            volume: 0.5,
+            volume: 0.0,
             speed: 1.0,
             scanline_sprite_limit: true,
             always_sprites_on_top: false,

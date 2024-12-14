@@ -149,8 +149,6 @@ impl Nes {
         match self.decode_and_execute(&inst) {
             Ok((bytes, cycles)) => {
                 self.cpu.p_c = self.cpu.p_c.wrapping_add(bytes);
-                // todo move this
-                self.apu.advance_cpu_cycles(cycles as u32);
                 return Ok(cycles);
             }
             Err(s) => {
@@ -653,10 +651,12 @@ impl Nes {
                     c += CPU_CYCLES_PER_OAM as u32;
                 }
             }
+            self.apu.advance_cpu_cycles(c);
             cycles += c;
             if self.ppu.advance_dots(3 * c as u32, &self.cartridge) && self.ppu.get_nmi_enabled() {
                 self.on_nmi();
                 cycles += 7;
+                self.apu.advance_cpu_cycles(7);
                 self.ppu.advance_dots(21, &self.cartridge);
             }
             // Render if we are in the visible screen area
