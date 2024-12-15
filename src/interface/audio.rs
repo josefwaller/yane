@@ -1,15 +1,10 @@
-use std::time::{Duration, Instant};
-
-use crate::{
-    apu::{AudioRegister, NoiseRegister, PulseRegister, TriangleRegister},
-    Apu, Cartridge, Nes, Settings,
-};
+use crate::{Nes, Settings};
 use log::*;
 use rubato::{
     Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
 };
 use sdl2::{
-    audio::{AudioCallback, AudioDevice, AudioQueue, AudioSpecDesired, AudioStatus},
+    audio::{AudioQueue, AudioSpecDesired},
     Sdl,
 };
 

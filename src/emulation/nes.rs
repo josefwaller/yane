@@ -119,7 +119,7 @@ impl Nes {
             }
             // 0x4017 => self.controller_bit = 0,
             // APU Registers
-            0x4000..0x4020 => self.apu.write_byte(addr, value, &self.cartridge),
+            0x4000..0x4020 => self.apu.write_byte(addr, value),
             0x4020..0x10000 => self.cartridge.write_cpu(addr, value),
             _ => panic!("Invalid write address provided: {:#X}", addr),
         };
@@ -651,12 +651,12 @@ impl Nes {
                     c += CPU_CYCLES_PER_OAM as u32;
                 }
             }
-            self.apu.advance_cpu_cycles(c);
+            self.apu.advance_cpu_cycles(c, &mut self.cartridge);
             cycles += c;
             if self.ppu.advance_dots(3 * c as u32, &self.cartridge) && self.ppu.get_nmi_enabled() {
                 self.on_nmi();
                 cycles += 7;
-                self.apu.advance_cpu_cycles(7);
+                self.apu.advance_cpu_cycles(7, &mut self.cartridge);
                 self.ppu.advance_dots(21, &self.cartridge);
             }
             // Render if we are in the visible screen area

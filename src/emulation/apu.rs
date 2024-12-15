@@ -236,8 +236,6 @@ pub struct DmcRegister {
     bytes_remaining: usize,
     // Byte of the sample currently in buffer
     sample: u8,
-    // todo maybe remove
-    sample_full: Vec<u8>,
     bits_left: u32,
     output: u32,
     silent: bool,
@@ -255,6 +253,13 @@ impl AudioRegister for DmcRegister {
     }
     fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
+    }
+}
+impl DmcRegister {
+    pub fn load_sample(&mut self, cartridge: &mut Cartridge) {
+        let i = self.sample_len - self.bytes_remaining;
+        self.sample = cartridge.read_cpu(self.sample_addr + i);
+        self.bits_left = 7;
     }
 }
 
@@ -291,7 +296,7 @@ impl Apu {
     }
     /// Write a byte of data to the APU given its address in CPU memory space
     //TODO : Remove cartridge from here and solve the audio cartridge issue
-    pub fn write_byte(&mut self, addr: usize, value: u8, cartridge: &Cartridge) {
+    pub fn write_byte(&mut self, addr: usize, value: u8) {
         match addr {
             0x4000..0x4004 => self.set_pulse_byte(0, addr, value),
             0x4004..0x4008 => self.set_pulse_byte(1, addr, value),
@@ -337,27 +342,13 @@ impl Apu {
             0x4012 => {
                 let d = &mut self.dmc_register;
                 d.sample_addr = (value as usize * 64) + 0xC000;
-                d.sample_full = (0..d.sample_len)
-                    .map(|i| cartridge.read_cpu(d.sample_addr + i))
-                    .collect();
-                d.sample = if d.sample_full.len() == 0 {
-                    0
-                } else {
-                    d.sample_full[0]
-                };
                 self.dmc_register.silent = false;
             }
             0x4013 => {
                 let d = &mut self.dmc_register;
                 d.sample_len = (value as usize) * 16 + 1;
-                d.sample_full = (0..d.sample_len)
-                    .map(|i| cartridge.read_cpu(d.sample_addr + i))
-                    .collect();
-                d.sample = if d.sample_full.len() == 0 {
-                    0
-                } else {
-                    d.sample_full[0]
-                };
+                // Cause an immediate reload
+                d.bits_left = 0;
                 d.bytes_remaining = d.sample_len;
             }
             0x4015 => {
@@ -405,7 +396,7 @@ impl Apu {
             _ => {} // _ => panic!("Invalid address given to APU"),
         }
     }
-    pub fn advance_cpu_cycles(&mut self, cpu_cycles: u32) {
+    pub fn advance_cpu_cycles(&mut self, cpu_cycles: u32, cartridge: &mut Cartridge) {
         const FRAME_CYCLES: u32 = 2 * 3728;
         (0..cpu_cycles).for_each(|_| {
             self.queue.push(self.mixer_output());
@@ -471,16 +462,15 @@ impl Apu {
                         // Go to next byte
                         if d.bytes_remaining == 1 {
                             if d.repeat {
-                                d.bytes_remaining = d.sample_len - 1;
-                                d.sample = d.sample_full[0];
-                                d.bits_left = 8;
+                                d.bytes_remaining = d.sample_len;
+                                d.load_sample(cartridge);
                             } else {
                                 d.silent = true;
                             }
-                        } else if d.bytes_remaining > 0 {
+                        } else if d.bytes_remaining > 1 {
+                            // Load next sample
                             d.bytes_remaining -= 1;
-                            d.bits_left = 8;
-                            d.sample = d.sample_full[d.sample_len - 1 - d.bytes_remaining];
+                            d.load_sample(cartridge);
                         }
                     } else {
                         // Todo: Don't just clamp, check range
