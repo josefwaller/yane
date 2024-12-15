@@ -321,6 +321,7 @@ impl Apu {
                 self.noise_register.envelope.constant = (value & 0x10) != 0;
                 self.noise_register.envelope.volume = (value & 0x0F) as usize;
             }
+            0x400D => {} // Unused
             0x400E => {
                 self.noise_register.mode = (value & 0x80) != 0;
                 self.noise_register.timer_reload = NOISE_TIMER_PERIODS[(value & 0x0F) as usize];

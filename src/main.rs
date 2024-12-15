@@ -156,6 +156,9 @@ fn main() {
                 if wait_duration != Duration::ZERO {
                     frame_wait_time += wait_duration;
                     sleep(wait_duration);
+                } else if Instant::now().duration_since(delta) > Duration::from_millis(500) {
+                    // If we have fallen way behind (by messing with the speed in settings)
+                    delta = Instant::now();
                 }
                 // Advance real time by amount of emulator time that will have passed
                 // Since sleep may overshoot, this will let us catch up next frame/scanline

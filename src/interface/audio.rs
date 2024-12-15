@@ -12,6 +12,7 @@ pub struct Audio {
     queue: AudioQueue<f32>,
     resampler: SincFixedIn<f32>,
     data_queue: Vec<f32>,
+    last_speed: f32,
 }
 
 impl Audio {
@@ -38,10 +39,8 @@ impl Audio {
             interpolation: SincInterpolationType::Nearest,
             window: WindowFunction::BlackmanHarris2,
         };
-        debug!("Ratio is {}", spec.freq.unwrap() as f64 / 1_789_000 as f64);
         let resampler = SincFixedIn::<f32>::new(
             spec.freq.unwrap() as f64 / 1_789_000 as f64,
-            // 1.0 / 37.0,
             10.0,
             params,
             1_789_000 / 60,
@@ -52,6 +51,7 @@ impl Audio {
             queue,
             resampler,
             data_queue: Vec::<f32>::new(),
+            last_speed: 1.0,
         }
     }
     pub fn update_audio(&mut self, nes: &mut Nes, settings: &Settings) {
@@ -73,6 +73,17 @@ impl Audio {
         // Downsample to audio output rate
         let input_size = self.resampler.input_frames_next();
         let mut out = vec![vec![0.0; self.resampler.output_frames_max()]; 1];
+        if settings.speed != self.last_speed {
+            debug!("Changing speed");
+            self.last_speed = settings.speed;
+            let ratio = (self.queue.spec().freq as f64 / 1_789_000 as f64)
+                / settings.speed.min(9.9999) as f64;
+            self.resampler.reset();
+            self.resampler
+                .set_resample_ratio(ratio, false)
+                .expect("Unable to change ratio");
+            self.queue.clear();
+        }
         while self.data_queue.len() >= input_size {
             let input: Vec<f32> = self.data_queue.drain(0..input_size).collect();
             let (_nbr_in, nbr_out) = self

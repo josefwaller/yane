@@ -219,7 +219,7 @@ impl DebugWindow {
                 .prepare_frame(&mut self.imgui, &self.window, event_pump);
             let ui = self.imgui.new_frame();
             ui.window("Settings")
-                .size([200.0, 400.0], FirstUseEver)
+                .size([600.0, 400.0], FirstUseEver)
                 .build(|| {
                     if let Some(c) = ui.begin_combo("Page", format!("Page {}", self.tile_page)) {
                         (0..(self.num_tiles / (self.num_columns * self.num_rows))).for_each(|i| {
@@ -260,7 +260,11 @@ impl DebugWindow {
                         &mut settings.always_sprites_on_top,
                     );
                     ui.slider("Volume", 0.0, 10.0, &mut settings.volume);
-                    ui.slider("Speed", 0.1, 10.0, &mut settings.speed);
+                    ui.slider("Speed", 0.1, 3.0, &mut settings.speed);
+                    ui.same_line();
+                    if ui.button("Reset to 1") {
+                        settings.speed = 1.0;
+                    }
                     ui.text(format!(
                         "Scroll: ({:3}, {:3})",
                         nes.ppu.scroll_x, nes.ppu.scroll_y
