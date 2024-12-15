@@ -150,14 +150,10 @@ impl AudioRegister for TriangleRegister {
             || self.linear_counter == 0
     }
     fn value(&self) -> u32 {
-        if self.muted() {
-            0
+        if self.sequencer <= 15 {
+            self.sequencer
         } else {
-            if self.sequencer <= 15 {
-                self.sequencer
-            } else {
-                31 - self.sequencer
-            }
+            31 - self.sequencer
         }
     }
     fn set_enabled(&mut self, enabled: bool) {
@@ -447,11 +443,17 @@ impl Apu {
                     }
                 });
             }
-            if self.triangle_register.enabled {
-                self.triangle_register.timer = (self.triangle_register.timer + 1)
-                    % max(self.triangle_register.timer_reload as u32, 1);
-                if self.triangle_register.timer == 0 {
-                    self.triangle_register.sequencer = (self.triangle_register.sequencer + 1) % 32;
+            // We cheat a bit here
+            // We always clock the triangle register, and then if it's muted, we just ensure the current wave finishes
+            // This is done to stop a weird clicking sound when the wave is suddenly cut off/on.
+            // `timer` and `sequencer` are both set to 0 on re-enable so it doesn't make any difference
+            self.triangle_register.timer = (self.triangle_register.timer + 1)
+                % max(self.triangle_register.timer_reload as u32, 1);
+            if self.triangle_register.timer == 0 {
+                self.triangle_register.sequencer = (self.triangle_register.sequencer + 1) % 32;
+                // If the triangle register should be muted and we just finished a wave
+                if self.triangle_register.muted() && self.triangle_register.sequencer == 1 {
+                    self.triangle_register.sequencer = 0;
                 }
             }
             let n = &mut self.noise_register;
