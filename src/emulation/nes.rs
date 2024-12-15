@@ -94,9 +94,8 @@ impl Nes {
             0..0x2000 => self.mem[addr % 0x0800],
             0x2000..0x4000 => self.ppu.read_byte(addr, &self.cartridge),
             0x4016 => self.read_controller_bit(0),
-            0x4017 => return self.read_controller_bit(1),
-            // TBA
-            0x4000..0x4020 => 0,
+            0x4017 => self.read_controller_bit(1),
+            0x4000..0x4020 => self.apu.read_byte(addr),
             0x4020..0x10000 => self.cartridge.read_cpu(addr),
             _ => panic!("Invalid read address provided: {:#X}", addr),
         };

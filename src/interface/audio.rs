@@ -56,7 +56,7 @@ impl Audio {
     }
     pub fn update_audio(&mut self, nes: &mut Nes, settings: &Settings) {
         // Clear queue if it's too big
-        if self.queue.size() > 8 * 2000 {
+        if self.queue.size() > 16 * 2000 {
             info!("Queue is too big, clearing (was {})", self.queue.size());
             self.queue.clear();
         } else if self.queue.size() == 0 {
@@ -74,7 +74,6 @@ impl Audio {
         let input_size = self.resampler.input_frames_next();
         let mut out = vec![vec![0.0; self.resampler.output_frames_max()]; 1];
         if settings.speed != self.last_speed {
-            debug!("Changing speed");
             self.last_speed = settings.speed;
             let ratio = (self.queue.spec().freq as f64 / 1_789_000 as f64)
                 / settings.speed.min(9.9999) as f64;
