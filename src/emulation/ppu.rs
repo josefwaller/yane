@@ -45,6 +45,9 @@ pub struct Ppu {
     bg_byte: u8,
     // Attribute byte
     attr_byte: u8,
+    // Indices of sprites on the scanline it is currently drawing
+    // None means no sprite on that pixel
+    scanline_sprites: [Option<(usize, usize)>; 256],
     // Internal screen buffer, olding indices of colours in TV palette
     pub output: [[usize; 256]; 240],
 }
@@ -72,6 +75,7 @@ impl Ppu {
             x: 0,
             bg_byte: 0,
             attr_byte: 0,
+            scanline_sprites: [None; 256],
             output: [[0; 256]; 240],
         }
     }
@@ -166,8 +170,69 @@ impl Ppu {
             } else {
                 (self.dot.0 + 1, self.dot.1)
             };
-            if self.dot == (0, 0) {
-                self.v = self.t;
+            if self.dot.0 == 0 {
+                if self.dot.1 == 0 {
+                    self.v = self.t;
+                }
+                // Refresh scanline sprites
+                self.scanline_sprites = [None; 256];
+                let sprite_height = if self.is_8x16_sprites() { 16 } else { 8 };
+                // Get the 8 objs on the scanline
+                let objs: Vec<usize> = self
+                    .oam
+                    .chunks(4)
+                    .enumerate()
+                    .filter(|(_i, obj)| {
+                        (obj[0] as u32 + 1) <= self.dot.1
+                            && obj[0] as u32 + 1 + sprite_height > self.dot.1
+                    })
+                    .take(8)
+                    .map(|(i, _obj)| i)
+                    .collect();
+                // Add them to the scanline
+                objs.iter().for_each(|i| {
+                    let obj = &self.oam[(4 * i)..(4 * i + 4)];
+                    let flip_hor = (obj[2] & 0x40) != 0;
+                    let flip_vert = (obj[2] & 0x80) != 0;
+                    let palette_index = 16 + 4 * (obj[2] & 0x03) as usize;
+                    let y_off = if flip_vert {
+                        (sprite_height - 1 - (self.dot.1 - (obj[0] as u32 + 1))) as usize
+                    } else {
+                        (self.dot.1 - (obj[0] as u32 + 1)) as usize
+                    };
+
+                    let (mut tile_low, mut tile_high) = if self.is_8x16_sprites() {
+                        let tile_addr = 0x1000 * (obj[1] & 0x01) as usize
+                            + 16 * (obj[1] & 0xFE) as usize
+                            + if y_off > 7 { 16 + y_off % 8 } else { y_off };
+                        (
+                            cartridge.read_ppu(tile_addr) as usize,
+                            cartridge.read_ppu(tile_addr + 8) as usize,
+                        )
+                    } else {
+                        let tile_addr =
+                            self.spr_pattern_table_addr() + 16 * obj[1] as usize + y_off;
+                        (
+                            cartridge.read_ppu(tile_addr) as usize,
+                            cartridge.read_ppu(tile_addr + 8) as usize,
+                        )
+                    };
+                    // Optimization - shift tile_high left by one so combining it with tile_low is simply
+                    // (tile_high & 0x02) + (tile_lot & 0x01)
+                    tile_high <<= 1;
+                    (0..8).for_each(|j| {
+                        let pixel_index = (tile_low as usize & 0x01) + (tile_high as usize & 0x02);
+                        let x = obj[3] as usize + if flip_hor { j } else { 7 - j };
+                        if pixel_index != 0 && x < 256 {
+                            self.scanline_sprites[x].get_or_insert((
+                                *i,
+                                self.palette_ram[palette_index + pixel_index] as usize,
+                            ));
+                        }
+                        tile_low >>= 1;
+                        tile_high >>= 1;
+                    })
+                });
             }
             if self.dot.0 < 256 {
                 if self.dot.1 < 240 {
@@ -208,14 +273,43 @@ impl Ppu {
                                 self.background_pattern_table_addr() + 16 * nt_num + 8 + fine_y,
                             );
                             // Add tile data to output
+                            // TODO: Optimize tile_low and tile_high to have a 1 bit offset
                             (0..8).for_each(|i| {
+                                // Initially set output to background
                                 let x = self.dot.0 as usize - i;
-                                let index = 4 * palette_index
-                                    + ((tile_low & 0x01) + (2 * tile_high & 0x02)) as usize;
+                                let mut output = if self.is_background_rendering_enabled() {
+                                    let index =
+                                        ((tile_low & 0x01) + (2 * (tile_high & 0x01))) as usize;
+                                    tile_low >>= 1;
+                                    tile_high >>= 1;
+                                    if index == 0 {
+                                        None
+                                    } else {
+                                        Some(self.palette_ram[4 * palette_index + index] as usize)
+                                    }
+                                } else {
+                                    None
+                                };
+                                // Check for sprite
+                                if let Some((j, p)) = self.scanline_sprites[x] {
+                                    if self.is_sprite_rendering_enabled() {
+                                        // Check for sprite 0 hit
+                                        if !self.sprite_zero_hit() && j == 0 && output.is_some() {
+                                            debug!(
+                                                "Hit, palette is {:X}, p is {:X}, output is {:X}",
+                                                self.oam[4 * j + 2] & 0x03,
+                                                p,
+                                                output.unwrap()
+                                            );
+                                            self.status |= 0x40;
+                                        }
+                                        if self.oam[4 * j + 2] & 0x20 == 0 || output == None {
+                                            output = Some(p);
+                                        }
+                                    }
+                                }
                                 self.output[self.dot.1 as usize][x] =
-                                    self.palette_ram[index] as usize;
-                                tile_low >>= 1;
-                                tile_high >>= 1;
+                                    output.unwrap_or(self.palette_ram[0] as usize);
                             });
                             // Go to next tile or nametable
                             self.v = if self.v & 0x1F == 0x1F {
@@ -248,53 +342,6 @@ impl Ppu {
                 // Clear VBlank, sprite overflow and sprite 0 hit flags
                 self.status &= 0x1F;
             }
-            let sprite_height = if self.is_8x16_sprites() { 16 } else { 8 };
-            // Check for sprite 0 hit
-            if !self.sprite_zero_hit()
-                && self.is_background_rendering_enabled()
-                && self.is_oam_rendering_enabled()
-                && self.dot.1 > 0
-                && self.dot.1 < 240
-            {
-                let y = self.oam[0] as u32 + 1;
-                if y <= self.dot.1 && y + sprite_height > self.dot.1 {
-                    let x = self.oam[3] as u32;
-                    if x <= self.dot.0 && x + 8 > self.dot.0 && self.dot.0 < 255 {
-                        if self.dot.0 >= 8
-                            || !(self.sprite_left_clipping() || self.background_left_clipping())
-                        {
-                            if !self.sprite_pixel_is_transparent(
-                                0,
-                                (self.dot.0 - x) as usize,
-                                (self.dot.1 - y) as usize,
-                                cartridge,
-                            ) {
-                                if !self.background_pixel_is_transparent(
-                                    self.dot.0 as usize,
-                                    self.dot.1 as usize,
-                                    cartridge,
-                                ) {
-                                    self.status |= 0x40;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            if self.dot.0 == 0 {
-                // Set sprite overflow
-                if self
-                    .oam
-                    .chunks(4)
-                    .filter(|obj| {
-                        obj[0] as u32 <= self.dot.1 && obj[0] as u32 + sprite_height > self.dot.0
-                    })
-                    .count()
-                    > 8
-                {
-                    self.status |= 0x20;
-                }
-            }
         });
         to_return
     }
@@ -315,7 +362,7 @@ impl Ppu {
         let tile_num = if self.is_8x16_sprites() {
             ((obj[1] as usize & 0x01) << 8) + (obj[1] as usize & 0xFE)
         } else {
-            self.get_spr_pattern_table_addr() + obj[1] as usize
+            self.spr_pattern_table_addr() + obj[1] as usize
         };
         let slice_index = y;
         let flip_vert = obj[2] & 0x80 != 0;
@@ -430,7 +477,7 @@ impl Ppu {
         (self.ctrl & 0x20) != 0
     }
     /// Return true if OAM rendering is enabled, and false otherwise
-    pub fn is_oam_rendering_enabled(&self) -> bool {
+    pub fn is_sprite_rendering_enabled(&self) -> bool {
         (self.mask & 0x10) != 0
     }
     /// Return true if background rendering is enabled, and false otherwise
@@ -450,7 +497,7 @@ impl Ppu {
         (self.mask & 0x01) != 0
     }
     /// Return where to read the sprite patterns from
-    pub fn get_spr_pattern_table_addr(&self) -> usize {
+    pub fn spr_pattern_table_addr(&self) -> usize {
         if self.ctrl & 0x08 != 0 {
             return 0x1000;
         }
