@@ -115,7 +115,7 @@ impl Mapper for SxRom {
             } else {
                 // Reset shift and set control
                 self.shift = 0x10;
-                self.control = self.control | 0xC;
+                self.control = self.control | 0x0C;
             }
         }
     }
@@ -129,5 +129,13 @@ impl Mapper for SxRom {
             3 => NametableArrangement::Vertical,
             _ => panic!("Should never happen"),
         })
+    }
+    fn get_debug_string(&self) -> String {
+        format!(
+            "Mode: {:X}, Control: {:X}, shift: {:X}",
+            (self.control & 0x0C) >> 2,
+            self.control,
+            self.shift
+        )
     }
 }

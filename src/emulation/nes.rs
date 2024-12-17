@@ -24,9 +24,7 @@ pub struct Nes {
     // Current bit being read from the controller
     controller_bits: [usize; 2],
     // Last 200 instructions executed, stored for debugging purposes
-    #[cfg(debug_assertions)]
     pub last_instructions: [[u8; 3]; 200],
-    #[cfg(debug_assertions)]
     last_inst_index: usize,
 }
 
@@ -46,9 +44,7 @@ impl Nes {
             controllers: [Controller::new(); 2],
             cached_controllers: [Controller::new(); 2],
             controller_bits: [0; 2],
-            #[cfg(debug_assertions)]
             last_instructions: [[0; 3]; 200],
-            #[cfg(debug_assertions)]
             last_inst_index: 0,
         }
     }
@@ -62,9 +58,7 @@ impl Nes {
             controllers: [Controller::new(); 2],
             cached_controllers: [Controller::new(); 2],
             controller_bits: [0; 2],
-            #[cfg(debug_assertions)]
             last_instructions: [[0; 3]; 200],
-            #[cfg(debug_assertions)]
             last_inst_index: 0,
         };
         nes.cpu.p_c = ((nes.cartridge.read_cpu(0xFFFD) as u16) << 8)
@@ -139,39 +133,33 @@ impl Nes {
             self.read_byte(pc + 1),
             self.read_byte(pc + 2),
         ]);
-        #[cfg(debug_assertions)]
-        {
-            // Add instruction for debugging purposes
-            self.last_instructions[self.last_inst_index].copy_from_slice(&inst);
-            self.last_inst_index = (self.last_inst_index + 1) % self.last_instructions.len();
-        }
+        // Add instruction for debugging purposes
+        self.last_instructions[self.last_inst_index].copy_from_slice(&inst);
+        self.last_inst_index = (self.last_inst_index + 1) % self.last_instructions.len();
         match self.decode_and_execute(&inst) {
             Ok((bytes, cycles)) => {
                 self.cpu.p_c = self.cpu.p_c.wrapping_add(bytes);
                 return Ok(cycles);
             }
             Err(s) => {
-                #[cfg(debug_assertions)]
-                {
+                error!(
+                    "Encountered an error \"{}\", printing last 200 instructions",
+                    s
+                );
+                [
+                    &self.last_instructions[((self.last_inst_index + 1)
+                        % self.last_instructions.len())
+                        ..self.last_instructions.len()],
+                    &self.last_instructions[0..self.last_inst_index],
+                ]
+                .concat()
+                .iter()
+                .for_each(|inst| {
                     error!(
-                        "Encountered an error \"{}\", printing last 200 instructions",
-                        s
-                    );
-                    [
-                        &self.last_instructions[((self.last_inst_index + 1)
-                            % self.last_instructions.len())
-                            ..self.last_instructions.len()],
-                        &self.last_instructions[0..self.last_inst_index],
-                    ]
-                    .concat()
-                    .iter()
-                    .for_each(|inst| {
-                        error!(
-                            "\t OPCODE={:X} OPERANDS={:X} {:X}",
-                            inst[0], inst[1], inst[2]
-                        )
-                    });
-                }
+                        "\t OPCODE={:X} OPERANDS={:X} {:X}",
+                        inst[0], inst[1], inst[2]
+                    )
+                });
                 return Err(s);
             }
         }
@@ -235,6 +223,7 @@ impl Nes {
         macro_rules! cpu_write_func {
             ($func: ident, $read_addr: ident, $write_addr: ident, $bytes: expr, $cycles: expr) => {{
                 let v = self.$read_addr(operands);
+                self.$write_addr(operands, v);
                 let value = self.cpu.$func(v);
                 self.$write_addr(operands, value);
                 Ok(($bytes, $cycles))
@@ -662,7 +651,7 @@ impl Nes {
             if scanline != self.ppu.scanline() && scanline <= 240 {
                 match screen.as_mut() {
                     Some(s) => unsafe {
-                        s.render_scanline(&self, scanline as i32);
+                        // s.render_scanline(&self, scanline as i32);
                     },
                     None => {}
                 }

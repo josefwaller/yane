@@ -269,6 +269,17 @@ impl DebugWindow {
                         "Scroll: ({:3}, {:3})",
                         nes.ppu.scroll_x, nes.ppu.scroll_y
                     ));
+                    ui.text(format!(
+                        "PC: {:X}, opcode: {:X} {:X} ({:X})",
+                        nes.cpu.p_c,
+                        nes.last_instructions[0][0],
+                        nes.last_instructions[0][1],
+                        nes.last_instructions[0][2]
+                    ));
+                    let s = nes.cartridge.debug_string();
+                    if !s.is_empty() {
+                        ui.text(s);
+                    }
                 });
             let draw_data = self.imgui.render();
             self.renderer

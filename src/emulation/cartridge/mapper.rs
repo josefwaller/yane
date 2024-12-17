@@ -13,6 +13,9 @@ pub trait Mapper {
     fn nametable_arrangement(&self) -> Option<NametableArrangement> {
         None
     }
+    fn get_debug_string(&self) -> String {
+        "".to_string()
+    }
 }
 
 pub fn get_mapper(mapper_id: usize) -> Box<dyn Mapper> {

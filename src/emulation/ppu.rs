@@ -36,6 +36,17 @@ pub struct Ppu {
     w: bool,
     // (x, y) coordinate of dot (pixel) being processed
     dot: (u32, u32),
+    // t register
+    t: u32,
+    // v register
+    v: u32,
+    x: u32,
+    // Background byte
+    bg_byte: u8,
+    // Attribute byte
+    attr_byte: u8,
+    // Internal screen buffer, olding indices of colours in TV palette
+    pub output: [[usize; 256]; 240],
 }
 
 impl Ppu {
@@ -56,6 +67,12 @@ impl Ppu {
             nametable_ram: [0; 0x800],
             w: true,
             dot: (0, 0),
+            t: 0,
+            v: 0,
+            x: 0,
+            bg_byte: 0,
+            attr_byte: 0,
+            output: [[0; 256]; 240],
         }
     }
 
@@ -86,7 +103,10 @@ impl Ppu {
     /// Write a byte to the PPU registers given an address in CPU space
     pub fn write_byte(&mut self, addr: usize, value: u8, cartridge: &mut Cartridge) {
         match addr % 8 {
-            0 => self.ctrl = value,
+            0 => {
+                self.ctrl = value;
+                // self.v = (self.v & 0xC00) | (((value & 0x03) as u32) << 11);
+            }
             1 => self.mask = value,
             2 => {}
             3 => self.oam_addr = value,
@@ -94,12 +114,19 @@ impl Ppu {
             5 => {
                 if self.w {
                     self.scroll_y = value;
+                    // self.t = (self.t & 0x0C1F)
+                    //     | (((value & 0x07) as u32) << 12)
+                    //     | (((value & 0x0F8) as u32) << 2);
                 } else {
+                    // self.t = (self.t & 0xFE0) | (value >> 3) as u32;
+                    // self.x = (value & 0x07) as u32;
                     self.scroll_x = value
                 }
                 self.w = !self.w;
             }
-            6 => self.write_to_addr(value),
+            6 => {
+                self.write_to_addr(value);
+            }
             7 => self.write_vram(value, cartridge),
             _ => panic!("This should never happen. Addr is {:#X}", addr),
         }
@@ -116,9 +143,12 @@ impl Ppu {
         if self.w {
             // Set address
             self.addr = ((self.temp_addr_msb as u16) << 8) + value as u16;
+            // self.t = (self.t & 0xFF00) | value as u32;
+            // self.v = self.t;
         } else {
             // Set the most significant byte to the temp register
             self.temp_addr_msb = value;
+            // self.t = (self.t & 0x00FF) | (value as u32 & 0x3F) << 8;
         }
         self.w = !self.w;
     }
@@ -136,11 +166,84 @@ impl Ppu {
             } else {
                 (self.dot.0 + 1, self.dot.1)
             };
+            if self.dot == (0, 0) {
+                self.v = self.t;
+            }
+            if self.dot.0 < 256 {
+                if self.dot.1 < 240 {
+                    match self.dot.0 % 8 {
+                        2 => {
+                            // Fetch nametable
+                        }
+                        4 => {
+                            // Fetch attribute table
+                        }
+                        6 => {
+                            // Fetch LSB
+                        }
+                        7 => {
+                            // Fetch MSB
+                            // Also set output
+                            // Get nametable
+                            let nt_addr = cartridge
+                                .transform_nametable_addr(0x2000 + (self.v as usize & 0xFFF));
+                            let nt_num = self.nametable_ram[nt_addr] as usize;
+                            // Get palette index
+                            let palette_byte_addr = cartridge.transform_nametable_addr(
+                                (0x23C0
+                                    + (self.v & 0xC00)
+                                    + ((self.v >> 4) & 0x38)
+                                    + ((self.v >> 2) & 0x07))
+                                    as usize,
+                            );
+                            let palette_byte = self.nametable_ram[palette_byte_addr];
+                            let palette_shift = ((self.v & 0x40) >> 4) + ((self.v & 0x02) >> 0);
+                            let palette_index = ((palette_byte >> palette_shift) as usize) & 0x03;
+                            // Get high/low byte of tile
+                            let fine_y = ((self.v & 0x7000) >> 12) as usize;
+                            let mut tile_low = cartridge.read_ppu(
+                                self.background_pattern_table_addr() + 16 * nt_num + fine_y,
+                            );
+                            let mut tile_high = cartridge.read_ppu(
+                                self.background_pattern_table_addr() + 16 * nt_num + 8 + fine_y,
+                            );
+                            // Add tile data to output
+                            (0..8).for_each(|i| {
+                                let x = self.dot.0 as usize - i;
+                                let index = 4 * palette_index
+                                    + ((tile_low & 0x01) + (2 * tile_high & 0x02)) as usize;
+                                self.output[self.dot.1 as usize][x] =
+                                    self.palette_ram[index] as usize;
+                                tile_low >>= 1;
+                                tile_high >>= 1;
+                            });
+                            // Go to next tile or nametable
+                            self.v = if self.v & 0x1F == 0x1F {
+                                self.v + 0x400 - 0x1F
+                            } else {
+                                self.v + 1
+                            };
+                        }
+                        _ => {}
+                    }
+                }
+            } else if self.dot.0 == 256 {
+                self.v = if self.v & 0x7000 == 0x7000 {
+                    // Reset fine Y and increment coarse Y
+                    self.v - 0x7000 + 0x20
+                } else {
+                    // Inc fine Y
+                    self.v + 0x1000
+                };
+                // Copy nametable
+                self.v = (self.v & !0x400) + (self.t & 0x400);
+            }
             // Passes the timing test
             if self.dot == (13, 241) {
                 // Set vblank
                 self.status |= 0x80;
                 to_return = true;
+                self.v = self.t;
             } else if self.dot == (1, 261) {
                 // Clear VBlank, sprite overflow and sprite 0 hit flags
                 self.status &= 0x1F;
@@ -197,7 +300,7 @@ impl Ppu {
     }
 
     pub fn in_vblank(&self) -> bool {
-        self.dot.0 + DOTS_PER_SCANLINE * self.dot.1 > 1 + DOTS_PER_SCANLINE * 241
+        self.dot.0 + DOTS_PER_SCANLINE * self.dot.1 > 1 + DOTS_PER_SCANLINE * 241 || self.dot.1 == 0
     }
 
     fn sprite_pixel_is_transparent(
@@ -261,7 +364,7 @@ impl Ppu {
         };
         let final_tile_addr = cartridge.transform_nametable_addr(tile_addr);
         // Get tile
-        let tile_num = self.get_background_pattern_table_addr() / 0x10
+        let tile_num = self.background_pattern_table_addr() / 0x10
             + self.nametable_ram[final_tile_addr] as usize;
         let tile = &cartridge.get_tile(tile_num);
         // Get slice at this y index
@@ -354,8 +457,7 @@ impl Ppu {
         0x0000
     }
     /// Return where to read the backgronud patterns from
-    /// TODO: Rename
-    pub fn get_background_pattern_table_addr(&self) -> usize {
+    pub fn background_pattern_table_addr(&self) -> usize {
         if self.ctrl & 0x10 != 0 {
             return 0x1000;
         }

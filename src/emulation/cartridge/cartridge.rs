@@ -159,4 +159,7 @@ impl Cartridge {
     pub fn get_tile(&self, tile_num: usize) -> &[u8] {
         &self.get_pattern_table()[(16 * tile_num)..(16 * (tile_num + 1))]
     }
+    pub fn debug_string(&self) -> String {
+        self.mapper.get_debug_string()
+    }
 }
