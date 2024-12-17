@@ -99,7 +99,31 @@ impl Ppu {
             // SCROLL and ADDR shouldn't be read from
             5 => self.scroll_x,
             6 => self.addr as u8,
-            7 => self.read_vram(cartridge),
+            7 => {
+                if self.in_vblank() {
+                    self.v = if self.v & 0x7000 == 0x7000 {
+                        // Note we are checking for 0x3A0 here
+                        // Coarse Y wraps at 30, not 32
+                        if self.v & 0x3E0 == 0x3A0 {
+                            // Switch vertical nametable and reset both coarse and fine Y
+                            self.v ^ (0x800 + 0x3A0 + 0x7000)
+                        } else {
+                            // Reset fine Y and increment coarse Y
+                            self.v - 0x7000 + 0x20
+                        }
+                    } else {
+                        // Inc fine Y
+                        self.v + 0x1000
+                    };
+                    // Go to next tile or horizontal nametable
+                    self.v = if self.v & 0x1F == 0x1F {
+                        self.v ^ 0x41F
+                    } else {
+                        self.v + 1
+                    };
+                }
+                self.read_vram(cartridge)
+            }
             _ => panic!("This should never happen. Addr is {:#X}", addr),
         }
     }
@@ -109,7 +133,7 @@ impl Ppu {
         match addr % 8 {
             0 => {
                 self.ctrl = value;
-                // self.v = (self.v & 0xC00) | (((value & 0x03) as u32) << 11);
+                self.t = (self.t & !0xC00) | (((value & 0x03) as u32) << 10);
             }
             1 => self.mask = value,
             2 => {}
@@ -118,12 +142,12 @@ impl Ppu {
             5 => {
                 if self.w {
                     self.scroll_y = value;
-                    // self.t = (self.t & 0x0C1F)
-                    //     | (((value & 0x07) as u32) << 12)
-                    //     | (((value & 0x0F8) as u32) << 2);
+                    self.t = (self.t & 0x0C1F)
+                        | (((value & 0x07) as u32) << 12)
+                        | (((value & 0x0F8) as u32) << 2);
                 } else {
-                    // self.t = (self.t & 0xFE0) | (value >> 3) as u32;
-                    // self.x = (value & 0x07) as u32;
+                    self.t = (self.t & 0xFFE0) | (value >> 3) as u32;
+                    self.x = (value & 0x07) as u32;
                     self.scroll_x = value
                 }
                 self.w = !self.w;
@@ -131,7 +155,13 @@ impl Ppu {
             6 => {
                 self.write_to_addr(value);
             }
-            7 => self.write_vram(value, cartridge),
+            7 => {
+                self.write_vram(value, cartridge);
+                if self.in_vblank() {
+                    self.fine_y_inc();
+                    self.coarse_x_inc();
+                }
+            }
             _ => panic!("This should never happen. Addr is {:#X}", addr),
         }
     }
@@ -147,12 +177,12 @@ impl Ppu {
         if self.w {
             // Set address
             self.addr = ((self.temp_addr_msb as u16) << 8) + value as u16;
-            // self.t = (self.t & 0xFF00) | value as u32;
-            // self.v = self.t;
+            self.t = (self.t & 0xFF00) | value as u32;
+            self.v = self.t;
         } else {
             // Set the most significant byte to the temp register
             self.temp_addr_msb = value;
-            // self.t = (self.t & 0x00FF) | (value as u32 & 0x3F) << 8;
+            self.t = (self.t & 0x00FF) | (value as u32 & 0x3F) << 8;
         }
         self.w = !self.w;
     }
@@ -234,7 +264,7 @@ impl Ppu {
                     })
                 });
             }
-            if self.dot.0 < 256 {
+            if self.dot.0 < 256 + 8 {
                 if self.dot.1 < 240 {
                     match self.dot.0 % 8 {
                         2 => {
@@ -268,76 +298,63 @@ impl Ppu {
                             let fine_y = ((self.v & 0x7000) >> 12) as usize;
                             let mut tile_low = cartridge.read_ppu(
                                 self.background_pattern_table_addr() + 16 * nt_num + fine_y,
-                            );
+                            ) as usize;
                             let mut tile_high = cartridge.read_ppu(
                                 self.background_pattern_table_addr() + 16 * nt_num + 8 + fine_y,
-                            );
+                            ) as usize;
                             // Add tile data to output
-                            // TODO: Optimize tile_low and tile_high to have a 1 bit offset
+                            tile_high <<= 1;
                             (0..8).for_each(|i| {
-                                // Initially set output to background
-                                let x = self.dot.0 as usize - i;
-                                let mut output = if self.is_background_rendering_enabled() {
-                                    let index =
-                                        ((tile_low & 0x01) + (2 * (tile_high & 0x01))) as usize;
-                                    tile_low >>= 1;
-                                    tile_high >>= 1;
-                                    if index == 0 {
-                                        None
+                                let x: isize = self.dot.0 as isize - i as isize - self.x as isize;
+                                if x >= 0 && x < 256 {
+                                    // Initially set output to background
+                                    let mut output = if self.is_background_rendering_enabled() {
+                                        let index = (tile_low & 0x01) + (tile_high & 0x02);
+                                        if index == 0 {
+                                            None
+                                        } else {
+                                            Some(
+                                                self.palette_ram[4 * palette_index + index]
+                                                    as usize,
+                                            )
+                                        }
                                     } else {
-                                        Some(self.palette_ram[4 * palette_index + index] as usize)
-                                    }
-                                } else {
-                                    None
-                                };
-                                // Check for sprite
-                                if let Some((j, p)) = self.scanline_sprites[x] {
-                                    if self.is_sprite_rendering_enabled() {
-                                        // Check for sprite 0 hit
-                                        if !self.sprite_zero_hit() && j == 0 && output.is_some() {
-                                            debug!(
-                                                "Hit, palette is {:X}, p is {:X}, output is {:X}",
-                                                self.oam[4 * j + 2] & 0x03,
-                                                p,
-                                                output.unwrap()
-                                            );
-                                            self.status |= 0x40;
-                                        }
-                                        if self.oam[4 * j + 2] & 0x20 == 0 || output == None {
-                                            output = Some(p);
+                                        None
+                                    };
+                                    // Check for sprite
+                                    if let Some((j, p)) = self.scanline_sprites[x as usize] {
+                                        if self.is_sprite_rendering_enabled() {
+                                            // Check for sprite 0 hit
+                                            if !self.sprite_zero_hit() && j == 0 && output.is_some()
+                                            {
+                                                self.status |= 0x40;
+                                            }
+                                            if self.oam[4 * j + 2] & 0x20 == 0 || output == None {
+                                                output = Some(p);
+                                            }
                                         }
                                     }
+                                    self.output[self.dot.1 as usize][x as usize] =
+                                        output.unwrap_or(self.palette_ram[0] as usize);
                                 }
-                                self.output[self.dot.1 as usize][x] =
-                                    output.unwrap_or(self.palette_ram[0] as usize);
+                                tile_low >>= 1;
+                                tile_high >>= 1;
                             });
-                            // Go to next tile or nametable
-                            self.v = if self.v & 0x1F == 0x1F {
-                                self.v + 0x400 - 0x1F
-                            } else {
-                                self.v + 1
-                            };
+                            self.coarse_x_inc();
                         }
                         _ => {}
                     }
                 }
-            } else if self.dot.0 == 256 {
-                self.v = if self.v & 0x7000 == 0x7000 {
-                    // Reset fine Y and increment coarse Y
-                    self.v - 0x7000 + 0x20
-                } else {
-                    // Inc fine Y
-                    self.v + 0x1000
-                };
-                // Copy nametable
-                self.v = (self.v & !0x400) + (self.t & 0x400);
+            } else if self.dot.0 == 256 + 8 {
+                self.fine_y_inc();
+                // Copy horizontal nametable and coarse X
+                self.v = (self.v & !0x41F) + (self.t & 0x41F);
             }
             // Passes the timing test
             if self.dot == (13, 241) {
                 // Set vblank
                 self.status |= 0x80;
                 to_return = true;
-                self.v = self.t;
             } else if self.dot == (1, 261) {
                 // Clear VBlank, sprite overflow and sprite 0 hit flags
                 self.status &= 0x1F;
@@ -346,8 +363,36 @@ impl Ppu {
         to_return
     }
 
+    // Coarse X increment on V
+    fn coarse_x_inc(&mut self) {
+        // Go to next tile or horizontal nametable
+        self.v = if self.v & 0x1F == 0x1F {
+            self.v ^ 0x41F
+        } else {
+            self.v + 1
+        };
+    }
+    // Fine Y increment on V
+    fn fine_y_inc(&mut self) {
+        self.v = if self.v & 0x7000 == 0x7000 {
+            // Note we are checking for 0x3A0 here
+            // Coarse Y wraps at 30, not 32
+            if self.v & 0x3E0 == 0x3A0 {
+                // Switch vertical nametable and reset both coarse and fine Y
+                self.v ^ (0x800 + 0x3A0 + 0x7000)
+            } else {
+                // Reset fine Y and increment coarse Y
+                self.v - 0x7000 + 0x20
+            }
+        } else {
+            // Inc fine Y
+            self.v + 0x1000
+        };
+    }
+
     pub fn in_vblank(&self) -> bool {
-        self.dot.0 + DOTS_PER_SCANLINE * self.dot.1 > 1 + DOTS_PER_SCANLINE * 241 || self.dot.1 == 0
+        // self.dot.0 + DOTS_PER_SCANLINE * self.dot.1 > 1 + DOTS_PER_SCANLINE * 241 || self.dot.1 == 0
+        self.dot.1 < 1 || self.dot.1 > 240
     }
 
     fn sprite_pixel_is_transparent(
