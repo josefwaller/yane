@@ -1,4 +1,4 @@
-use std::cmp::max;
+use std::{cmp::max, i128::MAX};
 
 use log::*;
 
@@ -439,9 +439,11 @@ impl Apu {
         }
     }
     pub fn advance_cpu_cycles(&mut self, cpu_cycles: u32, cartridge: &mut Cartridge) {
-        // const FRAME_CYCLES: u32 = 2 * 3728;
+        const MAX_QUEUE_LEN: usize = 2usize.pow(16);
         (0..cpu_cycles).for_each(|_| {
-            self.queue.push(self.mixer_output());
+            if self.queue.len() < MAX_QUEUE_LEN {
+                self.queue.push(self.mixer_output());
+            }
             self.cycles += 1;
             if STEPS.contains(&self.cycles) {
                 if self.cycles != STEPS[2] || self.mode == false {

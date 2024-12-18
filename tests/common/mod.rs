@@ -1,11 +1,9 @@
 // Create an NES from a test rom
 #[macro_export]
 macro_rules! nes_with_rom {
-    ($rom_path: literal) => {{
-        let file_contents = include_bytes!($rom_path);
-        let nes = Nes::from_cartridge(Cartridge::new(file_contents.as_slice()));
-        nes
-    }};
+    ($rom_path: literal) => {
+        Nes::from_cartridge(Cartridge::new(include_bytes!($rom_path)))
+    };
 }
 
 // Advance the NES a certain number of frames
@@ -14,7 +12,7 @@ macro_rules! advance_nes_frames {
     ($nes: ident, $frames: literal) => {{
         // Run the emulator a bit
         (0..($frames)).for_each(|_| {
-            $nes.advance_frame(None);
+            $nes.advance_frame();
         });
     }};
 }

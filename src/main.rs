@@ -106,7 +106,7 @@ fn main() {
                 // Advance 1 frame
                 window.make_gl_current();
                 let screen: Option<&mut Screen> = Some(window.screen());
-                let cycles_to_wait = nes.advance_frame(screen);
+                let cycles_to_wait = nes.advance_frame();
                 // debug!("{} CPU cycles elapsed", cycles_to_wait);
                 frame_cycles += cycles_to_wait;
                 // Debug log FPS info

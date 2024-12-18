@@ -1,4 +1,5 @@
 mod common;
+use log::*;
 use std::{
     cmp::min,
     fs::{read, File},

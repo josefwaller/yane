@@ -325,7 +325,13 @@ impl Ppu {
                                     if let Some((j, p)) = self.scanline_sprites[x as usize] {
                                         if self.is_sprite_rendering_enabled() {
                                             // Check for sprite 0 hit
-                                            if !self.sprite_zero_hit() && j == 0 && output.is_some()
+                                            if !self.sprite_zero_hit()
+                                                && j == 0
+                                                && output.is_some()
+                                                && x < 255
+                                                && (x > 7
+                                                    || (!self.sprite_left_clipping()
+                                                        && !self.background_left_clipping()))
                                             {
                                                 self.status |= 0x40;
                                             }

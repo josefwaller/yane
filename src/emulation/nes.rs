@@ -628,7 +628,7 @@ impl Nes {
     /// Requires a `Screen` in order to render properly, as rendering
     /// must be done after every scanline, not every frame.
     /// Returns the total number of cycles ran.
-    pub fn advance_frame(&mut self, mut screen: Option<&mut Screen>) -> u32 {
+    pub fn advance_frame(&mut self) -> u32 {
         let mut cycles = 0;
         loop {
             let scanline = self.ppu.scanline();
@@ -646,15 +646,6 @@ impl Nes {
                 cycles += 7;
                 self.apu.advance_cpu_cycles(7, &mut self.cartridge);
                 self.ppu.advance_dots(21, &self.cartridge);
-            }
-            // Render if we are in the visible screen area
-            if scanline != self.ppu.scanline() && scanline <= 240 {
-                match screen.as_mut() {
-                    Some(s) => unsafe {
-                        // s.render_scanline(&self, scanline as i32);
-                    },
-                    None => {}
-                }
             }
             // If we have finished VBlank and are rendering the next frame
             if scanline != 0 && self.ppu.scanline() == 0 {
