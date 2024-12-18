@@ -1,4 +1,6 @@
-use super::{cartridge, Cartridge, NametableArrangement};
+use crate::Settings;
+
+use super::{cartridge, Cartridge, NametableArrangement, DEBUG_PALETTE};
 use log::*;
 
 const DOTS_PER_SCANLINE: u32 = 341;
@@ -187,7 +189,13 @@ impl Ppu {
         self.w = !self.w;
     }
     // Return whether to trigger an NMI
-    pub fn advance_dots(&mut self, dots: u32, cartridge: &Cartridge) -> bool {
+    pub fn advance_dots(
+        &mut self,
+        dots: u32,
+        cartridge: &Cartridge,
+        settings_opt: Option<Settings>,
+    ) -> bool {
+        let settings = settings_opt.unwrap_or_default();
         // Todo: tidy
         let mut to_return = false;
         (0..dots).for_each(|_| {
@@ -250,14 +258,17 @@ impl Ppu {
                     // Optimization - shift tile_high left by one so combining it with tile_low is simply
                     // (tile_high & 0x02) + (tile_lot & 0x01)
                     tile_high <<= 1;
+                    let palette = if settings.use_debug_palette {
+                        &DEBUG_PALETTE
+                    } else {
+                        &self.palette_ram
+                    };
                     (0..8).for_each(|j| {
                         let pixel_index = (tile_low as usize & 0x01) + (tile_high as usize & 0x02);
                         let x = obj[3] as usize + if flip_hor { j } else { 7 - j };
                         if pixel_index != 0 && x < 256 {
-                            self.scanline_sprites[x].get_or_insert((
-                                *i,
-                                self.palette_ram[palette_index + pixel_index] as usize,
-                            ));
+                            self.scanline_sprites[x]
+                                .get_or_insert((*i, palette[palette_index + pixel_index] as usize));
                         }
                         tile_low >>= 1;
                         tile_high >>= 1;
@@ -305,6 +316,11 @@ impl Ppu {
                             // Add tile data to output
                             tile_high <<= 1;
                             (0..8).for_each(|i| {
+                                let palette = if settings.use_debug_palette {
+                                    &DEBUG_PALETTE
+                                } else {
+                                    &self.palette_ram
+                                };
                                 let x: isize = self.dot.0 as isize - i as isize - self.x as isize;
                                 if x >= 0 && x < 256 {
                                     // Initially set output to background
@@ -313,10 +329,7 @@ impl Ppu {
                                         if index == 0 {
                                             None
                                         } else {
-                                            Some(
-                                                self.palette_ram[4 * palette_index + index]
-                                                    as usize,
-                                            )
+                                            Some(palette[4 * palette_index + index] as usize)
                                         }
                                     } else {
                                         None
@@ -335,7 +348,10 @@ impl Ppu {
                                             {
                                                 self.status |= 0x40;
                                             }
-                                            if self.oam[4 * j + 2] & 0x20 == 0 || output == None {
+                                            if self.oam[4 * j + 2] & 0x20 == 0
+                                                || output == None
+                                                || settings.always_sprites_on_top
+                                            {
                                                 output = Some(p);
                                             }
                                         }

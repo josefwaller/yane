@@ -343,13 +343,3 @@ pub unsafe fn create_screen_texture(
     }
     (texture_buffer, vao, texture_program, render_texture)
 }
-
-pub fn debug_palette() -> Vec<[f32; 3]> {
-    [
-        [0.0, 0.0, 0.0],
-        [0.6, 0.0, 0.1],
-        [0.1, 0.6, 0.1],
-        [0.3, 0.3, 1.0],
-    ]
-    .to_vec()
-}

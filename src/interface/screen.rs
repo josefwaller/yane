@@ -426,97 +426,97 @@ impl Screen {
         // The sprite height (1 = 8px, 2 = 16px)
         height: i32,
     ) {
-        #[cfg(debug_assertions)]
-        {
-            // Make sure everything is the same length
-            assert_eq!(pos.len(), 2 * pattern_nums.len());
-            assert_eq!(pattern_nums.len(), palette_indices.len());
-            assert_eq!(palette_indices.len(), flip_vert.len());
-            assert_eq!(flip_vert.len(), flip_horz.len());
-            // Make sure all the booleans are valid
-            [&flip_horz, &flip_vert].iter().for_each(|v| {
-                v.iter().for_each(|val| {
-                    assert!(
-                        *val == 0 || *val == 1,
-                        "Invalid boolean value passed to bulk_render_tiles"
-                    )
-                })
-            });
-        }
-        self.gl.use_program(Some(self.tile_program));
-        self.gl.bind_vertex_array(Some(self.tile_vao));
-        // Set texture
-        const TEX_NUM: i32 = 2;
-        self.gl.active_texture(glow::TEXTURE0 + TEX_NUM as u32);
-        check_error!(self.gl);
-        self.gl.bind_texture(glow::TEXTURE_2D, Some(self.chr_tex));
-        check_error!(self.gl);
-        set_uniform!(self.gl, self.tile_program, "chrTex", uniform_1_i32, TEX_NUM);
-        set_uniform!(
-            self.gl,
-            self.tile_program,
-            "patternIndices",
-            uniform_1_i32_slice,
-            pattern_nums.as_slice()
-        );
+        // #[cfg(debug_assertions)]
+        // {
+        //     // Make sure everything is the same length
+        //     assert_eq!(pos.len(), 2 * pattern_nums.len());
+        //     assert_eq!(pattern_nums.len(), palette_indices.len());
+        //     assert_eq!(palette_indices.len(), flip_vert.len());
+        //     assert_eq!(flip_vert.len(), flip_horz.len());
+        //     // Make sure all the booleans are valid
+        //     [&flip_horz, &flip_vert].iter().for_each(|v| {
+        //         v.iter().for_each(|val| {
+        //             assert!(
+        //                 *val == 0 || *val == 1,
+        //                 "Invalid boolean value passed to bulk_render_tiles"
+        //             )
+        //         })
+        //     });
+        // }
+        // self.gl.use_program(Some(self.tile_program));
+        // self.gl.bind_vertex_array(Some(self.tile_vao));
+        // // Set texture
+        // const TEX_NUM: i32 = 2;
+        // self.gl.active_texture(glow::TEXTURE0 + TEX_NUM as u32);
+        // check_error!(self.gl);
+        // self.gl.bind_texture(glow::TEXTURE_2D, Some(self.chr_tex));
+        // check_error!(self.gl);
+        // set_uniform!(self.gl, self.tile_program, "chrTex", uniform_1_i32, TEX_NUM);
+        // set_uniform!(
+        //     self.gl,
+        //     self.tile_program,
+        //     "patternIndices",
+        //     uniform_1_i32_slice,
+        //     pattern_nums.as_slice()
+        // );
 
-        // Set position
-        set_uniform!(
-            self.gl,
-            self.tile_program,
-            "positions",
-            uniform_2_i32_slice,
-            pos.as_slice()
-        );
-        set_int_uniform(&self.gl, &self.tile_program, "scanline", scanline as i32);
-        set_uniform!(
-            self.gl,
-            self.tile_program,
-            "paletteIndices",
-            uniform_1_i32_slice,
-            palette_indices.as_slice()
-        );
-        let debug_pal: Vec<f32> = (0..8)
-            .map(|_| debug_palette().into_flattened())
-            .flatten()
-            .collect();
-        let final_palette = if self.settings.palette_debug {
-            debug_pal.as_slice()
-        } else {
-            palette.as_flattened()
-        };
+        // // Set position
+        // set_uniform!(
+        //     self.gl,
+        //     self.tile_program,
+        //     "positions",
+        //     uniform_2_i32_slice,
+        //     pos.as_slice()
+        // );
+        // set_int_uniform(&self.gl, &self.tile_program, "scanline", scanline as i32);
+        // set_uniform!(
+        //     self.gl,
+        //     self.tile_program,
+        //     "paletteIndices",
+        //     uniform_1_i32_slice,
+        //     palette_indices.as_slice()
+        // );
+        // let debug_pal: Vec<f32> = (0..8)
+        //     .map(|_| debug_palette().into_flattened())
+        //     .flatten()
+        //     .collect();
+        // let final_palette = if self.settings.palette_debug {
+        //     debug_pal.as_slice()
+        // } else {
+        //     palette.as_flattened()
+        // };
 
-        set_uniform!(
-            self.gl,
-            self.tile_program,
-            "palette",
-            uniform_3_f32_slice,
-            final_palette
-        );
-        set_uniform!(
-            self.gl,
-            self.tile_program,
-            "depths",
-            uniform_1_f32_slice,
-            depths.as_slice()
-        );
-        set_uniform!(
-            self.gl,
-            self.tile_program,
-            "flipHorizontal",
-            uniform_1_i32_slice,
-            flip_horz.as_slice()
-        );
-        set_uniform!(
-            self.gl,
-            self.tile_program,
-            "flipVertical",
-            uniform_1_i32_slice,
-            flip_vert.as_slice()
-        );
-        set_uniform!(self.gl, self.tile_program, "height", uniform_1_i32, height);
-        self.gl
-            .draw_arrays_instanced(glow::TRIANGLE_STRIP, 0, 4, pattern_nums.len() as i32);
+        // set_uniform!(
+        //     self.gl,
+        //     self.tile_program,
+        //     "palette",
+        //     uniform_3_f32_slice,
+        //     final_palette
+        // );
+        // set_uniform!(
+        //     self.gl,
+        //     self.tile_program,
+        //     "depths",
+        //     uniform_1_f32_slice,
+        //     depths.as_slice()
+        // );
+        // set_uniform!(
+        //     self.gl,
+        //     self.tile_program,
+        //     "flipHorizontal",
+        //     uniform_1_i32_slice,
+        //     flip_horz.as_slice()
+        // );
+        // set_uniform!(
+        //     self.gl,
+        //     self.tile_program,
+        //     "flipVertical",
+        //     uniform_1_i32_slice,
+        //     flip_vert.as_slice()
+        // );
+        // set_uniform!(self.gl, self.tile_program, "height", uniform_1_i32, height);
+        // self.gl
+        //     .draw_arrays_instanced(glow::TRIANGLE_STRIP, 0, 4, pattern_nums.len() as i32);
     }
     // This function should probably be moved into the PPU somewhere
     // Or perhaps the cartridge
