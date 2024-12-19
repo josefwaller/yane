@@ -402,8 +402,6 @@ impl Screen {
                     self.gl.draw_arrays(glow::LINE_LOOP, 0, 4);
                 });
             }
-            let chr: Vec<u8> = (0..0x2000).map(|i| nes.cartridge.read_ppu(i)).collect();
-            refresh_chr_texture(&self.gl, self.chr_tex, nes, chr);
         }
     }
     /// Bulk render a bunch of tiles in one single draw_arrays_instanced call

@@ -14,7 +14,7 @@ use yane::{Cartridge, Controller, Nes};
 #[test]
 fn test_nestest_log() {
     let rom = read("./tests/test_roms/cpu_nestest.nes").unwrap();
-    let mut nes = Nes::from_cartridge(Cartridge::new(&rom));
+    let mut nes = Nes::from_cartridge(Cartridge::new(&rom, None));
     nes.cpu.p_c = 0xC000;
     let f = File::open("./tests/nestest.log").unwrap();
     let buf = BufReader::new(f);

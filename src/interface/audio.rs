@@ -60,7 +60,7 @@ impl Audio {
             info!("Queue is too big, clearing (was {})", self.queue.size());
             self.queue.clear();
         } else if self.queue.size() == 0 {
-            warn!("Queue is empty!");
+            // warn!("Queue is empty!");
         }
         // Get and transform data
         let data = nes

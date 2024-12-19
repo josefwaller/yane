@@ -6,9 +6,14 @@ use sdl2::{
 use simplelog::{
     ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger,
 };
-use std::fs::File;
-use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::{
+    ffi::OsStr,
+    fs::OpenOptions,
+    io::BufReader,
+    time::{Duration, Instant},
+};
+use std::{ffi::OsString, thread::sleep};
+use std::{fs::File, path::PathBuf};
 use yane::{
     Cartridge, DebugWindow, Nes, Screen, Settings, Window, CPU_CYCLES_PER_OAM,
     CPU_CYCLES_PER_SCANLINE, CPU_CYCLES_PER_VBLANK,
@@ -33,8 +38,21 @@ fn main() {
         .expect("Unable to create logger");
         // Read file and init NES
         let args: Vec<String> = std::env::args().collect();
-        let data = std::fs::read(args[1].clone()).unwrap();
-        let mut nes = Nes::from_cartridge(Cartridge::new(data.as_slice()));
+        let file_name = args[1].clone();
+        // Read cartridge data
+        let data = std::fs::read(file_name.clone()).unwrap();
+        // Read savedata, if there is any
+        let mut savedata_path = PathBuf::from(file_name.clone());
+        savedata_path.set_extension("bin");
+        let mut savedata_filename = OsString::new();
+        savedata_filename.push(savedata_path.file_name().unwrap());
+        savedata_filename.push(OsStr::new("_savedata"));
+        savedata_path.set_file_name(savedata_filename);
+        let savedata = match std::fs::read(savedata_path.clone()) {
+            Ok(d) => Some(d),
+            Err(_) => None,
+        };
+        let mut nes = Nes::from_cartridge(Cartridge::new(data.as_slice(), savedata));
         let mut settings = Settings::default();
 
         let sdl = sdl2::init().unwrap();
@@ -110,16 +128,16 @@ fn main() {
                 frame_cycles += cycles_to_wait;
                 // Debug log FPS info
                 frame_count += 1;
-                if frame_count == 100 {
+                if frame_count == 600 {
                     frame_count = 0;
                     let now = Instant::now();
                     debug!(
-                        "Over last 100 frames: Avg FPS: {}, duration: {:?}, avg cycles: {} (wait time {:#?})",
-                        100.0
+                        "Over last 600 frames: Avg FPS: {}, duration: {:?}, avg cycles: {}, avg wait time {:#?}",
+                        600.0
                             / (now.duration_since(last_hundred_frames).as_millis() as f32 / 1000.0),
                         now.duration_since(last_hundred_frames),
-                        frame_cycles as f64 / 100.0,
-                        frame_wait_time
+                        frame_cycles as f64 / 600.0,
+                        frame_wait_time.div_f64(600.0)
                     );
                     // debug!("{:X?}", nes.last_instructions);
                     // Uncomment this to verify screenshot results
@@ -163,6 +181,12 @@ fn main() {
                 // Since sleep may overshoot, this will let us catch up next frame/scanline
                 delta += emu_elapsed;
             }
+        }
+        // Save game if we want to
+        if nes.cartridge.has_battery_backed_ram() {
+            info!("Writing savedata to to {:#?}", savedata_path);
+            std::fs::write(savedata_path, nes.cartridge.memory.prg_ram)
+                .expect("Unable to save savefile");
         }
     }
 }

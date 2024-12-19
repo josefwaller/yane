@@ -40,7 +40,7 @@ impl Nes {
             ppu: Ppu::new(),
             apu: Apu::new(),
             mem: [0x00; 0x800],
-            cartridge: Cartridge::new(c.as_slice()),
+            cartridge: Cartridge::new(c.as_slice(), None),
             controllers: [Controller::new(); 2],
             cached_controllers: [Controller::new(); 2],
             controller_bits: [0; 2],

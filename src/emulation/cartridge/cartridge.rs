@@ -38,10 +38,12 @@ pub struct Cartridge {
     nametable_arrangement: NametableArrangement,
     // Mapper
     mapper: Box<dyn Mapper>,
+    // Whether the cartridge has battery backed RAM and should be saved
+    has_battery_ram: bool,
 }
 
 impl Cartridge {
-    pub fn new(bytes: &[u8]) -> Cartridge {
+    pub fn new(bytes: &[u8], savedata: Option<Vec<u8>>) -> Cartridge {
         if cfg!(debug_assertions) {
             assert_eq!(bytes[0], 'N' as u8);
             assert_eq!(bytes[1], 'E' as u8);
@@ -50,14 +52,14 @@ impl Cartridge {
         }
         let prg_rom_size = 0x4000 * bytes[4] as usize;
         let chr_rom_size = 0x2000 * bytes[5] as usize;
-        let mut prg_ram_size = max(bytes[8] as usize, 1) * 8000;
+        let mut prg_ram_size = max(bytes[8] as usize, 1) * 0x2000;
         let chr_ram_size = if chr_rom_size == 0 { 0x2000 } else { 0x0 };
         if bytes[7] & 0x0C == 0x08 {
             warn!("iNES 2.0 file detected");
         } else {
             info!("iNES file detected");
             info!("Header: {:X?}", &bytes[0..16]);
-            prg_ram_size = max(bytes[8] as usize * 8000, 8000);
+            prg_ram_size = max(bytes[8] as usize * 0x2000, 0x2000);
             info!(
                 "Detected as {}, ignoring.",
                 if bytes[9] & 0x01 != 0 { "PAL" } else { "NTSC" }
@@ -66,6 +68,11 @@ impl Cartridge {
         info!(
             "{:X} bytes PRG ROM, {:X} bytes CHR ROM, {:X} bytes PRG RAM, {:X} bytes CHR RAM",
             prg_rom_size, chr_rom_size, prg_ram_size, chr_ram_size
+        );
+        let has_battery_ram = (bytes[6] & 0x02) != 0;
+        info!(
+            "Cartridge {} have battery-backed PRG RAM",
+            if has_battery_ram { "does" } else { "doesn't" }
         );
         // Todo
         let mapper_id = (bytes[6] >> 4) + (bytes[7] & 0xF0);
@@ -90,15 +97,23 @@ impl Cartridge {
         end += chr_rom_size;
         info!("Reading CHRROM at {:#X}", start);
         let chr_rom = bytes[start..end].to_vec();
+        let prg_ram = match savedata {
+            Some(data) => {
+                assert_eq!(data.len(), prg_ram_size);
+                data
+            }
+            None => vec![0; prg_ram_size],
+        };
         Cartridge {
             memory: CartridgeMemory {
                 prg_rom,
                 chr_rom,
-                prg_ram: vec![0; prg_ram_size],
+                prg_ram,
                 chr_ram: vec![0; chr_ram_size],
             },
             nametable_arrangement,
             mapper,
+            has_battery_ram,
         }
     }
     /// Read a byte from the cartridge's memory given an address in CPU memory space
@@ -118,6 +133,7 @@ impl Cartridge {
     }
     /// Write a byte to the cartridge's memory given an address in PPU memory space
     /// Usually writes tot CHR RAM.
+    /// Todo: Use mapper here?
     pub fn write_chr(&mut self, addr: usize, value: u8) {
         // TBA - only do this if there is CHR RAM
         if addr < self.memory.chr_ram.len() {
@@ -161,5 +177,8 @@ impl Cartridge {
     }
     pub fn debug_string(&self) -> String {
         self.mapper.get_debug_string()
+    }
+    pub fn has_battery_backed_ram(&self) -> bool {
+        self.has_battery_ram
     }
 }
