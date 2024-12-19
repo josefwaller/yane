@@ -1,6 +1,6 @@
 use log::*;
 
-use crate::{check_error, utils::*, Nes, Settings};
+use crate::{check_error, utils::*, Nes, Settings, DEBUG_PALETTE};
 use glow::{HasContext, NativeProgram, NativeTexture, VertexArray};
 use imgui::Condition::FirstUseEver;
 use imgui_glow_renderer::AutoRenderer;
@@ -113,7 +113,14 @@ impl DebugWindow {
                 )
                 .iter()
                 .flatten()
-                .map(|i| self.palette[nes.ppu.palette_ram[4 * self.palette_index + *i] as usize])
+                .map(|i| {
+                    let index = 4 * self.palette_index + *i;
+                    self.palette[if settings.use_debug_palette {
+                        DEBUG_PALETTE[index] as usize
+                    } else {
+                        nes.ppu.palette_ram[index] as usize
+                    }]
+                })
                 .flatten()
                 .collect();
             gl.bind_framebuffer(glow::FRAMEBUFFER, None);
@@ -169,19 +176,17 @@ impl DebugWindow {
                         });
                         c.end();
                     }
-                    ui.disabled(settings.use_debug_palette, || {
-                        if let Some(c) =
-                            ui.begin_combo("Palette", format!("Palette {}", self.palette_index))
-                        {
-                            (0..8).for_each(|i| {
-                                let label = format!("Palette {}", i);
-                                if ui.selectable(label) {
-                                    self.palette_index = i;
-                                }
-                            });
-                            c.end();
-                        }
-                    });
+                    if let Some(c) =
+                        ui.begin_combo("Palette", format!("Palette {}", self.palette_index))
+                    {
+                        (0..8).for_each(|i| {
+                            let label = format!("Palette {}", i);
+                            if ui.selectable(label) {
+                                self.palette_index = i;
+                            }
+                        });
+                        c.end();
+                    }
                     ui.checkbox("Debug palette", &mut settings.use_debug_palette);
                     ui.checkbox("Debug OAM", &mut settings.oam_debug);
                     if ui.checkbox("Paused", &mut settings.paused) {

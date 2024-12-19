@@ -43,10 +43,6 @@ pub struct Ppu {
     // v register
     v: u32,
     x: u32,
-    // Background byte
-    bg_byte: u8,
-    // Attribute byte
-    attr_byte: u8,
     // Indices of sprites on the scanline it is currently drawing
     // None means no sprite on that pixel
     scanline_sprites: [Option<(usize, usize)>; 256],
@@ -75,8 +71,6 @@ impl Ppu {
             t: 0,
             v: 0,
             x: 0,
-            bg_byte: 0,
-            attr_byte: 0,
             scanline_sprites: [None; 256],
             output: [[0; 256]; 240],
         }
@@ -224,7 +218,11 @@ impl Ppu {
                         (obj[0] as u32 + 1) <= self.dot.1
                             && obj[0] as u32 + 1 + sprite_height > self.dot.1
                     })
-                    .take(8)
+                    .take(if settings.scanline_sprite_limit {
+                        8
+                    } else {
+                        64
+                    })
                     .map(|(i, _obj)| i)
                     .collect();
                 // Add them to the scanline
