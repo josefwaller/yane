@@ -43,11 +43,11 @@ fn main() {
         let data = std::fs::read(file_name.clone()).unwrap();
         // Read savedata, if there is any
         let mut savedata_path = PathBuf::from(file_name.clone());
-        savedata_path.set_extension("bin");
-        let mut savedata_filename = OsString::new();
-        savedata_filename.push(savedata_path.file_name().unwrap());
-        savedata_filename.push(OsStr::new("_savedata"));
-        savedata_path.set_file_name(savedata_filename);
+        savedata_path.set_extension("srm");
+        // let mut savedata_filename = OsString::new();
+        // savedata_filename.push(savedata_path.file_name().unwrap());
+        // savedata_filename.push(OsStr::new("_savedata"));
+        // savedata_path.set_file_name(savedata_filename);
         let savedata = match std::fs::read(savedata_path.clone()) {
             Ok(d) => Some(d),
             Err(_) => None,
