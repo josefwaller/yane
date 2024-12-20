@@ -1,8 +1,10 @@
+use std::fmt::Debug;
+
 use crate::StatusRegister;
 
 /// The CPU of the NES.
 /// Contains all registers and is responsible for changing the flags when the values are set/unset.
-#[derive(Debug)]
+#[derive(Clone)]
 pub struct Cpu {
     /// Accumulator
     pub a: u8,
@@ -379,6 +381,16 @@ impl Cpu {
     fn set_load_flags(&mut self, value: u8) {
         self.s_r.z = value == 0;
         self.s_r.n = (value & 0x80) != 0;
+    }
+}
+
+impl Debug for Cpu {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "[A={:2X} X={:2X} Y={:2X} PC={:4X} SP={:2X} SR={:?}]",
+            self.a, self.x, self.y, self.p_c, self.s_p, self.s_r
+        )
     }
 }
 

@@ -1,6 +1,8 @@
+use std::fmt::Debug;
+
 /// The status register of the NES.
 
-#[derive(Debug)]
+#[derive(Clone)]
 pub struct StatusRegister {
     /// The carry flag, also known as the unsigned overflow flag
     pub c: bool,
@@ -83,5 +85,29 @@ impl StatusRegister {
         self.d = (byte & 0x08) != 0;
         self.v = (byte & 0x40) != 0;
         self.n = (byte & 0x80) != 0;
+    }
+}
+
+impl Debug for StatusRegister {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        macro_rules! format_flag {
+            ($flag: ident, $name: literal) => {
+                if self.$flag {
+                    format!(" {}", $name)
+                } else {
+                    format!("!{}", $name)
+                }
+            };
+        }
+        write!(
+            f,
+            "[{} {} {} {} {} {}]",
+            format_flag!(c, "C"),
+            format_flag!(z, "Z"),
+            format_flag!(i, "I"),
+            format_flag!(d, "D"),
+            format_flag!(v, "V"),
+            format_flag!(n, "N")
+        )
     }
 }

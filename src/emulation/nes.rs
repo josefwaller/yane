@@ -1,9 +1,39 @@
+use std::{collections::VecDeque, fmt::Debug};
+
 use log::*;
 
 use crate::{
     opcodes::*, Apu, Cartridge, Controller, Cpu, Ppu, Screen, Settings, CPU_CYCLES_PER_OAM,
     CPU_CYCLES_PER_SCANLINE,
 };
+struct NesState {
+    cpu: Cpu,
+    opcode: u8,
+    operands: Vec<u8>,
+}
+
+impl NesState {
+    pub fn new(nes: &Nes, instruction: &[u8]) -> NesState {
+        NesState {
+            cpu: nes.cpu.clone(),
+            opcode: instruction[0],
+            operands: instruction[1..].to_vec(),
+        }
+    }
+}
+impl Debug for NesState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{:?} OPCODE={:X} OPERANDS={:X?}",
+            self.cpu,
+            self.opcode,
+            self.operands.as_slice()
+        )
+    }
+}
+
+const NUMBER_STORED_STATES: usize = 200;
 
 /// The NES.
 pub struct Nes {
@@ -24,8 +54,7 @@ pub struct Nes {
     // Current bit being read from the controller
     controller_bits: [usize; 2],
     // Last 200 instructions executed, stored for debugging purposes
-    pub last_instructions: [[u8; 3]; 200],
-    last_inst_index: usize,
+    previous_states: VecDeque<NesState>,
 }
 
 impl Nes {
@@ -44,8 +73,7 @@ impl Nes {
             controllers: [Controller::new(); 2],
             cached_controllers: [Controller::new(); 2],
             controller_bits: [0; 2],
-            last_instructions: [[0; 3]; 200],
-            last_inst_index: 0,
+            previous_states: VecDeque::with_capacity(NUMBER_STORED_STATES),
         }
     }
     pub fn from_cartridge(cartridge: Cartridge) -> Nes {
@@ -58,8 +86,7 @@ impl Nes {
             controllers: [Controller::new(); 2],
             cached_controllers: [Controller::new(); 2],
             controller_bits: [0; 2],
-            last_instructions: [[0; 3]; 200],
-            last_inst_index: 0,
+            previous_states: VecDeque::with_capacity(NUMBER_STORED_STATES),
         };
         nes.cpu.p_c = ((nes.cartridge.read_cpu(0xFFFD) as u16) << 8)
             + (nes.cartridge.read_cpu(0xFFFC) as u16);
@@ -134,32 +161,34 @@ impl Nes {
             self.read_byte(pc + 2),
         ]);
         // Add instruction for debugging purposes
-        self.last_instructions[self.last_inst_index].copy_from_slice(&inst);
-        self.last_inst_index = (self.last_inst_index + 1) % self.last_instructions.len();
         match self.decode_and_execute(&inst) {
             Ok((bytes, cycles)) => {
                 self.cpu.p_c = self.cpu.p_c.wrapping_add(bytes);
+                self.previous_states.push_back(NesState::new(&self, &inst));
+                if self.previous_states.len() > NUMBER_STORED_STATES {
+                    self.previous_states.pop_front();
+                }
                 return Ok(cycles as u32);
             }
             Err(s) => {
-                error!(
-                    "Encountered an error \"{}\", printing last 200 instructions",
-                    s
-                );
-                [
-                    &self.last_instructions[((self.last_inst_index + 1)
-                        % self.last_instructions.len())
-                        ..self.last_instructions.len()],
-                    &self.last_instructions[0..self.last_inst_index],
-                ]
-                .concat()
-                .iter()
-                .for_each(|inst| {
-                    error!(
-                        "\t OPCODE={:X} OPERANDS={:X} {:X}",
-                        inst[0], inst[1], inst[2]
-                    )
-                });
+                error!("Encountered an error \"{}\" while processing {:X?}, printing last 200 states\n{:#X?}", s,
+            inst,
+        self.previous_states
+    );
+                // [
+                //     &self.last_instructions[((self.last_inst_index + 1)
+                //         % self.last_instructions.len())
+                //         ..self.last_instructions.len()],
+                //     &self.last_instructions[0..self.last_inst_index],
+                // ]
+                // .concat()
+                // .iter()
+                // .for_each(|inst| {
+                //     error!(
+                //         "\t OPCODE={:X} OPERANDS={:X} {:X}",
+                //         inst[0], inst[1], inst[2]
+                //     )
+                // });
                 return Err(s);
             }
         }
