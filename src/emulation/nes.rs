@@ -125,7 +125,7 @@ impl Nes {
         self.controllers[num] = state;
     }
 
-    pub fn step(&mut self) -> Result<i64, String> {
+    pub fn step(&mut self) -> Result<u32, String> {
         let pc = self.cpu.p_c as usize;
         let mut inst: [u8; 3] = [0; 3];
         inst.copy_from_slice(&[
@@ -139,7 +139,7 @@ impl Nes {
         match self.decode_and_execute(&inst) {
             Ok((bytes, cycles)) => {
                 self.cpu.p_c = self.cpu.p_c.wrapping_add(bytes);
-                return Ok(cycles);
+                return Ok(cycles as u32);
             }
             Err(s) => {
                 error!(
@@ -626,11 +626,14 @@ impl Nes {
     /// Advance the NES by 1 frame, approx 29780 cycles.
     /// Just finishes rendering the frame if the NES is halfway done rendering one.
     /// Returns the total number of cycles ran.
-    pub fn advance_frame(&mut self, settings: Option<Settings>) -> u32 {
+    pub fn advance_frame(&mut self, settings: Option<Settings>) -> Result<u32, String> {
         let mut cycles = 0;
         loop {
             let scanline = self.ppu.scanline();
-            let mut c = self.step().unwrap() as u32;
+            let mut c = match self.step() {
+                Ok(x) => x as u32,
+                Err(e) => return Err(e),
+            };
             // If we are in VBlank
             if self.ppu.in_vblank() {
                 if self.check_oam_dma() {
@@ -654,7 +657,7 @@ impl Nes {
                 break;
             }
         }
-        cycles
+        Ok(cycles)
     }
 
     /// Check if the PPU's OAM DMA register has been set.

@@ -123,7 +123,13 @@ fn main() {
             } else {
                 // Advance 1 frame
                 window.make_gl_current();
-                let cycles_to_wait = nes.advance_frame(Some(settings));
+                let cycles_to_wait = match nes.advance_frame(Some(settings)) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        error!("Error encountered while advancing emulator: {:X?}", e);
+                        break;
+                    }
+                };
                 // debug!("{} CPU cycles elapsed", cycles_to_wait);
                 frame_cycles += cycles_to_wait;
                 // Debug log FPS info
