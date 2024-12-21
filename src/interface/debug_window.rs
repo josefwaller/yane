@@ -4,7 +4,7 @@ use log::*;
 
 use crate::{check_error, utils::*, Nes, Settings, DEBUG_PALETTE};
 use glow::{HasContext, NativeProgram, NativeTexture, VertexArray};
-use imgui::{Condition::FirstUseEver, TextureId};
+use imgui::{Condition::FirstUseEver, TextureId, TreeNodeFlags};
 use imgui_glow_renderer::AutoRenderer;
 use imgui_sdl2_support::SdlPlatform;
 use sdl2::{event::Event, EventPump, Sdl, VideoSubsystem};
@@ -42,8 +42,8 @@ impl DebugWindow {
         // let num_rows = max(num_tiles / num_columns, 1);
         let num_rows = 0x10;
         // Set window size
-        let window_width = 1024;
-        let window_height = 1024;
+        let window_width = 512;
+        let window_height = 512;
         // let window_width = 4 * 8 * num_columns as u32;
         // let window_height = 4 * 8 * num_rows as u32;
 
@@ -161,91 +161,76 @@ impl DebugWindow {
             );
             gl.clear_color(0.0, 0.0, 0.0, 1.0);
             gl.clear(glow::COLOR_BUFFER_BIT);
-            // check_error!(gl);
-            // let loc = gl.get_uniform_location(self.screen_program, "renderedTexture");
-            // gl.uniform_1_i32(loc.as_ref(), tex_num);
-
-            // gl.bind_vertex_array(Some(self.screen_vao));
-            // check_error!(gl);
-            // gl.draw_arrays(glow::TRIANGLES, 0, 6);
-            // check_error!(gl);
-
             // Draw imgui
             self.platform
                 .prepare_frame(&mut self.imgui, &self.window, event_pump);
             let ui = self.imgui.new_frame();
-            ui.window("Settings")
-                .size([600.0, 400.0], FirstUseEver)
-                .build(|| {
-                    ui.checkbox("Debug palette", &mut settings.use_debug_palette);
-                    ui.checkbox("Debug OAM", &mut settings.oam_debug);
-                    if ui.checkbox("Paused", &mut settings.paused) {
-                        info!(
-                            "Manual pause {}",
-                            if settings.paused {
-                                "checked"
-                            } else {
-                                "unchecked"
-                            }
-                        );
-                    }
-                    ui.checkbox("Scanline sprite limit", &mut settings.scanline_sprite_limit);
-                    ui.checkbox(
-                        "Always draw sprites on top of background",
-                        &mut settings.always_sprites_on_top,
+            if ui.collapsing_header("Settings", TreeNodeFlags::empty()) {
+                ui.checkbox("Debug palette", &mut settings.use_debug_palette);
+                ui.checkbox("Debug OAM", &mut settings.oam_debug);
+                if ui.checkbox("Paused", &mut settings.paused) {
+                    info!(
+                        "Manual pause {}",
+                        if settings.paused {
+                            "checked"
+                        } else {
+                            "unchecked"
+                        }
                     );
-                    ui.slider("Volume", 0.0, 10.0, &mut settings.volume);
-                    ui.slider("Speed", 0.1, 3.0, &mut settings.speed);
-                    ui.same_line();
-                    if ui.button("Reset to 1") {
-                        settings.speed = 1.0;
-                    }
-                    ui.text(format!(
-                        "Scroll: ({:3}, {:3})",
-                        nes.ppu.scroll_x, nes.ppu.scroll_y
-                    ));
-                    let s = nes.cartridge.debug_string();
-                    if !s.is_empty() {
-                        ui.text(s);
-                    }
+                }
+                ui.checkbox("Scanline sprite limit", &mut settings.scanline_sprite_limit);
+                ui.checkbox(
+                    "Always draw sprites on top of background",
+                    &mut settings.always_sprites_on_top,
+                );
+                ui.slider("Volume", 0.0, 10.0, &mut settings.volume);
+                ui.slider("Speed", 0.1, 3.0, &mut settings.speed);
+                ui.same_line();
+                if ui.button("Reset to 1") {
+                    settings.speed = 1.0;
+                }
+                ui.text(format!(
+                    "Scroll: ({:3}, {:3})",
+                    nes.ppu.scroll_x, nes.ppu.scroll_y
+                ));
+                let s = nes.cartridge.debug_string();
+                if !s.is_empty() {
+                    ui.text(s);
+                }
+            }
+            if ui.collapsing_header("Previous Instructions", TreeNodeFlags::empty()) {
+                nes.previous_states.iter().rev().take(0x20).for_each(|s| {
+                    ui.text(format!("{:?}", s));
                 });
-            ui.window("Previous instructions")
-                .size([100.0, 100.0], FirstUseEver)
-                .build(|| {
-                    nes.previous_states.iter().rev().take(0x20).for_each(|s| {
-                        ui.text(format!("{:?}", s));
+            }
+            if ui.collapsing_header("CHR ROM/RAM", TreeNodeFlags::empty()) {
+                if let Some(c) = ui.begin_combo("Page", format!("Page {}", self.tile_page)) {
+                    (0..(self.num_tiles / (self.num_columns * self.num_rows))).for_each(|i| {
+                        if ui.selectable(format!("Page {}", i)) {
+                            self.tile_page = i;
+                        }
                     });
-                });
-            ui.window("CHR ROM/RAM")
-                .size([500.0, 500.0], FirstUseEver)
-                .build(|| {
-                    if let Some(c) = ui.begin_combo("Page", format!("Page {}", self.tile_page)) {
-                        (0..(self.num_tiles / (self.num_columns * self.num_rows))).for_each(|i| {
-                            if ui.selectable(format!("Page {}", i)) {
-                                self.tile_page = i;
-                            }
-                        });
-                        c.end();
-                    }
-                    if let Some(c) =
-                        ui.begin_combo("Palette", format!("Palette {}", self.palette_index))
-                    {
-                        (0..8).for_each(|i| {
-                            let label = format!("Palette {}", i);
-                            if ui.selectable(label) {
-                                self.palette_index = i;
-                            }
-                        });
-                        c.end();
-                    }
-                    ui.slider("Scale", 0.01, 10.0, &mut self.chr_size);
-                    let size = [
-                        self.chr_size * 8.0 * self.num_columns as f32,
-                        self.chr_size * 8.0 * self.num_rows as f32,
-                    ];
-                    let image = imgui::Image::new(TextureId::new(tex_num as usize), size);
-                    image.build(&ui);
-                });
+                    c.end();
+                }
+                if let Some(c) =
+                    ui.begin_combo("Palette", format!("Palette {}", self.palette_index))
+                {
+                    (0..8).for_each(|i| {
+                        let label = format!("Palette {}", i);
+                        if ui.selectable(label) {
+                            self.palette_index = i;
+                        }
+                    });
+                    c.end();
+                }
+                ui.slider("Scale", 0.01, 10.0, &mut self.chr_size);
+                let size = [
+                    self.chr_size * 8.0 * self.num_columns as f32,
+                    self.chr_size * 8.0 * self.num_rows as f32,
+                ];
+                let image = imgui::Image::new(TextureId::new(tex_num as usize), size);
+                image.build(&ui);
+            }
             let draw_data = self.imgui.render();
             self.renderer
                 .render(draw_data)
