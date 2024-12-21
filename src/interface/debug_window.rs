@@ -87,6 +87,10 @@ impl DebugWindow {
     pub fn handle_event(&mut self, event: &Event) {
         self.platform.handle_event(&mut self.imgui, event);
     }
+    /// Transform some tile data (i.e. sections of CHR ROM/RAM in the cartridge) to RGB triplets that can be
+    /// piped to an OpenGL texture.
+    /// `width` and `height` are how many tiles wide/high the texture should be.
+    /// The resulting texture will have dimensions `(8 * width, 8 * height)`.
     fn transform_chr_data(&self, data: &[u8], width: usize, height: usize) -> Vec<u8> {
         data.chunks(16)
             .map(|tile| {
@@ -124,49 +128,15 @@ impl DebugWindow {
             let gl = self.renderer.gl_context();
             // Refresh texture
             let num_tiles_per_page = self.num_rows * self.num_columns;
-            let start = 16 * num_tiles_per_page * self.tile_page;
-            let end = 16 * num_tiles_per_page * (self.tile_page + 1);
+            let start = 0x10 * num_tiles_per_page * self.tile_page;
+            let end = 0x10 * num_tiles_per_page * (self.tile_page + 1);
             let data = &nes.cartridge.get_pattern_table()[start..end];
-            let tex_data: Vec<u8> = data
-                .chunks(16)
-                .map(|tile| {
-                    (0..64).map(|i| {
-                        let x = i % 8;
-                        let y = i / 8;
-                        let tile_low = tile[y] as usize;
-                        let tile_high = (tile[y + 8] as usize) << 1;
-                        ((tile_low >> (7 - x)) & 0x01) + ((tile_high >> (7 - x)) & 0x02)
-                    })
-                })
-                .enumerate()
-                .fold(
-                    vec![Vec::with_capacity(8 * self.num_columns); 8 * self.num_rows],
-                    |mut a, (i, e)| {
-                        e.enumerate().for_each(|(j, s)| {
-                            a[8 * (i / self.num_columns) + j / 8].push(s);
-                        });
-                        a
-                    },
-                )
-                .iter()
-                .flatten()
-                .map(|i| {
-                    let index = 4 * self.palette_index + *i;
-                    self.palette[if settings.use_debug_palette {
-                        DEBUG_PALETTE[index] as usize
-                    } else {
-                        nes.ppu.palette_ram[index] as usize
-                    }]
-                })
-                .flatten()
-                .collect();
-            gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+            let tex_data: Vec<u8> = self.transform_chr_data(data, self.num_columns, self.num_rows);
             check_error!(gl);
             let chr_tex_num: i32 = 1;
             gl.active_texture(glow::TEXTURE0 + chr_tex_num as u32);
             check_error!(gl);
             gl.bind_texture(glow::TEXTURE_2D, Some(self.chr_tex));
-            gl.active_texture(glow::TEXTURE0 + chr_tex_num as u32);
             check_error!(gl);
             gl.tex_image_2d(
                 glow::TEXTURE_2D,
@@ -178,18 +148,6 @@ impl DebugWindow {
                 glow::RGB,
                 glow::UNSIGNED_BYTE,
                 Some(&tex_data),
-            );
-            check_error!(gl);
-            gl.tex_parameter_i32(
-                glow::TEXTURE_2D,
-                glow::TEXTURE_MIN_FILTER,
-                glow::NEAREST as i32,
-            );
-            check_error!(gl);
-            gl.tex_parameter_i32(
-                glow::TEXTURE_2D,
-                glow::TEXTURE_MAG_FILTER,
-                glow::NEAREST as i32,
             );
             check_error!(gl);
             // Set up nametable texture
