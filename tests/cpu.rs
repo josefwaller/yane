@@ -55,7 +55,7 @@ fn test_nestest_log() {
             nes.cpu.s_r.to_byte()
         );
         match nes.step() {
-            Ok(c) => cycles += c,
+            Ok(c) => cycles += c as i64,
             Err(s) => panic!("{}", s),
         }
     }

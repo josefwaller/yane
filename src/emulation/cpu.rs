@@ -388,8 +388,8 @@ impl Debug for Cpu {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "[A={:2X} X={:2X} Y={:2X} PC={:4X} SP={:2X} SR={:?}]",
-            self.a, self.x, self.y, self.p_c, self.s_p, self.s_r
+            "[PC={:4X} A={:2X} X={:2X} Y={:2X} SP={:2X} SR={:?}]",
+            self.p_c, self.a, self.x, self.y, self.s_p, self.s_r
         )
     }
 }

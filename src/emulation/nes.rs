@@ -6,7 +6,7 @@ use crate::{
     opcodes::*, Apu, Cartridge, Controller, Cpu, Ppu, Screen, Settings, CPU_CYCLES_PER_OAM,
     CPU_CYCLES_PER_SCANLINE,
 };
-struct NesState {
+pub struct NesState {
     cpu: Cpu,
     opcode: u8,
     operands: Vec<u8>,
@@ -54,7 +54,7 @@ pub struct Nes {
     // Current bit being read from the controller
     controller_bits: [usize; 2],
     // Last 200 instructions executed, stored for debugging purposes
-    previous_states: VecDeque<NesState>,
+    pub previous_states: VecDeque<NesState>,
 }
 
 impl Nes {

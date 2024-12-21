@@ -1,8 +1,10 @@
+use std::cmp::min;
+
 use log::*;
 
 use crate::{check_error, utils::*, Nes, Settings, DEBUG_PALETTE};
 use glow::{HasContext, NativeProgram, NativeTexture, VertexArray};
-use imgui::Condition::FirstUseEver;
+use imgui::{Condition::FirstUseEver, TextureId};
 use imgui_glow_renderer::AutoRenderer;
 use imgui_sdl2_support::SdlPlatform;
 use sdl2::{event::Event, EventPump, Sdl, VideoSubsystem};
@@ -27,6 +29,8 @@ pub struct DebugWindow {
     palette_index: usize,
     // Index of current page of tiles we are viewing
     tile_page: usize,
+    // Size of CHR texture
+    chr_size: f32,
 }
 
 impl DebugWindow {
@@ -38,8 +42,10 @@ impl DebugWindow {
         // let num_rows = max(num_tiles / num_columns, 1);
         let num_rows = 0x10;
         // Set window size
-        let window_width = 4 * 8 * num_columns as u32;
-        let window_height = 4 * 8 * num_rows as u32;
+        let window_width = 1024;
+        let window_height = 1024;
+        // let window_width = 4 * 8 * num_columns as u32;
+        // let window_height = 4 * 8 * num_rows as u32;
 
         let (window, gl_context, gl) = create_window(video, "CHR ROM", window_width, window_height);
 
@@ -75,6 +81,7 @@ impl DebugWindow {
                 renderer,
                 imgui,
                 palette_index: 0,
+                chr_size: 4.0,
             }
         }
     }
@@ -152,14 +159,16 @@ impl DebugWindow {
                 glow::UNSIGNED_BYTE,
                 Some(&tex_data),
             );
-            check_error!(gl);
-            let loc = gl.get_uniform_location(self.screen_program, "renderedTexture");
-            gl.uniform_1_i32(loc.as_ref(), tex_num);
+            gl.clear_color(0.0, 0.0, 0.0, 1.0);
+            gl.clear(glow::COLOR_BUFFER_BIT);
+            // check_error!(gl);
+            // let loc = gl.get_uniform_location(self.screen_program, "renderedTexture");
+            // gl.uniform_1_i32(loc.as_ref(), tex_num);
 
-            gl.bind_vertex_array(Some(self.screen_vao));
-            check_error!(gl);
-            gl.draw_arrays(glow::TRIANGLES, 0, 6);
-            check_error!(gl);
+            // gl.bind_vertex_array(Some(self.screen_vao));
+            // check_error!(gl);
+            // gl.draw_arrays(glow::TRIANGLES, 0, 6);
+            // check_error!(gl);
 
             // Draw imgui
             self.platform
@@ -168,25 +177,6 @@ impl DebugWindow {
             ui.window("Settings")
                 .size([600.0, 400.0], FirstUseEver)
                 .build(|| {
-                    if let Some(c) = ui.begin_combo("Page", format!("Page {}", self.tile_page)) {
-                        (0..(self.num_tiles / (self.num_columns * self.num_rows))).for_each(|i| {
-                            if ui.selectable(format!("Page {}", i)) {
-                                self.tile_page = i;
-                            }
-                        });
-                        c.end();
-                    }
-                    if let Some(c) =
-                        ui.begin_combo("Palette", format!("Palette {}", self.palette_index))
-                    {
-                        (0..8).for_each(|i| {
-                            let label = format!("Palette {}", i);
-                            if ui.selectable(label) {
-                                self.palette_index = i;
-                            }
-                        });
-                        c.end();
-                    }
                     ui.checkbox("Debug palette", &mut settings.use_debug_palette);
                     ui.checkbox("Debug OAM", &mut settings.oam_debug);
                     if ui.checkbox("Paused", &mut settings.paused) {
@@ -214,17 +204,47 @@ impl DebugWindow {
                         "Scroll: ({:3}, {:3})",
                         nes.ppu.scroll_x, nes.ppu.scroll_y
                     ));
-                    // ui.text(format!(
-                    //     "PC: {:X}, opcode: {:X} {:X} ({:X})",
-                    //     nes.cpu.p_c,
-                    //     nes.last_instructions[0][0],
-                    //     nes.last_instructions[0][1],
-                    //     nes.last_instructions[0][2]
-                    // ));
                     let s = nes.cartridge.debug_string();
                     if !s.is_empty() {
                         ui.text(s);
                     }
+                });
+            ui.window("Previous instructions")
+                .size([100.0, 100.0], FirstUseEver)
+                .build(|| {
+                    nes.previous_states.iter().rev().take(0x20).for_each(|s| {
+                        ui.text(format!("{:?}", s));
+                    });
+                });
+            ui.window("CHR ROM/RAM")
+                .size([500.0, 500.0], FirstUseEver)
+                .build(|| {
+                    if let Some(c) = ui.begin_combo("Page", format!("Page {}", self.tile_page)) {
+                        (0..(self.num_tiles / (self.num_columns * self.num_rows))).for_each(|i| {
+                            if ui.selectable(format!("Page {}", i)) {
+                                self.tile_page = i;
+                            }
+                        });
+                        c.end();
+                    }
+                    if let Some(c) =
+                        ui.begin_combo("Palette", format!("Palette {}", self.palette_index))
+                    {
+                        (0..8).for_each(|i| {
+                            let label = format!("Palette {}", i);
+                            if ui.selectable(label) {
+                                self.palette_index = i;
+                            }
+                        });
+                        c.end();
+                    }
+                    ui.slider("Scale", 0.01, 10.0, &mut self.chr_size);
+                    let size = [
+                        self.chr_size * 8.0 * self.num_columns as f32,
+                        self.chr_size * 8.0 * self.num_rows as f32,
+                    ];
+                    let image = imgui::Image::new(TextureId::new(tex_num as usize), size);
+                    image.build(&ui);
                 });
             let draw_data = self.imgui.render();
             self.renderer

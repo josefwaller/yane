@@ -40,7 +40,7 @@ fn main() {
         let args: Vec<String> = std::env::args().collect();
         let file_name = args[1].clone();
         // Read cartridge data
-        let data = std::fs::read(file_name.clone()).unwrap();
+        let data = std::fs::read(file_name.clone()).expect("Please provide an iNES (.NES) file");
         // Read savedata, if there is any
         let mut savedata_path = PathBuf::from(file_name.clone());
         savedata_path.set_extension("srm");
