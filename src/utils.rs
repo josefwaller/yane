@@ -217,7 +217,7 @@ pub unsafe fn buffer_data_slice(gl: &Context, program: &Program, data: &[i32]) -
 pub unsafe fn create_screen_texture(
     gl: &Context,
     size: (usize, usize),
-) -> (NativeFramebuffer, VertexArray, NativeProgram, NativeTexture) {
+) -> (VertexArray, NativeProgram, NativeTexture) {
     info!("Creating screen buffer with size {:?}", size);
     check_error!(gl);
     let texture_program = gl.create_program().unwrap();
@@ -265,13 +265,6 @@ pub unsafe fn create_screen_texture(
 
     gl.link_program(texture_program);
 
-    let texture_buffer = gl.create_framebuffer().unwrap();
-    let status = gl.check_framebuffer_status(glow::FRAMEBUFFER);
-    if status != glow::FRAMEBUFFER_COMPLETE {
-        panic!("Error creating frame buffer: {:X}", status);
-    }
-    check_error!(gl);
-    gl.bind_framebuffer(glow::FRAMEBUFFER, Some(texture_buffer));
     check_error!(gl);
     let render_texture = gl.create_texture().unwrap();
     check_error!(gl);
@@ -301,45 +294,24 @@ pub unsafe fn create_screen_texture(
         glow::NEAREST as i32,
     );
     check_error!(gl);
-    gl.framebuffer_texture(
-        glow::FRAMEBUFFER,
-        glow::COLOR_ATTACHMENT0,
-        Some(render_texture),
-        0,
-    );
+    (vao, texture_program, render_texture)
+}
+
+/// Create a new openGL texture for 2D rendering
+pub unsafe fn create_texture(gl: &Context) -> NativeTexture {
+    let tex = gl.create_texture().expect("Unable to create texture");
+    gl.bind_texture(glow::TEXTURE_2D, Some(tex));
     check_error!(gl);
-    gl.draw_buffers(&[glow::COLOR_ATTACHMENT0]);
-    check_error!(gl);
-    let status = gl.check_framebuffer_status(glow::FRAMEBUFFER);
-    if status != glow::FRAMEBUFFER_COMPLETE {
-        panic!("Error creating frame buffer: {:X}", status);
-    }
-    let depth_stencil_tex = gl.create_texture().unwrap();
-    gl.bind_texture(glow::TEXTURE_2D, Some(depth_stencil_tex));
-    gl.tex_image_2d(
+    gl.tex_parameter_i32(
         glow::TEXTURE_2D,
-        0,
-        glow::DEPTH24_STENCIL8 as i32,
-        size.0 as i32,
-        size.1 as i32,
-        0,
-        glow::DEPTH_STENCIL,
-        glow::UNSIGNED_INT_24_8,
-        None,
+        glow::TEXTURE_MAG_FILTER,
+        glow::NEAREST as i32,
     );
     check_error!(gl);
-    // Add a stencil and depth attachment
-    gl.framebuffer_texture_2d(
-        glow::FRAMEBUFFER,
-        glow::DEPTH_STENCIL_ATTACHMENT,
+    gl.tex_parameter_i32(
         glow::TEXTURE_2D,
-        Some(depth_stencil_tex),
-        0,
+        glow::TEXTURE_MIN_FILTER,
+        glow::NEAREST as i32,
     );
-    check_error!(gl);
-    let status = gl.check_framebuffer_status(glow::FRAMEBUFFER);
-    if status != glow::FRAMEBUFFER_COMPLETE {
-        panic!("Error creating frame buffer: {:X}", status);
-    }
-    (texture_buffer, vao, texture_program, render_texture)
+    tex
 }

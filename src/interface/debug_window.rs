@@ -13,11 +13,6 @@ pub struct DebugWindow {
     window: sdl2::video::Window,
     gl_context: sdl2::video::GLContext,
     palette: [[u8; 3]; 64],
-    // Stuff for rendering the single quad texture to screen
-    screen_program: NativeProgram,
-    screen_vao: VertexArray,
-    screen_texture: NativeTexture,
-    // Amount of rows/columns of tiles
     num_tiles: usize,
     num_rows: usize,
     num_columns: usize,
@@ -31,6 +26,12 @@ pub struct DebugWindow {
     tile_page: usize,
     // Size of CHR texture
     chr_size: f32,
+    // Cached nametable RAM
+    nametable_ram: Vec<u8>,
+    nametable_num: usize,
+
+    chr_tex: NativeTexture,
+    nametable_tex: NativeTexture,
 }
 
 impl DebugWindow {
@@ -39,13 +40,10 @@ impl DebugWindow {
         let num_tiles =
             (nes.cartridge.memory.chr_rom.len() + nes.cartridge.memory.chr_ram.len()) / 0x10;
         let num_columns = 0x10;
-        // let num_rows = max(num_tiles / num_columns, 1);
         let num_rows = 0x10;
         // Set window size
         let window_width = 512;
         let window_height = 512;
-        // let window_width = 4 * 8 * num_columns as u32;
-        // let window_height = 4 * 8 * num_rows as u32;
 
         let (window, gl_context, gl) = create_window(video, "CHR ROM", window_width, window_height);
 
@@ -61,8 +59,8 @@ impl DebugWindow {
             let palette: [[u8; 3]; 64] =
                 core::array::from_fn(|i| core::array::from_fn(|j| palette_data[3 * i + j] as u8));
             check_error!(gl);
-            let (_screen_fbo, screen_vao, screen_program, screen_texture) =
-                create_screen_texture(&gl, (8 * num_columns, 8 * num_rows));
+            let chr_tex = create_texture(&gl);
+            let nametable_tex = create_texture(&gl);
 
             let platform = SdlPlatform::new(&mut imgui);
             let renderer = AutoRenderer::new(gl, &mut imgui).unwrap();
@@ -70,9 +68,6 @@ impl DebugWindow {
                 window,
                 gl_context,
                 palette,
-                screen_program,
-                screen_texture,
-                screen_vao,
                 num_tiles,
                 num_columns,
                 num_rows,
@@ -82,11 +77,46 @@ impl DebugWindow {
                 imgui,
                 palette_index: 0,
                 chr_size: 4.0,
+                nametable_ram: Vec::new(),
+                nametable_num: 0,
+                chr_tex,
+                nametable_tex,
             }
         }
     }
     pub fn handle_event(&mut self, event: &Event) {
         self.platform.handle_event(&mut self.imgui, event);
+    }
+    fn transform_chr_data(&self, data: &[u8], width: usize, height: usize) -> Vec<u8> {
+        data.chunks(16)
+            .map(|tile| {
+                (0..64).map(|i| {
+                    let x = i % 8;
+                    let y = i / 8;
+                    let tile_low = tile[y] as usize;
+                    let tile_high = (tile[y + 8] as usize) << 1;
+                    ((tile_low >> (7 - x)) & 0x01) + ((tile_high >> (7 - x)) & 0x02)
+                })
+            })
+            .enumerate()
+            .fold(
+                vec![Vec::with_capacity(8 * width); 8 * height],
+                |mut a, (i, e)| {
+                    e.enumerate().for_each(|(j, s)| {
+                        a[8 * (i / width) + j / 8].push(s);
+                    });
+                    a
+                },
+            )
+            .iter()
+            .flatten()
+            .map(|i| {
+                let index = 4 * self.palette_index + *i;
+                // Todo
+                self.palette[DEBUG_PALETTE[index] as usize]
+            })
+            .flatten()
+            .collect()
     }
     pub fn render(&mut self, nes: &Nes, event_pump: &EventPump, settings: &mut Settings) {
         unsafe {
@@ -131,20 +161,12 @@ impl DebugWindow {
                 .flatten()
                 .collect();
             gl.bind_framebuffer(glow::FRAMEBUFFER, None);
-            gl.use_program(Some(self.screen_program));
             check_error!(gl);
-            gl.viewport(
-                0,
-                0,
-                self.window.size().0 as i32,
-                self.window.size().1 as i32,
-            );
+            let chr_tex_num: i32 = 1;
+            gl.active_texture(glow::TEXTURE0 + chr_tex_num as u32);
             check_error!(gl);
-            // Use FBO texture now
-            let tex_num: i32 = 1;
-            gl.active_texture(glow::TEXTURE0 + tex_num as u32);
-            check_error!(gl);
-            gl.bind_texture(glow::TEXTURE_2D, Some(self.screen_texture));
+            gl.bind_texture(glow::TEXTURE_2D, Some(self.chr_tex));
+            gl.active_texture(glow::TEXTURE0 + chr_tex_num as u32);
             check_error!(gl);
             gl.tex_image_2d(
                 glow::TEXTURE_2D,
@@ -152,15 +174,92 @@ impl DebugWindow {
                 glow::RGB as i32,
                 8 * self.num_columns as i32,
                 8 * self.num_rows as i32,
-                // 8 * self.num_columns as i32,
-                // 8 * self.num_rows as i32,
                 0,
                 glow::RGB,
                 glow::UNSIGNED_BYTE,
                 Some(&tex_data),
             );
+            check_error!(gl);
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MIN_FILTER,
+                glow::NEAREST as i32,
+            );
+            check_error!(gl);
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MAG_FILTER,
+                glow::NEAREST as i32,
+            );
+            check_error!(gl);
+            // Set up nametable texture
+            // Only update texture if there is a change since this is a fairly costly method
+            if self.nametable_num != nes.ppu.base_nametable_num()
+                || self.nametable_ram != nes.ppu.nametable_ram
+            {
+                self.nametable_num = nes.ppu.base_nametable_num();
+                self.nametable_ram = nes.ppu.nametable_ram.to_vec();
+                let nametables = [
+                    [
+                        nes.ppu.top_left_nametable_addr(),
+                        nes.ppu.top_right_nametable_addr(),
+                    ],
+                    [
+                        nes.ppu.bot_left_nametable_addr(),
+                        nes.ppu.bot_right_nametable_addr(),
+                    ],
+                ]
+                .iter()
+                // For every nametable
+                .map(|n| {
+                    (0..30)
+                        // For every row
+                        .map(move |y| {
+                            // For every column
+                            (0..64).map(move |x| {
+                                // Get the tile here, which could be in one of two nametables
+                                // Since we want the top left and top right ones to be beside each other
+                                let tile_addr = nes.ppu.nametable_tile_addr()
+                                    + 0x10
+                                        * nes.ppu.nametable_ram[nes
+                                            .cartridge
+                                            .transform_nametable_addr(if x < 32 {
+                                                n[0]
+                                            } else {
+                                                n[1]
+                                            })
+                                            + 32 * y
+                                            + x] as usize;
+                                (0..0x10).map(move |j| nes.cartridge.read_ppu(tile_addr + j))
+                            })
+                        })
+                        .flatten()
+                        .flatten()
+                })
+                .flatten()
+                .collect::<Vec<u8>>();
+                let tex_data = self.transform_chr_data(&nametables, 64, 60);
+                let tex_num: i32 = 2;
+                gl.active_texture(glow::TEXTURE0 + tex_num as u32);
+                check_error!(gl);
+                gl.bind_texture(glow::TEXTURE_2D, Some(self.nametable_tex));
+                check_error!(gl);
+                gl.tex_image_2d(
+                    glow::TEXTURE_2D,
+                    0,
+                    glow::RGB as i32,
+                    8 * 64 as i32,
+                    8 * 60 as i32,
+                    0,
+                    glow::RGB,
+                    glow::UNSIGNED_BYTE,
+                    Some(&tex_data),
+                );
+                check_error!(gl);
+            }
             gl.clear_color(0.0, 0.0, 0.0, 1.0);
             gl.clear(glow::COLOR_BUFFER_BIT);
+
             // Draw imgui
             self.platform
                 .prepare_frame(&mut self.imgui, &self.window, event_pump);
@@ -228,8 +327,12 @@ impl DebugWindow {
                     self.chr_size * 8.0 * self.num_columns as f32,
                     self.chr_size * 8.0 * self.num_rows as f32,
                 ];
-                let image = imgui::Image::new(TextureId::new(tex_num as usize), size);
+                check_error!(gl);
+                let image = imgui::Image::new(TextureId::new(chr_tex_num as usize), size);
                 image.build(&ui);
+            }
+            if ui.collapsing_header("Nametables", TreeNodeFlags::empty()) {
+                imgui::Image::new(TextureId::new(2), [64.0 * 8.0, 60.0 * 8.0]).build(&ui);
             }
             let draw_data = self.imgui.render();
             self.renderer

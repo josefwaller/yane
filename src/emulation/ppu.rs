@@ -305,12 +305,12 @@ impl Ppu {
                             let palette_index = ((palette_byte >> palette_shift) as usize) & 0x03;
                             // Get high/low byte of tile
                             let fine_y = ((self.v & 0x7000) >> 12) as usize;
-                            let mut tile_low = cartridge.read_ppu(
-                                self.background_pattern_table_addr() + 16 * nt_num + fine_y,
-                            ) as usize;
-                            let mut tile_high = cartridge.read_ppu(
-                                self.background_pattern_table_addr() + 16 * nt_num + 8 + fine_y,
-                            ) as usize;
+                            let mut tile_low = cartridge
+                                .read_ppu(self.nametable_tile_addr() + 16 * nt_num + fine_y)
+                                as usize;
+                            let mut tile_high = cartridge
+                                .read_ppu(self.nametable_tile_addr() + 16 * nt_num + 8 + fine_y)
+                                as usize;
                             // Add tile data to output
                             tile_high <<= 1;
                             (0..8).for_each(|i| {
@@ -414,77 +414,6 @@ impl Ppu {
         // self.dot.0 + DOTS_PER_SCANLINE * self.dot.1 > 1 + DOTS_PER_SCANLINE * 241 || self.dot.1 == 0
         self.dot.1 < 1 || self.dot.1 > 240
     }
-
-    fn sprite_pixel_is_transparent(
-        &self,
-        spr_num: usize,
-        x: usize,
-        y: usize,
-        cartridge: &Cartridge,
-    ) -> bool {
-        // Get the tile
-        let obj = &self.oam[spr_num..(spr_num + 4)];
-        let tile_num = if self.is_8x16_sprites() {
-            ((obj[1] as usize & 0x01) << 8) + (obj[1] as usize & 0xFE)
-        } else {
-            self.spr_pattern_table_addr() + obj[1] as usize
-        };
-        let slice_index = y;
-        let flip_vert = obj[2] & 0x80 != 0;
-        let sprite_height = if self.is_8x16_sprites() { 16 } else { 8 };
-        let final_index = if flip_vert {
-            sprite_height as usize - 1 - slice_index
-        } else {
-            slice_index
-        };
-        let slice = if self.is_8x16_sprites() && final_index > 7 {
-            // Get the next tile if we are in the bottom half of an 8x16 tile
-            let tile = cartridge.get_tile(tile_num + 1);
-            tile[final_index - 8] | tile[final_index]
-        } else {
-            let tile = cartridge.get_tile(tile_num);
-            tile[final_index] | tile[final_index + 8]
-        };
-        if slice == 0 {
-            return true;
-        }
-        let flip_hor = (obj[2] & 0x40) != 0;
-        let shift = if flip_hor { x } else { 7 - x };
-        if (slice >> shift) & 0x01 != 0 {
-            return false;
-        }
-        true
-    }
-    // Return whether the background pixel index given an (x, y) coordinate in screen space is transparent
-    fn background_pixel_is_transparent(&self, x: usize, y: usize, cartridge: &Cartridge) -> bool {
-        // Get tile X Y coordinates
-        let tile_x = x / 8;
-        let tile_y = y / 8;
-        // Get nametable tile address by figuring out what nametable we're in
-        let tile_addr = if tile_x < 32 {
-            if tile_y < 30 {
-                self.top_left_nametable_addr() + 32 * tile_y + tile_x
-            } else {
-                self.bot_left_nametable_addr() + 32 * (tile_y - 30) + tile_x
-            }
-        } else {
-            if tile_y < 30 {
-                self.bot_left_nametable_addr() + 32 * tile_y + (tile_x - 32)
-            } else {
-                self.bot_right_nametable_addr() + 32 * (tile_y - 30) + (tile_x - 32)
-            }
-        };
-        let final_tile_addr = cartridge.transform_nametable_addr(tile_addr);
-        // Get tile
-        let tile_num = self.background_pattern_table_addr() / 0x10
-            + self.nametable_ram[final_tile_addr] as usize;
-        let tile = &cartridge.get_tile(tile_num);
-        // Get slice at this y index
-        let slice = tile[y % 8] | tile[8 + y % 8];
-        // Check pixel at slice
-        (slice >> (7 - (x % 8))) == 0
-    }
-
     /// Write a single byte to VRAM at `PPUADDR`
     /// Increments `PPUADDR` by 1 or by 32 depending `PPUSTATUS`
     fn write_vram(&mut self, value: u8, cartridge: &mut Cartridge) {
@@ -569,7 +498,7 @@ impl Ppu {
         0x0000
     }
     /// Return where to read the backgronud patterns from
-    pub fn background_pattern_table_addr(&self) -> usize {
+    pub fn nametable_tile_addr(&self) -> usize {
         if self.ctrl & 0x10 != 0 {
             return 0x1000;
         }
@@ -596,12 +525,6 @@ impl Ppu {
     }
     pub fn sprite_overflow(&self) -> bool {
         (self.status & 0x20) != 0
-    }
-    pub fn get_nametable_addr(&self) -> usize {
-        return 0x2000 + (self.status & 0x03) as usize * 0x400;
-    }
-    pub fn get_base_nametable(&self) -> usize {
-        0x400 * (self.ctrl as usize & 0x03)
     }
     /// Returns the base nametable number, a nubmer between 0 and 3.
     /// * 0 means that the base nametable is top left (0x2000)

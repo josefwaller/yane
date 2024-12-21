@@ -171,24 +171,11 @@ impl Nes {
                 return Ok(cycles as u32);
             }
             Err(s) => {
-                error!("Encountered an error \"{}\" while processing {:X?}, printing last 200 states\n{:#X?}", s,
-            inst,
-        self.previous_states
-    );
-                // [
-                //     &self.last_instructions[((self.last_inst_index + 1)
-                //         % self.last_instructions.len())
-                //         ..self.last_instructions.len()],
-                //     &self.last_instructions[0..self.last_inst_index],
-                // ]
-                // .concat()
-                // .iter()
-                // .for_each(|inst| {
-                //     error!(
-                //         "\t OPCODE={:X} OPERANDS={:X} {:X}",
-                //         inst[0], inst[1], inst[2]
-                //     )
-                // });
+                error!("Encountered an error \"{}\" while processing {:X?}, printing last 200 states\n{:#X?}",
+                    s,
+                    inst,
+                    self.previous_states
+                );
                 return Err(s);
             }
         }

@@ -11,7 +11,6 @@ pub struct Screen {
     palette: [[u8; 3]; 0x40],
     chr_tex: NativeTexture,
     // Stuff for rendering to screen
-    screen_fbo: NativeFramebuffer,
     screen_texture: NativeTexture,
     screen_program: NativeProgram,
     screen_vao: NativeVertexArray,
@@ -46,7 +45,7 @@ impl Screen {
                 2,
             );
 
-            let (screen_fbo, screen_vao, screen_program, screen_texture) =
+            let (screen_vao, screen_program, screen_texture) =
                 create_screen_texture(&gl, (256, 240));
             // Load pallete data and convert to RGB values
             let palette_data: &[u8] = include_bytes!("../2C02G_wiki.pal");
@@ -75,7 +74,6 @@ impl Screen {
 
             Screen {
                 gl,
-                screen_fbo,
                 screen_program,
                 screen_texture,
                 screen_vao,
@@ -268,7 +266,7 @@ impl Screen {
         //             } else {
         //                 (&right_nametable, x - 32)
         //             };
-        //             nes.ppu.get_background_pattern_table_addr() as i32 / 0x10
+        //             nes.ppu.get_nametable_tile_addr() as i32 / 0x10
         //                 + nametable[32 * nametable_row_index + index] as i32
         //         })
         //         .collect();
