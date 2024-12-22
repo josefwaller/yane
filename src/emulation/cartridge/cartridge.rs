@@ -178,4 +178,9 @@ impl Cartridge {
     pub fn has_battery_backed_ram(&self) -> bool {
         self.has_battery_ram
     }
+    pub fn nametable_arrangement(&self) -> NametableArrangement {
+        self.mapper
+            .nametable_arrangement()
+            .unwrap_or(self.nametable_arrangement)
+    }
 }

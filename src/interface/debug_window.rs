@@ -2,7 +2,7 @@ use std::cmp::min;
 
 use log::*;
 
-use crate::{check_error, utils::*, Nes, Settings, DEBUG_PALETTE};
+use crate::{check_error, utils::*, NametableArrangement, Nes, Settings, DEBUG_PALETTE};
 use glow::{HasContext, NativeProgram, NativeTexture, VertexArray};
 use imgui::{Condition::FirstUseEver, TextureId, TreeNodeFlags};
 use imgui_glow_renderer::AutoRenderer;
@@ -32,6 +32,8 @@ pub struct DebugWindow {
 
     chr_tex: NativeTexture,
     nametable_tex: NativeTexture,
+    reset_nametable_tex: bool,
+    nametable_arrangement: NametableArrangement,
 }
 
 impl DebugWindow {
@@ -81,6 +83,8 @@ impl DebugWindow {
                 nametable_num: 0,
                 chr_tex,
                 nametable_tex,
+                reset_nametable_tex: true,
+                nametable_arrangement: NametableArrangement::Horizontal,
             }
         }
     }
@@ -91,7 +95,14 @@ impl DebugWindow {
     /// piped to an OpenGL texture.
     /// `width` and `height` are how many tiles wide/high the texture should be.
     /// The resulting texture will have dimensions `(8 * width, 8 * height)`.
-    fn transform_chr_data(&self, data: &[u8], width: usize, height: usize) -> Vec<u8> {
+    fn transform_chr_data(
+        &self,
+        data: &[u8],
+        width: usize,
+        height: usize,
+        palette: &[u8],
+        palette_indices: Vec<usize>,
+    ) -> Vec<u8> {
         data.chunks(16)
             .map(|tile| {
                 (0..64).map(|i| {
@@ -107,17 +118,16 @@ impl DebugWindow {
                 vec![Vec::with_capacity(8 * width); 8 * height],
                 |mut a, (i, e)| {
                     e.enumerate().for_each(|(j, s)| {
-                        a[8 * (i / width) + j / 8].push(s);
+                        a[8 * (i / width) + j / 8].push((i, s));
                     });
                     a
                 },
             )
             .iter()
             .flatten()
-            .map(|i| {
-                let index = 4 * self.palette_index + *i;
-                // Todo
-                self.palette[DEBUG_PALETTE[index] as usize]
+            .map(|(tile_index, pixel_index)| {
+                let index = 4 * palette_indices[*tile_index % palette_indices.len()] + *pixel_index;
+                self.palette[palette[index % palette.len()] as usize]
             })
             .flatten()
             .collect()
@@ -131,7 +141,19 @@ impl DebugWindow {
             let start = 0x10 * num_tiles_per_page * self.tile_page;
             let end = 0x10 * num_tiles_per_page * (self.tile_page + 1);
             let data = &nes.cartridge.get_pattern_table()[start..end];
-            let tex_data: Vec<u8> = self.transform_chr_data(data, self.num_columns, self.num_rows);
+            let tex_data: Vec<u8> = self.transform_chr_data(
+                data,
+                self.num_columns,
+                self.num_rows,
+                if settings.use_debug_palette {
+                    &DEBUG_PALETTE
+                } else {
+                    &nes.ppu.palette_ram
+                },
+                // Todo: cache this somewhere
+                // vec![self.palette_index; self.num_columns * self.num_rows],
+                vec![0, 1, 2, 3, 4],
+            );
             check_error!(gl);
             let chr_tex_num: i32 = 1;
             gl.active_texture(glow::TEXTURE0 + chr_tex_num as u32);
@@ -154,9 +176,13 @@ impl DebugWindow {
             // Only update texture if there is a change since this is a fairly costly method
             if self.nametable_num != nes.ppu.base_nametable_num()
                 || self.nametable_ram != nes.ppu.nametable_ram
+                || self.reset_nametable_tex
+                || self.nametable_arrangement != nes.cartridge.nametable_arrangement()
             {
+                self.reset_nametable_tex = false;
                 self.nametable_num = nes.ppu.base_nametable_num();
                 self.nametable_ram = nes.ppu.nametable_ram.to_vec();
+                self.nametable_arrangement = nes.cartridge.nametable_arrangement();
                 let nametables = [
                     [
                         nes.ppu.top_left_nametable_addr(),
@@ -168,35 +194,57 @@ impl DebugWindow {
                     ],
                 ]
                 .iter()
-                // For every nametable
+                // For every left-right nametable pair
                 .map(|n| {
+                    let attr_addr = n.map(|i| i + 0x3C0);
                     (0..30)
                         // For every row
                         .map(move |y| {
                             // For every column
                             (0..64).map(move |x| {
+                                let (nt, at) = if x < 32 {
+                                    (n[0], attr_addr[0])
+                                } else {
+                                    (n[1], attr_addr[1])
+                                };
                                 // Get the tile here, which could be in one of two nametables
                                 // Since we want the top left and top right ones to be beside each other
                                 let tile_addr = nes.ppu.nametable_tile_addr()
                                     + 0x10
                                         * nes.ppu.nametable_ram[nes
                                             .cartridge
-                                            .transform_nametable_addr(if x < 32 {
-                                                n[0]
-                                            } else {
-                                                n[1]
-                                            })
+                                            .transform_nametable_addr(nt)
                                             + 32 * y
                                             + x] as usize;
-                                (0..0x10).map(move |j| nes.cartridge.read_ppu(tile_addr + j))
+                                let palette_shift = 2 * ((((x % 32) / 2) % 2) + 2 * ((y / 2) % 2));
+                                let palette_byte_addr = nes.cartridge.transform_nametable_addr(at)
+                                    + 0x08 * (y / 4)
+                                    + ((x % 32) / 4);
+                                let palette_byte = nes.ppu.nametable_ram[palette_byte_addr];
+                                let palette = (palette_byte >> palette_shift) & 0x03;
+                                (0..0x10).map(move |j| {
+                                    (nes.cartridge.read_ppu(tile_addr + j), palette as usize)
+                                })
                             })
                         })
                         .flatten()
                         .flatten()
                 })
                 .flatten()
-                .collect::<Vec<u8>>();
-                let tex_data = self.transform_chr_data(&nametables, 64, 60);
+                .collect::<Vec<(u8, usize)>>();
+                let (nt_tiles, nt_palettes): (Vec<u8>, Vec<usize>) = nametables.into_iter().unzip();
+                let p: Vec<usize> = nt_palettes.into_iter().step_by(0x10).collect();
+                let tex_data = self.transform_chr_data(
+                    nt_tiles.as_slice(),
+                    64,
+                    60,
+                    if settings.use_debug_palette {
+                        &DEBUG_PALETTE
+                    } else {
+                        &nes.ppu.palette_ram
+                    },
+                    p,
+                );
                 let tex_num: i32 = 2;
                 gl.active_texture(glow::TEXTURE0 + tex_num as u32);
                 check_error!(gl);
@@ -223,7 +271,11 @@ impl DebugWindow {
                 .prepare_frame(&mut self.imgui, &self.window, event_pump);
             let ui = self.imgui.new_frame();
             if ui.collapsing_header("Settings", TreeNodeFlags::empty()) {
+                let p = settings.use_debug_palette;
                 ui.checkbox("Debug palette", &mut settings.use_debug_palette);
+                if p != settings.use_debug_palette {
+                    self.reset_nametable_tex = true;
+                }
                 ui.checkbox("Debug OAM", &mut settings.oam_debug);
                 if ui.checkbox("Paused", &mut settings.paused) {
                     info!(
@@ -260,15 +312,7 @@ impl DebugWindow {
                     ui.text(format!("{:?}", s));
                 });
             }
-            if ui.collapsing_header("CHR ROM/RAM", TreeNodeFlags::empty()) {
-                if let Some(c) = ui.begin_combo("Page", format!("Page {}", self.tile_page)) {
-                    (0..(self.num_tiles / (self.num_columns * self.num_rows))).for_each(|i| {
-                        if ui.selectable(format!("Page {}", i)) {
-                            self.tile_page = i;
-                        }
-                    });
-                    c.end();
-                }
+            if ui.collapsing_header("Graphics Debug", TreeNodeFlags::empty()) {
                 if let Some(c) =
                     ui.begin_combo("Palette", format!("Palette {}", self.palette_index))
                 {
@@ -276,21 +320,35 @@ impl DebugWindow {
                         let label = format!("Palette {}", i);
                         if ui.selectable(label) {
                             self.palette_index = i;
+                            self.reset_nametable_tex = true;
                         }
                     });
                     c.end();
                 }
-                ui.slider("Scale", 0.01, 10.0, &mut self.chr_size);
-                let size = [
-                    self.chr_size * 8.0 * self.num_columns as f32,
-                    self.chr_size * 8.0 * self.num_rows as f32,
-                ];
-                check_error!(gl);
-                let image = imgui::Image::new(TextureId::new(chr_tex_num as usize), size);
-                image.build(&ui);
-            }
-            if ui.collapsing_header("Nametables", TreeNodeFlags::empty()) {
-                imgui::Image::new(TextureId::new(2), [64.0 * 8.0, 60.0 * 8.0]).build(&ui);
+                if ui.collapsing_header("CHR ROM/RAM", TreeNodeFlags::empty()) {
+                    if let Some(c) = ui.begin_combo("Page", format!("Page {}", self.tile_page)) {
+                        (0..(self.num_tiles / (self.num_columns * self.num_rows))).for_each(|i| {
+                            if ui.selectable(format!("Page {}", i)) {
+                                self.tile_page = i;
+                            }
+                        });
+                        c.end();
+                    }
+                    ui.slider("Scale", 0.01, 10.0, &mut self.chr_size);
+                    let size = [
+                        self.chr_size * 8.0 * self.num_columns as f32,
+                        self.chr_size * 8.0 * self.num_rows as f32,
+                    ];
+                    check_error!(gl);
+                    let image = imgui::Image::new(TextureId::new(chr_tex_num as usize), size);
+                    image.build(&ui);
+                }
+                if ui.collapsing_header("Nametables", TreeNodeFlags::empty()) {
+                    if ui.button("Refresh") {
+                        self.reset_nametable_tex = true;
+                    }
+                    imgui::Image::new(TextureId::new(2), [64.0 * 8.0, 60.0 * 8.0]).build(&ui);
+                }
             }
             let draw_data = self.imgui.render();
             self.renderer
