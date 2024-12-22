@@ -7,7 +7,7 @@ use glow::{HasContext, NativeProgram, NativeTexture, VertexArray};
 use imgui::{Condition::FirstUseEver, TextureId, TreeNodeFlags};
 use imgui_glow_renderer::AutoRenderer;
 use imgui_sdl2_support::SdlPlatform;
-use sdl2::{event::Event, EventPump, Sdl, VideoSubsystem};
+use sdl2::{event::Event, sys::Always, EventPump, Sdl, VideoSubsystem};
 // Renders all the CHR ROM (and CHR RAM TBD) in the cartridge for debug purposes
 pub struct DebugWindow {
     window: sdl2::video::Window,
@@ -26,14 +26,11 @@ pub struct DebugWindow {
     tile_page: usize,
     // Size of CHR texture
     chr_size: f32,
-    // Cached nametable RAM
-    nametable_ram: Vec<u8>,
-    nametable_num: usize,
+    // Update nametable every 6 "ticks" (should be around 10 Hz)
+    nametable_timer: u32,
 
     chr_tex: NativeTexture,
     nametable_tex: NativeTexture,
-    reset_nametable_tex: bool,
-    nametable_arrangement: NametableArrangement,
 }
 
 impl DebugWindow {
@@ -44,8 +41,8 @@ impl DebugWindow {
         let num_columns = 0x10;
         let num_rows = 0x10;
         // Set window size
-        let window_width = 512;
-        let window_height = 512;
+        let window_width = 600;
+        let window_height = 1200;
 
         let (window, gl_context, gl) = create_window(video, "CHR ROM", window_width, window_height);
 
@@ -79,12 +76,9 @@ impl DebugWindow {
                 imgui,
                 palette_index: 0,
                 chr_size: 4.0,
-                nametable_ram: Vec::new(),
-                nametable_num: 0,
                 chr_tex,
                 nametable_tex,
-                reset_nametable_tex: true,
-                nametable_arrangement: NametableArrangement::Horizontal,
+                nametable_timer: 0,
             }
         }
     }
@@ -151,8 +145,7 @@ impl DebugWindow {
                     &nes.ppu.palette_ram
                 },
                 // Todo: cache this somewhere
-                // vec![self.palette_index; self.num_columns * self.num_rows],
-                vec![0, 1, 2, 3, 4],
+                vec![self.palette_index],
             );
             check_error!(gl);
             let chr_tex_num: i32 = 1;
@@ -174,15 +167,8 @@ impl DebugWindow {
             check_error!(gl);
             // Set up nametable texture
             // Only update texture if there is a change since this is a fairly costly method
-            if self.nametable_num != nes.ppu.base_nametable_num()
-                || self.nametable_ram != nes.ppu.nametable_ram
-                || self.reset_nametable_tex
-                || self.nametable_arrangement != nes.cartridge.nametable_arrangement()
-            {
-                self.reset_nametable_tex = false;
-                self.nametable_num = nes.ppu.base_nametable_num();
-                self.nametable_ram = nes.ppu.nametable_ram.to_vec();
-                self.nametable_arrangement = nes.cartridge.nametable_arrangement();
+            self.nametable_timer = (self.nametable_timer + 1) % 6;
+            if self.nametable_timer == 0 {
                 let nametables = [
                     [
                         nes.ppu.top_left_nametable_addr(),
@@ -197,25 +183,27 @@ impl DebugWindow {
                 // For every left-right nametable pair
                 .map(|n| {
                     let attr_addr = n.map(|i| i + 0x3C0);
+                    // For every row
                     (0..30)
-                        // For every row
                         .map(move |y| {
                             // For every column
                             (0..64).map(move |x| {
+                                // Get the tile here, which could be in one of two nametables
+                                // Since we want the top left and top right ones to be beside each other
                                 let (nt, at) = if x < 32 {
                                     (n[0], attr_addr[0])
                                 } else {
                                     (n[1], attr_addr[1])
                                 };
-                                // Get the tile here, which could be in one of two nametables
-                                // Since we want the top left and top right ones to be beside each other
                                 let tile_addr = nes.ppu.nametable_tile_addr()
                                     + 0x10
                                         * nes.ppu.nametable_ram[nes
                                             .cartridge
                                             .transform_nametable_addr(nt)
                                             + 32 * y
-                                            + x] as usize;
+                                            + x % 32]
+                                            as usize;
+                                // Get palette info
                                 let palette_shift = 2 * ((((x % 32) / 2) % 2) + 2 * ((y / 2) % 2));
                                 let palette_byte_addr = nes.cartridge.transform_nametable_addr(at)
                                     + 0x08 * (y / 4)
@@ -270,86 +258,89 @@ impl DebugWindow {
             self.platform
                 .prepare_frame(&mut self.imgui, &self.window, event_pump);
             let ui = self.imgui.new_frame();
-            if ui.collapsing_header("Settings", TreeNodeFlags::empty()) {
-                let p = settings.use_debug_palette;
-                ui.checkbox("Debug palette", &mut settings.use_debug_palette);
-                if p != settings.use_debug_palette {
-                    self.reset_nametable_tex = true;
-                }
-                ui.checkbox("Debug OAM", &mut settings.oam_debug);
-                if ui.checkbox("Paused", &mut settings.paused) {
-                    info!(
-                        "Manual pause {}",
-                        if settings.paused {
-                            "checked"
-                        } else {
-                            "unchecked"
-                        }
-                    );
-                }
-                ui.checkbox("Scanline sprite limit", &mut settings.scanline_sprite_limit);
-                ui.checkbox(
-                    "Always draw sprites on top of background",
-                    &mut settings.always_sprites_on_top,
-                );
-                ui.slider("Volume", 0.0, 10.0, &mut settings.volume);
-                ui.slider("Speed", 0.1, 3.0, &mut settings.speed);
-                ui.same_line();
-                if ui.button("Reset to 1") {
-                    settings.speed = 1.0;
-                }
-                ui.text(format!(
-                    "Scroll: ({:3}, {:3})",
-                    nes.ppu.scroll_x, nes.ppu.scroll_y
-                ));
-                let s = nes.cartridge.debug_string();
-                if !s.is_empty() {
-                    ui.text(s);
-                }
-            }
-            if ui.collapsing_header("Previous Instructions", TreeNodeFlags::empty()) {
-                nes.previous_states.iter().rev().take(0x20).for_each(|s| {
-                    ui.text(format!("{:?}", s));
-                });
-            }
-            if ui.collapsing_header("Graphics Debug", TreeNodeFlags::empty()) {
-                if let Some(c) =
-                    ui.begin_combo("Palette", format!("Palette {}", self.palette_index))
-                {
-                    (0..8).for_each(|i| {
-                        let label = format!("Palette {}", i);
-                        if ui.selectable(label) {
-                            self.palette_index = i;
-                            self.reset_nametable_tex = true;
-                        }
-                    });
-                    c.end();
-                }
-                if ui.collapsing_header("CHR ROM/RAM", TreeNodeFlags::empty()) {
-                    if let Some(c) = ui.begin_combo("Page", format!("Page {}", self.tile_page)) {
-                        (0..(self.num_tiles / (self.num_columns * self.num_rows))).for_each(|i| {
-                            if ui.selectable(format!("Page {}", i)) {
-                                self.tile_page = i;
+            ui.window("Debug Settings")
+                .position([0.0, 0.0], imgui::Condition::Always)
+                .size(
+                    [self.window.size().0 as f32, self.window.size().1 as f32],
+                    imgui::Condition::Always,
+                )
+                .build(|| {
+                    ui.checkbox("Debug OAM", &mut settings.oam_debug);
+                    if ui.checkbox("Paused", &mut settings.paused) {
+                        info!(
+                            "Manual pause {}",
+                            if settings.paused {
+                                "checked"
+                            } else {
+                                "unchecked"
                             }
+                        );
+                    }
+                    ui.checkbox("Scanline sprite limit", &mut settings.scanline_sprite_limit);
+                    ui.checkbox(
+                        "Always draw sprites on top of background",
+                        &mut settings.always_sprites_on_top,
+                    );
+                    ui.slider("Volume", 0.0, 10.0, &mut settings.volume);
+                    ui.slider("Speed", 0.1, 3.0, &mut settings.speed);
+                    ui.same_line();
+                    if ui.button("Reset to 1") {
+                        settings.speed = 1.0;
+                    }
+                    ui.text(format!(
+                        "Scroll: ({:3}, {:3})",
+                        nes.ppu.scroll_x, nes.ppu.scroll_y
+                    ));
+                    let s = nes.cartridge.debug_string();
+                    if !s.is_empty() {
+                        ui.text(s);
+                    }
+                    if ui.collapsing_header("Previous Instructions", TreeNodeFlags::empty()) {
+                        nes.previous_states.iter().rev().take(0x20).for_each(|s| {
+                            ui.text(format!("{:?}", s));
                         });
-                        c.end();
                     }
-                    ui.slider("Scale", 0.01, 10.0, &mut self.chr_size);
-                    let size = [
-                        self.chr_size * 8.0 * self.num_columns as f32,
-                        self.chr_size * 8.0 * self.num_rows as f32,
-                    ];
-                    check_error!(gl);
-                    let image = imgui::Image::new(TextureId::new(chr_tex_num as usize), size);
-                    image.build(&ui);
-                }
-                if ui.collapsing_header("Nametables", TreeNodeFlags::empty()) {
-                    if ui.button("Refresh") {
-                        self.reset_nametable_tex = true;
+                    if ui.collapsing_header("Graphics Debug", TreeNodeFlags::empty()) {
+                        ui.checkbox("Debug palette", &mut settings.use_debug_palette);
+                        if ui.collapsing_header("CHR ROM/RAM", TreeNodeFlags::empty()) {
+                            if let Some(c) =
+                                ui.begin_combo("Palette", format!("Palette {}", self.palette_index))
+                            {
+                                (0..8).for_each(|i| {
+                                    let label = format!("Palette {}", i);
+                                    if ui.selectable(label) {
+                                        self.palette_index = i;
+                                    }
+                                });
+                                c.end();
+                            }
+                            if let Some(c) =
+                                ui.begin_combo("Page", format!("Page {}", self.tile_page))
+                            {
+                                (0..(self.num_tiles / (self.num_columns * self.num_rows)))
+                                    .for_each(|i| {
+                                        if ui.selectable(format!("Page {}", i)) {
+                                            self.tile_page = i;
+                                        }
+                                    });
+                                c.end();
+                            }
+                            ui.slider("Scale", 0.01, 10.0, &mut self.chr_size);
+                            let size = [
+                                self.chr_size * 8.0 * self.num_columns as f32,
+                                self.chr_size * 8.0 * self.num_rows as f32,
+                            ];
+                            check_error!(gl);
+                            let image =
+                                imgui::Image::new(TextureId::new(chr_tex_num as usize), size);
+                            image.build(&ui);
+                        }
+                        if ui.collapsing_header("Nametables", TreeNodeFlags::empty()) {
+                            imgui::Image::new(TextureId::new(2), [64.0 * 8.0, 60.0 * 8.0])
+                                .build(&ui);
+                        }
                     }
-                    imgui::Image::new(TextureId::new(2), [64.0 * 8.0, 60.0 * 8.0]).build(&ui);
-                }
-            }
+                });
             let draw_data = self.imgui.render();
             self.renderer
                 .render(draw_data)
