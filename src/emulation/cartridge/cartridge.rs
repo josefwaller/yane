@@ -183,4 +183,7 @@ impl Cartridge {
             .nametable_arrangement()
             .unwrap_or(self.nametable_arrangement)
     }
+    pub fn advance_cpu_cycles(&mut self, cycles: u32) {
+        self.mapper.advance_cpu_cycles(cycles);
+    }
 }

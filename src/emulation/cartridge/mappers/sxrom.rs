@@ -9,6 +9,8 @@ pub struct SxRom {
     chr_bank_1: usize,
     prg_bank: usize,
     control: usize,
+    // Whether something has been written this CPU cycle, and thus further writes should be blocked
+    has_written: bool,
 }
 
 impl Default for SxRom {
@@ -19,6 +21,7 @@ impl Default for SxRom {
             chr_bank_1: 0,
             prg_bank: 0,
             control: 0,
+            has_written: false,
         }
     }
 }
@@ -80,42 +83,45 @@ impl Mapper for SxRom {
         mem.read_chr(addr)
     }
     fn write_cpu(&mut self, cpu_addr: usize, mem: &mut CartridgeMemory, value: u8) {
-        if cpu_addr < 0x8000 {
-            if cpu_addr < 0x6000 {
-                warn!("Writing to {:X}", cpu_addr);
-            } else {
-                let max = mem.prg_ram.len();
-                mem.prg_ram[(cpu_addr - 0x6000) % max] = value;
-            }
-        } else {
-            // If value high bit is not set
-            if value & 0x80 == 0 {
-                // Check if shift register is full
-                let new_shift = (self.shift >> 1) | ((value as usize & 0x01) << 4);
-                if (self.shift & 0x01) != 0 {
-                    // Set register based on address
-                    if cpu_addr < 0xA000 {
-                        // Set control
-                        self.control = new_shift;
-                    } else if cpu_addr < 0xC000 {
-                        // Set first character bank
-                        self.chr_bank_0 = new_shift;
-                    } else if cpu_addr < 0xE000 {
-                        // Set second character bank
-                        self.chr_bank_1 = new_shift;
-                    } else {
-                        // Set program bank
-                        self.prg_bank = new_shift;
-                    }
-                    self.shift = 0x10;
+        if !self.has_written {
+            self.has_written = true;
+            if cpu_addr < 0x8000 {
+                if cpu_addr < 0x6000 {
+                    warn!("Writing to {:X}", cpu_addr);
                 } else {
-                    // Add bit to shift register
-                    self.shift = new_shift;
+                    let max = mem.prg_ram.len();
+                    mem.prg_ram[(cpu_addr - 0x6000) % max] = value;
                 }
             } else {
-                // Reset shift and set control
-                self.shift = 0x10;
-                self.control = self.control | 0x0C;
+                // If value high bit is not set
+                if value & 0x80 == 0 {
+                    // Check if shift register is full
+                    let new_shift = (self.shift >> 1) | ((value as usize & 0x01) << 4);
+                    if (self.shift & 0x01) != 0 {
+                        // Set register based on address
+                        if cpu_addr < 0xA000 {
+                            // Set control
+                            self.control = new_shift;
+                        } else if cpu_addr < 0xC000 {
+                            // Set first character bank
+                            self.chr_bank_0 = new_shift;
+                        } else if cpu_addr < 0xE000 {
+                            // Set second character bank
+                            self.chr_bank_1 = new_shift;
+                        } else {
+                            // Set program bank
+                            self.prg_bank = new_shift;
+                        }
+                        self.shift = 0x10;
+                    } else {
+                        // Add bit to shift register
+                        self.shift = new_shift;
+                    }
+                } else {
+                    // Reset shift and set control
+                    self.shift = 0x10;
+                    self.control = self.control | 0x0C;
+                }
             }
         }
     }
@@ -137,5 +143,8 @@ impl Mapper for SxRom {
             self.control,
             self.shift
         )
+    }
+    fn advance_cpu_cycles(&mut self, _cycles: u32) {
+        self.has_written = false;
     }
 }

@@ -657,6 +657,7 @@ impl Nes {
                 }
             }
             self.apu.advance_cpu_cycles(c, &mut self.cartridge);
+            self.cartridge.advance_cpu_cycles(c);
             cycles += c;
             if self
                 .ppu
@@ -666,6 +667,7 @@ impl Nes {
                 self.on_nmi();
                 cycles += 7;
                 self.apu.advance_cpu_cycles(7, &mut self.cartridge);
+                self.cartridge.advance_cpu_cycles(7);
                 self.ppu.advance_dots(21, &self.cartridge, settings);
             }
             // If we have finished VBlank and are rendering the next frame
