@@ -5,6 +5,7 @@ use log::*;
 
 const DOTS_PER_SCANLINE: u32 = 341;
 const SCANLINES_PER_FRAME: u32 = 262;
+const DOTS_PER_OPEN_BUS_DECAY: u32 = 1_789_000 / 3;
 
 #[derive(Debug)]
 pub struct Ppu {
@@ -48,6 +49,10 @@ pub struct Ppu {
     scanline_sprites: [Option<(usize, usize)>; 256],
     // Internal screen buffer, olding indices of colours in TV palette
     pub output: [[usize; 256]; 240],
+    // Open bus output
+    open_bus: u8,
+    // Cycles since open bus was written
+    open_bus_dots: u32,
 }
 
 impl Ppu {
@@ -73,28 +78,30 @@ impl Ppu {
             x: 0,
             scanline_sprites: [None; 256],
             output: [[0; 256]; 240],
+            open_bus: 0,
+            open_bus_dots: 0,
         }
     }
 
     /// Read a byte from the PPU register given an address in CPU space
     pub fn read_byte(&mut self, addr: usize, cartridge: &Cartridge) -> u8 {
         match addr % 8 {
-            // Zero out some bits in control
-            0 => self.ctrl & 0xBF,
-            1 => self.mask,
             2 => {
                 // VBLANK is cleared on read
                 let status = self.status;
                 self.status &= 0x7F;
                 // Clear W
                 self.w = false;
-                status
+                (status & 0xE0) | (self.open_bus & 0x1F)
             }
-            3 => self.oam_addr,
-            4 => self.oam[self.oam_addr as usize % self.oam.len()],
-            // SCROLL and ADDR shouldn't be read from
-            5 => self.scroll_x,
-            6 => self.addr as u8,
+            4 => {
+                // 0 out some bits on the OAM attribute byte (byte 2)
+                let v = self.oam[self.oam_addr as usize % self.oam.len()]
+                    & if self.oam_addr % 4 == 2 { 0xE3 } else { 0xFF };
+                self.open_bus = v;
+                v
+                // self.oam[self.oam_addr as usize % self.oam.len()]
+            }
             7 => {
                 if self.in_vblank() {
                     self.v = if self.v & 0x7000 == 0x7000 {
@@ -118,21 +125,26 @@ impl Ppu {
                         self.v + 1
                     };
                 }
-                self.read_vram(cartridge)
+                // Set decay value to what's read
+                let v = self.read_vram(cartridge);
+                self.open_bus = v;
+                v
             }
-            _ => panic!("This should never happen. Addr is {:#X}", addr),
+            _ => self.open_bus,
         }
     }
 
     /// Write a byte to the PPU registers given an address in CPU space
     pub fn write_byte(&mut self, addr: usize, value: u8, cartridge: &mut Cartridge) {
+        self.open_bus = value;
+        self.open_bus_dots = 0;
         match addr % 8 {
             0 => {
                 self.ctrl = value;
                 self.t = (self.t & !0xC00) | (((value & 0x03) as u32) << 10);
             }
             1 => self.mask = value,
-            2 => {}
+            2 => self.w = false,
             3 => self.oam_addr = value,
             4 => self.write_oam(0, value),
             5 => {
@@ -190,6 +202,10 @@ impl Ppu {
         settings_opt: Option<Settings>,
     ) -> bool {
         let settings = settings_opt.unwrap_or_default();
+        self.open_bus_dots += dots;
+        if self.open_bus_dots >= DOTS_PER_OPEN_BUS_DECAY && self.open_bus != 0 {
+            self.open_bus = 0;
+        }
         // Todo: tidy
         let mut to_return = false;
         (0..dots).for_each(|_| {
@@ -446,7 +462,7 @@ impl Ppu {
         }
         // Palette ram updates the buffer but also returns the current value
         let palette_index = Ppu::get_palette_index(addr);
-        let b = self.palette_ram[palette_index];
+        let b = (self.open_bus & 0xC0) | (self.palette_ram[palette_index] & 0x3F);
         // Read the mirrored nametable byte into memory
         self.data = self.nametable_ram[addr as usize % self.nametable_ram.len()];
         b

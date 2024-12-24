@@ -12,7 +12,8 @@ macro_rules! advance_nes_frames {
     ($nes: ident, $frames: literal) => {{
         // Run the emulator a bit
         (0..($frames)).for_each(|_| {
-            $nes.advance_frame(None);
+            $nes.advance_frame(None)
+                .expect("Error when advancing NES by a frame");
         });
     }};
 }

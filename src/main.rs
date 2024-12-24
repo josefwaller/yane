@@ -44,10 +44,6 @@ fn main() {
         // Read savedata, if there is any
         let mut savedata_path = PathBuf::from(file_name.clone());
         savedata_path.set_extension("srm");
-        // let mut savedata_filename = OsString::new();
-        // savedata_filename.push(savedata_path.file_name().unwrap());
-        // savedata_filename.push(OsStr::new("_savedata"));
-        // savedata_path.set_file_name(savedata_filename);
         let savedata = match std::fs::read(savedata_path.clone()) {
             Ok(d) => Some(d),
             Err(_) => None,
@@ -145,20 +141,19 @@ fn main() {
                         frame_cycles as f64 / 600.0,
                         frame_wait_time.div_f64(600.0)
                     );
-                    // debug!("{:X?}", nes.last_instructions);
                     // Uncomment this to verify screenshot results
-                    // let screen: Vec<String> = nes
-                    //     .ppu
-                    //     .nametable_ram
-                    //     .chunks(32)
-                    //     .map(|row| {
-                    //         row.iter()
-                    //             .map(|r| format!("{:2X?}", r))
-                    //             .collect::<Vec<String>>()
-                    //             .join(" ")
-                    //     })
-                    //     .collect();
-                    // info!("{:?}", screen);
+                    let screen: Vec<String> = nes
+                        .ppu
+                        .nametable_ram
+                        .chunks(32)
+                        .map(|row| {
+                            row.iter()
+                                .map(|r| format!("{:2X?}", r))
+                                .collect::<Vec<String>>()
+                                .join(" ")
+                        })
+                        .collect();
+                    info!("{:?}", screen);
 
                     frame_cycles = 0;
                     frame_wait_time = Duration::ZERO;
