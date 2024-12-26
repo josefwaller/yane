@@ -100,7 +100,6 @@ impl Ppu {
                     & if self.oam_addr % 4 == 2 { 0xE3 } else { 0xFF };
                 self.open_bus = v;
                 v
-                // self.oam[self.oam_addr as usize % self.oam.len()]
             }
             7 => {
                 if self.in_vblank() {

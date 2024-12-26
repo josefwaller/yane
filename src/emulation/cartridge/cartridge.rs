@@ -52,44 +52,61 @@ impl Cartridge {
         }
         let prg_rom_size = 0x4000 * bytes[4] as usize;
         let chr_rom_size = 0x2000 * bytes[5] as usize;
-        let mut prg_ram_size = max(bytes[8] as usize, 1) * 0x2000;
-        let chr_ram_size = if chr_rom_size == 0 { 0x2000 } else { 0x0 };
-        if bytes[7] & 0x0C == 0x08 {
-            warn!("iNES 2.0 file detected");
+        let prg_ram_size = max(bytes[8] as usize * 0x2000, 0x2000);
+        let mut chr_ram_size = if chr_rom_size == 0 { 0x2000 } else { 0x0 };
+        info!("Header: {:X?}", &bytes[0..16]);
+        let has_battery_ram = (bytes[6] & 0x02) != 0;
+        let has_trainer = (bytes[6] & 0x04) != 0;
+        let alt_nametable_layout = (bytes[6] & 0x08) != 0;
+        info!(
+            "Trainer: {}, alternate nametable: {}, battery backed ram: {}",
+            has_trainer, alt_nametable_layout, has_battery_ram
+        );
+        // Detect type of iNes file
+        let total_file_size = 16 + if has_trainer { 512 } else { 0 } + prg_rom_size + chr_rom_size;
+        info!(
+            "Total data size: {:X} bytes. File size: {:X}",
+            total_file_size,
+            bytes.len()
+        );
+        let file_type = if bytes[7] & 0x0C == 0x08 && bytes.len() >= total_file_size {
+            info!("iNES 2.0 detected");
+            0
+        } else if bytes[7] & 0x0C == 0x04 {
+            info!("Archaic iNES detected");
+            chr_ram_size = 0;
+            1
+        } else if bytes[7] & 0x0C == 0x00 {
+            info!("iNES detected");
+            2
         } else {
-            info!("iNES file detected");
-            info!("Header: {:X?}", &bytes[0..16]);
-            prg_ram_size = max(bytes[8] as usize * 0x2000, 0x2000);
-            info!(
-                "Detected as {}, ignoring.",
-                if bytes[9] & 0x01 != 0 { "PAL" } else { "NTSC" }
-            );
-        }
+            info!("Archaic iNES probably detected");
+            1
+        };
+        info!(
+            "Detected as {}, ignoring.",
+            if bytes[9] & 0x01 != 0 { "PAL" } else { "NTSC" }
+        );
         info!(
             "{:X} bytes PRG ROM, {:X} bytes CHR ROM, {:X} bytes PRG RAM, {:X} bytes CHR RAM",
             prg_rom_size, chr_rom_size, prg_ram_size, chr_ram_size
         );
-        let has_battery_ram = (bytes[6] & 0x02) != 0;
-        info!(
-            "Cartridge {} have battery-backed PRG RAM",
-            if has_battery_ram { "does" } else { "doesn't" }
-        );
         // Todo
-        let mapper_id = (bytes[6] >> 4) + (bytes[7] & 0xF0);
-        let nametable_arrangement = if (bytes[6] & 0x01) != 0 {
-            NametableArrangement::Horizontal
-        } else {
+        let mapper_id = (bytes[6] >> 4) + if file_type != 1 { bytes[7] & 0xF0 } else { 0 };
+        let nametable_arrangement = if (bytes[6] & 0x01) == 0 {
             NametableArrangement::Vertical
+        } else {
+            NametableArrangement::Horizontal
         };
-        info!("Cartridge is using {:?} nametable", nametable_arrangement);
-        info!("Cartridge is using {} mapper", mapper_id);
-        let mapper = get_mapper(mapper_id as usize);
-        let has_trainer = bytes[6] & 0x04 != 0;
         info!(
-            "Cartridge {} trainer",
-            if has_trainer { "has" } else { "does not have" },
+            "Cartridge is using a {:?} nametable arrangment",
+            nametable_arrangement
         );
-        // TODO: Add CHR_RAM
+        info!(
+            "Cartridge is using {} mapper (0x{:X})",
+            mapper_id, mapper_id
+        );
+        let mapper = get_mapper(mapper_id as usize);
         let mut start = 16 + if has_trainer { 512 } else { 0 };
         let mut end = start + prg_rom_size;
         let prg_rom = bytes[start..end].to_vec();
@@ -97,6 +114,7 @@ impl Cartridge {
         end += chr_rom_size;
         info!("Reading CHRROM at {:#X}", start);
         let chr_rom = bytes[start..end].to_vec();
+        // Load PRG RAM from savedata if we have some
         let prg_ram = match savedata {
             Some(data) => {
                 assert_eq!(data.len(), prg_ram_size);

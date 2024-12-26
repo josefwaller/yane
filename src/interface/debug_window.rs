@@ -121,7 +121,7 @@ impl DebugWindow {
             .flatten()
             .map(|(tile_index, pixel_index)| {
                 let index = 4 * palette_indices[*tile_index % palette_indices.len()] + *pixel_index;
-                self.palette[palette[index % palette.len()] as usize]
+                self.palette[palette[index % palette.len()] as usize % self.palette.len()]
             })
             .flatten()
             .collect()

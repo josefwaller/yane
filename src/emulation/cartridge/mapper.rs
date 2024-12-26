@@ -1,8 +1,6 @@
-use crate::emulation::cartridge::{mappers::NRom, CartridgeMemory};
-
 use super::{
-    mappers::{SxRom, UxRom},
-    NametableArrangement,
+    mappers::{CnRom, NRom, SxRom, UxRom},
+    CartridgeMemory, NametableArrangement,
 };
 pub trait Mapper {
     // Read/write a byte using various memory spaces
@@ -24,6 +22,7 @@ pub fn get_mapper(mapper_id: usize) -> Box<dyn Mapper> {
         0 => Box::new(NRom::default()),
         1 => Box::new(SxRom::default()),
         2 => Box::new(UxRom::default()),
+        3 => Box::new(CnRom::default()),
         _ => panic!("Unsupported mapper: {}", mapper_id),
     }
 }
