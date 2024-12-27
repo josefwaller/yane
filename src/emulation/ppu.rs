@@ -19,9 +19,6 @@ pub struct Ppu {
     pub status: u8,
     /// The OAMADDR register
     pub oam_addr: u8,
-    /// The PPUSCROLL register, split into its X/Y components
-    pub scroll_x: u8,
-    pub scroll_y: u8,
     /// The PPUADDR register
     pub addr: u16,
     // Temporary register holding most significant byte of the address
@@ -63,8 +60,6 @@ impl Ppu {
             mask: 0,
             status: 0xA0,
             oam_addr: 0,
-            scroll_x: 0,
-            scroll_y: 0,
             addr: 0,
             temp_addr_msb: 0,
             data: 0,
@@ -103,26 +98,8 @@ impl Ppu {
             }
             7 => {
                 if self.in_vblank() {
-                    self.v = if self.v & 0x7000 == 0x7000 {
-                        // Note we are checking for 0x3A0 here
-                        // Coarse Y wraps at 30, not 32
-                        if self.v & 0x3E0 == 0x3A0 {
-                            // Switch vertical nametable and reset both coarse and fine Y
-                            self.v ^ (0x800 + 0x3A0 + 0x7000)
-                        } else {
-                            // Reset fine Y and increment coarse Y
-                            self.v - 0x7000 + 0x20
-                        }
-                    } else {
-                        // Inc fine Y
-                        self.v + 0x1000
-                    };
-                    // Go to next tile or horizontal nametable
-                    self.v = if self.v & 0x1F == 0x1F {
-                        self.v ^ 0x41F
-                    } else {
-                        self.v + 1
-                    };
+                    self.coarse_x_inc();
+                    self.fine_y_inc();
                 }
                 // Set decay value to what's read
                 let v = self.read_vram(cartridge);
@@ -140,7 +117,7 @@ impl Ppu {
         match addr % 8 {
             0 => {
                 self.ctrl = value;
-                self.t = (self.t & !0xC00) | (((value & 0x03) as u32) << 10);
+                self.t = (self.t & !0x0C00) | (((value & 0x03) as u32) << 10);
             }
             1 => self.mask = value,
             2 => self.w = false,
@@ -148,14 +125,12 @@ impl Ppu {
             4 => self.write_oam(0, value),
             5 => {
                 if self.w {
-                    self.scroll_y = value;
                     self.t = (self.t & 0x0C1F)
                         | (((value & 0x07) as u32) << 12)
                         | (((value & 0x0F8) as u32) << 2);
                 } else {
                     self.t = (self.t & 0xFFE0) | (value >> 3) as u32;
                     self.x = (value & 0x07) as u32;
-                    self.scroll_x = value
                 }
                 self.w = !self.w;
             }
@@ -167,6 +142,12 @@ impl Ppu {
                 if self.in_vblank() {
                     self.fine_y_inc();
                     self.coarse_x_inc();
+                } else {
+                    if self.ctrl & 0x04 == 0 {
+                        self.coarse_x_inc();
+                    } else {
+                        self.fine_y_inc();
+                    }
                 }
             }
             _ => panic!("This should never happen. Addr is {:#X}", addr),
@@ -233,60 +214,84 @@ impl Ppu {
                         (obj[0] as u32 + 1) <= self.dot.1
                             && obj[0] as u32 + 1 + sprite_height > self.dot.1
                     })
+                    .map(|(i, _obj)| i)
+                    .collect();
+                // Check for sprite 0 hit
+                if self.is_sprite_rendering_enabled() || self.is_background_rendering_enabled() {
+                    if objs.len() > 8 {
+                        // Check in an incorrectly implemented fashion
+                        // Where instead of checking the coordinates horizontally, we start diagonally right-down from
+                        // the last sprite on the scanline
+                        let last_obj = &self.oam[(4 * objs[7])..(4 * objs[7] + 4)];
+                        (objs[8]..64).enumerate().for_each(|(i, obj_i)| {
+                            let x = last_obj[3] as u32 + i as u32;
+                            let y = last_obj[0] as u32 + i as u32;
+                            if x < 256
+                                && y < 240
+                                && self.oam[4 * obj_i] == last_obj[0].wrapping_add(i as u8)
+                                && self.oam[4 * obj_i + 3] == last_obj[3].wrapping_add(i as u8)
+                            {
+                                self.status |= 0x20;
+                            }
+                        });
+                    }
+                }
+                // Add them to the scanline
+                objs.iter()
                     .take(if settings.scanline_sprite_limit {
                         8
                     } else {
                         64
                     })
-                    .map(|(i, _obj)| i)
-                    .collect();
-                // Add them to the scanline
-                objs.iter().for_each(|i| {
-                    let obj = &self.oam[(4 * i)..(4 * i + 4)];
-                    let flip_hor = (obj[2] & 0x40) != 0;
-                    let flip_vert = (obj[2] & 0x80) != 0;
-                    let palette_index = 16 + 4 * (obj[2] & 0x03) as usize;
-                    let y_off = if flip_vert {
-                        (sprite_height - 1 - (self.dot.1 - (obj[0] as u32 + 1))) as usize
-                    } else {
-                        (self.dot.1 - (obj[0] as u32 + 1)) as usize
-                    };
+                    .for_each(|i| {
+                        let obj = &self.oam[(4 * i)..(4 * i + 4)];
+                        let flip_hor = (obj[2] & 0x40) != 0;
+                        let flip_vert = (obj[2] & 0x80) != 0;
+                        let palette_index = 16 + 4 * (obj[2] & 0x03) as usize;
+                        let y_off = if flip_vert {
+                            (sprite_height - 1 - (self.dot.1 - (obj[0] as u32 + 1))) as usize
+                        } else {
+                            (self.dot.1 - (obj[0] as u32 + 1)) as usize
+                        };
 
-                    let (mut tile_low, mut tile_high) = if self.is_8x16_sprites() {
-                        let tile_addr = 0x1000 * (obj[1] & 0x01) as usize
-                            + 16 * (obj[1] & 0xFE) as usize
-                            + if y_off > 7 { 16 + y_off % 8 } else { y_off };
-                        (
-                            cartridge.read_ppu(tile_addr) as usize,
-                            cartridge.read_ppu(tile_addr + 8) as usize,
-                        )
-                    } else {
-                        let tile_addr =
-                            self.spr_pattern_table_addr() + 16 * obj[1] as usize + y_off;
-                        (
-                            cartridge.read_ppu(tile_addr) as usize,
-                            cartridge.read_ppu(tile_addr + 8) as usize,
-                        )
-                    };
-                    // Optimization - shift tile_high left by one so combining it with tile_low is simply
-                    // (tile_high & 0x02) + (tile_lot & 0x01)
-                    tile_high <<= 1;
-                    let palette = if settings.use_debug_palette {
-                        &DEBUG_PALETTE
-                    } else {
-                        &self.palette_ram
-                    };
-                    (0..8).for_each(|j| {
-                        let pixel_index = (tile_low as usize & 0x01) + (tile_high as usize & 0x02);
-                        let x = obj[3] as usize + if flip_hor { j } else { 7 - j };
-                        if pixel_index != 0 && x < 256 {
-                            self.scanline_sprites[x]
-                                .get_or_insert((*i, palette[palette_index + pixel_index] as usize));
-                        }
-                        tile_low >>= 1;
-                        tile_high >>= 1;
-                    })
-                });
+                        let (mut tile_low, mut tile_high) = if self.is_8x16_sprites() {
+                            let tile_addr = 0x1000 * (obj[1] & 0x01) as usize
+                                + 16 * (obj[1] & 0xFE) as usize
+                                + if y_off > 7 { 16 + y_off % 8 } else { y_off };
+                            (
+                                cartridge.read_ppu(tile_addr) as usize,
+                                cartridge.read_ppu(tile_addr + 8) as usize,
+                            )
+                        } else {
+                            let tile_addr =
+                                self.spr_pattern_table_addr() + 16 * obj[1] as usize + y_off;
+                            (
+                                cartridge.read_ppu(tile_addr) as usize,
+                                cartridge.read_ppu(tile_addr + 8) as usize,
+                            )
+                        };
+                        // Optimization - shift tile_high left by one so combining it with tile_low is simply
+                        // (tile_high & 0x02) + (tile_lot & 0x01)
+                        tile_high <<= 1;
+                        let palette = if settings.use_debug_palette {
+                            &DEBUG_PALETTE
+                        } else {
+                            &self.palette_ram
+                        };
+                        (0..8).for_each(|j| {
+                            let pixel_index =
+                                (tile_low as usize & 0x01) + (tile_high as usize & 0x02);
+                            let x = obj[3] as usize + if flip_hor { j } else { 7 - j };
+                            if pixel_index != 0 && x < 256 {
+                                self.scanline_sprites[x].get_or_insert((
+                                    *i,
+                                    palette[palette_index + pixel_index] as usize,
+                                ));
+                            }
+                            tile_low >>= 1;
+                            tile_high >>= 1;
+                        })
+                    });
             }
             if self.dot.0 < 256 + 8 {
                 if self.dot.1 < 240 {

@@ -287,10 +287,6 @@ impl DebugWindow {
                     if ui.button("Reset to 1") {
                         settings.speed = 1.0;
                     }
-                    ui.text(format!(
-                        "Scroll: ({:3}, {:3})",
-                        nes.ppu.scroll_x, nes.ppu.scroll_y
-                    ));
                     let s = nes.cartridge.debug_string();
                     if !s.is_empty() {
                         ui.text(s);
