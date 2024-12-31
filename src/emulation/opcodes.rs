@@ -432,3 +432,270 @@ pub mod unofficial {
     /// Ignore byte from memory Absolute X
     pub const IGN_ABS_X: [u8; 6] = [0x1C, 0x3C, 0x5C, 0x7C, 0xDC, 0xFC];
 }
+
+fn combine_le_bytes(bytes: &[u8]) -> u16 {
+    ((bytes[1] as u16) << 8) + bytes[1] as u16
+}
+fn format_implied(opcode: &str) -> String {
+    opcode.to_string()
+}
+fn format_immediate(opcode: &str, operands: &[u8]) -> String {
+    format!("{} #{:X}", opcode, combine_le_bytes(operands))
+}
+fn format_a(opcode: &str) -> String {
+    format!("{}, A", opcode)
+}
+fn format_zp(opcode: &str, operands: &[u8]) -> String {
+    format!("{} ${:2X}", opcode, operands[1])
+}
+fn format_zp_x(opcode: &str, operands: &[u8]) -> String {
+    format!("{}, X", format_zp(opcode, operands))
+}
+fn format_zp_y(opcode: &str, operands: &[u8]) -> String {
+    format!("{}, X", format_zp(opcode, operands))
+}
+fn format_relative(opcode: &str, operands: &[u8]) -> String {
+    format!("{}, *{:+X}", opcode, operands[0] as i8)
+}
+fn format_absolute(opcode: &str, operands: &[u8]) -> String {
+    format!("{}, ${:4X}", opcode, combine_le_bytes(operands))
+}
+fn format_absolute_x(opcode: &str, operands: &[u8]) -> String {
+    format!("{}, X", format_absolute(opcode, operands))
+}
+fn format_absolute_y(opcode: &str, operands: &[u8]) -> String {
+    format!("{}, Y", format_absolute(opcode, operands))
+}
+fn format_indirect(opcode: &str, operands: &[u8]) -> String {
+    format!("{} ({:4X})", opcode, combine_le_bytes(operands))
+}
+fn format_indexed_indirect(opcode: &str, operands: &[u8]) -> String {
+    format!("{} (${:2X}, X)", opcode, operands[0])
+}
+fn format_indirect_indexed(opcode: &str, operands: &[u8]) -> String {
+    format!("{} (${:2X}), Y", opcode, operands[0])
+}
+
+pub fn format_opcode(opcode: u8, operands: &[u8]) -> String {
+    use unofficial::*;
+    match opcode {
+        LDA_I => format_immediate("LDA", operands),
+        LDA_ZP => format_zp("LDA", operands),
+        LDA_ZP_X => format_zp_x("LDA", operands),
+        LDA_ABS => format_absolute("LDA", operands),
+        LDA_ABS_X => format_absolute_x("LDA", operands),
+        LDA_ABS_Y => format_absolute_y("LDA", operands),
+        LDA_IND_X => format_indexed_indirect("LDA", operands),
+        LDA_IND_Y => format_indirect_indexed("LDA", operands),
+        LDX_I => format_immediate("LDX", operands),
+        LDX_ZP => format_zp("LDX", operands),
+        LDX_ZP_Y => format_zp_y("LDX", operands),
+        LDX_ABS => format_absolute("LDX", operands),
+        LDX_ABS_Y => format_absolute_y("LDX", operands),
+        LDY_I => format_immediate("LDY", operands),
+        LDY_ZP => format_zp("LDY", operands),
+        LDY_ZP_X => format_zp_x("LDY", operands),
+        LDY_ABS => format_absolute("LDY", operands),
+        LDY_ABS_X => format_absolute_x("LDY", operands),
+        ADC_I => format_immediate("ADC", operands),
+        ADC_ZP => format_zp("ADC", operands),
+        ADC_ZP_X => format_zp_x("ADC", operands),
+        ADC_ABS => format_absolute("ADC", operands),
+        ADC_ABS_X => format_absolute_x("ADC", operands),
+        ADC_ABS_Y => format_absolute_y("ADC", operands),
+        ADC_IND_X => format_indexed_indirect("ADC", operands),
+        ADC_IND_Y => format_indirect_indexed("ADC", operands),
+        AND_I => format_immediate("AND", operands),
+        AND_ZP => format_zp("AND", operands),
+        AND_ZP_X => format_zp_x("AND", operands),
+        AND_ABS => format_absolute("AND", operands),
+        AND_ABS_X => format_absolute_x("AND", operands),
+        AND_ABS_Y => format_absolute_y("AND", operands),
+        AND_IND_X => format_indexed_indirect("AND", operands),
+        AND_IND_Y => format_indirect_indexed("AND", operands),
+        ASL_A => format_a("ASL"),
+        ASL_ZP => format_zp("ASL", operands),
+        ASL_ZP_X => format_zp_x("ASL", operands),
+        ASL_ABS => format_absolute("ASL", operands),
+        ASL_ABS_X => format_absolute_x("ASL", operands),
+        BCC => format_relative("BCC", operands),
+        BCS => format_relative("BCS", operands),
+        BEQ => format_relative("BEQ", operands),
+        BNE => format_relative("BNE", operands),
+        BMI => format_relative("BMI", operands),
+        BPL => format_relative("BPL", operands),
+        BVC => format_relative("BVC", operands),
+        BVS => format_relative("BVS", operands),
+        BIT_ZP => format_zp("BIT", operands),
+        BIT_ABS => format_absolute("BIT", operands),
+        BRK => format_implied("BRK"),
+        CLC => format_implied("CLC"),
+        CLD => format_implied("CLD"),
+        CLI => format_implied("CLI"),
+        CLV => format_implied("CLV"),
+        CMP_I => format_immediate("CMP", operands),
+        CMP_ZP => format_zp("CMP", operands),
+        CMP_ZP_X => format_zp_x("CMP", operands),
+        CMP_ABS => format_absolute("CMP", operands),
+        CMP_ABS_X => format_absolute_x("CMP", operands),
+        CMP_ABS_Y => format_absolute_y("CMP", operands),
+        CMP_IND_X => format_indexed_indirect("CMP", operands),
+        CMP_IND_Y => format_indirect_indexed("CMP", operands),
+        CPX_I => format_immediate("CPX", operands),
+        CPX_ZP => format_zp("CPX", operands),
+        CPX_ABS => format_absolute("CPX", operands),
+        CPY_I => format_immediate("CPY", operands),
+        CPY_ZP => format_zp("CPY", operands),
+        CPY_ABS => format_absolute("CPY", operands),
+        DEC_ZP => format_zp("DEC", operands),
+        DEC_ZP_X => format_zp_x("DEC", operands),
+        DEC_ABS => format_absolute("DEC", operands),
+        DEC_ABS_X => format_absolute_x("DEC", operands),
+        DEX => format_implied("DEX"),
+        DEY => format_implied("DEY"),
+        EOR_I => format_immediate("EOR", operands),
+        EOR_ZP => format_zp("EOR", operands),
+        EOR_ZP_X => format_zp_x("EOR", operands),
+        EOR_ABS => format_absolute("EOR", operands),
+        EOR_ABS_X => format_absolute_x("EOR", operands),
+        EOR_ABS_Y => format_absolute_y("EOR", operands),
+        EOR_IND_X => format_indexed_indirect("EOR", operands),
+        EOR_IND_Y => format_indirect_indexed("EOR", operands),
+        INC_ZP => format_zp("INC", operands),
+        INC_ZP_X => format_zp_x("INC", operands),
+        INC_ABS => format_absolute("INC", operands),
+        INC_ABS_X => format_absolute_x("INC", operands),
+        INX => format_implied("INX"),
+        INY => format_implied("INY"),
+        JMP_ABS => format_absolute("JMP", operands),
+        JMP_IND => format_indirect("JMP", operands),
+        JSR => format_absolute("JSR", operands),
+        LSR_A => format_a("LSR"),
+        LSR_ZP => format_zp("LSR", operands),
+        LSR_ZP_X => format_zp_x("LSR", operands),
+        LSR_ABS => format_absolute("LSR", operands),
+        LSR_ABS_X => format_absolute_x("LSR", operands),
+        NOP => format_implied("NOP"),
+        ORA_I => format_immediate("ORA", operands),
+        ORA_ZP => format_zp("ORA", operands),
+        ORA_ZP_X => format_zp_x("ORA", operands),
+        ORA_ABS => format_absolute("ORA", operands),
+        ORA_ABS_X => format_absolute_x("ORA", operands),
+        ORA_ABS_Y => format_absolute_y("ORA", operands),
+        ORA_IND_X => format_indexed_indirect("ORA", operands),
+        ORA_IND_Y => format_indirect_indexed("ORA", operands),
+        PHA => format_implied("PHA"),
+        PHP => format_implied("PHP"),
+        PLA => format_implied("PLA"),
+        PLP => format_implied("PLP"),
+        ROL_A => format_a("ROL"),
+        ROL_ZP => format_zp("ROL", operands),
+        ROL_ZP_X => format_zp_x("ROL", operands),
+        ROL_ABS => format_absolute("ROL", operands),
+        ROL_ABS_X => format_absolute_x("ROL", operands),
+        ROR_A => format_a("ROR"),
+        ROR_ZP => format_zp("ROR", operands),
+        ROR_ZP_X => format_zp_x("ROR", operands),
+        ROR_ABS => format_absolute("ROR", operands),
+        ROR_ABS_X => format_absolute_x("ROR", operands),
+        RTI => format_implied("RTI"),
+        RTS => format_implied("RTS"),
+        SBC_I => format_immediate("SBC", operands),
+        SBC_ZP => format_zp("SBC", operands),
+        SBC_ZP_X => format_zp_x("SBC", operands),
+        SBC_ABS => format_absolute("SBC", operands),
+        SBC_ABS_X => format_absolute_x("SBC", operands),
+        SBC_ABS_Y => format_absolute_y("SBC", operands),
+        SBC_IND_X => format_indexed_indirect("SBC", operands),
+        SBC_IND_Y => format_indirect_indexed("SBC", operands),
+        SEC => format_implied("SEC"),
+        SED => format_implied("SED"),
+        SEI => format_implied("SEI"),
+        STA_ZP => format_zp("STA", operands),
+        STA_ZP_X => format_zp_x("STA", operands),
+        STA_ABS => format_absolute("STA", operands),
+        STA_ABS_X => format_absolute_x("STA", operands),
+        STA_ABS_Y => format_absolute_y("STA", operands),
+        STA_IND_X => format_indexed_indirect("STA", operands),
+        STA_IND_Y => format_indirect_indexed("STA", operands),
+        STX_ZP => format_zp("STX", operands),
+        STX_ZP_Y => format_zp_y("STX", operands),
+        STX_ABS => format_absolute("STX", operands),
+        STY_ZP => format_zp("STY", operands),
+        STY_ZP_X => format_zp_x("STY", operands),
+        STY_ABS => format_absolute("STY", operands),
+        TAX => format_implied("TAX"),
+        TAY => format_implied("TAY"),
+        TSX => format_implied("TSX"),
+        TXA => format_implied("TXA"),
+        TXS => format_implied("TXS"),
+        TYA => format_implied("TYA"),
+        ALR_I => format_immediate("ALR", operands),
+        _ if ANC_I.contains(&opcode) => format_immediate("ANC", operands),
+        ARR_I => format_immediate("ARR", operands),
+        AXS_I => format_immediate("AXS", operands),
+        LAX_ZP => format_zp("LAX", operands),
+        LAX_ZP_Y => format_zp_y("LAX", operands),
+        LAX_ABS => format_absolute("LAX", operands),
+        LAX_ABS_Y => format_absolute_y("LAX", operands),
+        LAX_IND_X => format_indexed_indirect("LAX", operands),
+        LAX_IND_Y => format_indirect_indexed("LAX", operands),
+        SAX_ZP => format_zp("SAX", operands),
+        SAX_ZP_Y => format_zp_y("SAX", operands),
+        SAX_ABS => format_absolute("SAX", operands),
+        SAX_IND_X => format_indexed_indirect("SAX", operands),
+        DCP_ZP => format_zp("DCP", operands),
+        DCP_ZP_X => format_zp_x("DCP", operands),
+        DCP_ABS => format_absolute("DCP", operands),
+        DCP_ABS_X => format_absolute_x("DCP", operands),
+        DCP_ABS_Y => format_absolute_y("DCP", operands),
+        DCP_IND_X => format_indexed_indirect("DCP", operands),
+        DCP_IND_Y => format_indirect_indexed("DCP", operands),
+        ISC_ZP => format_zp("ISC", operands),
+        ISC_ZP_X => format_zp_x("ISC", operands),
+        ISC_ABS => format_absolute("ISC", operands),
+        ISC_ABS_X => format_absolute_x("ISC", operands),
+        ISC_ABS_Y => format_absolute_y("ISC", operands),
+        ISC_IND_X => format_indexed_indirect("ISC", operands),
+        ISC_IND_Y => format_indirect_indexed("ISC", operands),
+        RLA_ZP => format_zp("RLA", operands),
+        RLA_ZP_X => format_zp_x("RLA", operands),
+        RLA_ABS => format_absolute("RLA", operands),
+        RLA_ABS_X => format_absolute_x("RLA", operands),
+        RLA_ABS_Y => format_absolute_y("RLA", operands),
+        RLA_IND_X => format_indexed_indirect("RLA", operands),
+        RLA_IND_Y => format_indirect_indexed("RLA", operands),
+        RRA_ZP => format_zp("RRA", operands),
+        RRA_ZP_X => format_zp_x("RRA", operands),
+        RRA_ABS => format_absolute("RRA", operands),
+        RRA_ABS_X => format_absolute_x("RRA", operands),
+        RRA_ABS_Y => format_absolute_y("RRA", operands),
+        RRA_IND_X => format_indexed_indirect("RRA", operands),
+        RRA_IND_Y => format_indirect_indexed("RRA", operands),
+        SLO_ZP => format_zp("SLO", operands),
+        SLO_ZP_X => format_zp_x("SLO", operands),
+        SLO_ABS => format_absolute("SLO", operands),
+        SLO_ABS_X => format_absolute_x("SLO", operands),
+        SLO_ABS_Y => format_absolute_y("SLO", operands),
+        SLO_IND_X => format_indexed_indirect("SLO", operands),
+        SLO_IND_Y => format_indirect_indexed("SLO", operands),
+        SRE_ZP => format_zp("SRE", operands),
+        SRE_ZP_X => format_zp_x("SRE", operands),
+        SRE_ABS => format_absolute("SRE", operands),
+        SRE_ABS_X => format_absolute_x("SRE", operands),
+        SRE_ABS_Y => format_absolute_y("SRE", operands),
+        SRE_IND_X => format_indexed_indirect("SRE", operands),
+        SRE_IND_Y => format_indirect_indexed("SRE", operands),
+        SBC => format_implied("SBC"),
+        _ if NOPS.contains(&opcode) => format_implied("NOPS"),
+        _ if SKBS.contains(&opcode) => format_implied("SKBS"),
+        _ if IGN_ZP.contains(&opcode) => format_zp("IGN", operands),
+        _ if IGN_ZP_X.contains(&opcode) => format_zp_x("IGN", operands),
+        IGN_ABS => format_absolute("IGN", operands),
+        _ if IGN_ABS_X.contains(&opcode) => format_absolute_x("IGN", operands),
+        _ => panic!(
+            "Invalid opcode provided to formatted: {:X} (operands: {:X?})",
+            opcode, operands
+        ),
+    }
+}
