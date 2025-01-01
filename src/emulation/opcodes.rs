@@ -434,7 +434,7 @@ pub mod unofficial {
 }
 
 fn combine_le_bytes(bytes: &[u8]) -> u16 {
-    ((bytes[1] as u16) << 8) + bytes[1] as u16
+    ((bytes[1] as u16) << 8) + bytes[0] as u16
 }
 fn format_implied(opcode: &str) -> String {
     opcode.to_string()
@@ -446,7 +446,7 @@ fn format_a(opcode: &str) -> String {
     format!("{}, A", opcode)
 }
 fn format_zp(opcode: &str, operands: &[u8]) -> String {
-    format!("{} ${:2X}", opcode, operands[1])
+    format!("{} ${:2X}", opcode, operands[0])
 }
 fn format_zp_x(opcode: &str, operands: &[u8]) -> String {
     format!("{}, X", format_zp(opcode, operands))
@@ -455,7 +455,10 @@ fn format_zp_y(opcode: &str, operands: &[u8]) -> String {
     format!("{}, X", format_zp(opcode, operands))
 }
 fn format_relative(opcode: &str, operands: &[u8]) -> String {
-    format!("{}, *{:+X}", opcode, operands[0] as i8)
+    format!(
+        "{}, *{:+X} ({:+})",
+        opcode, operands[0] as i8, operands[0] as i8
+    )
 }
 fn format_absolute(opcode: &str, operands: &[u8]) -> String {
     format!("{}, ${:4X}", opcode, combine_le_bytes(operands))

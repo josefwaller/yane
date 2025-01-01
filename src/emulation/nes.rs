@@ -25,7 +25,7 @@ impl Debug for NesState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{:?} INST={} (OPCODE={:X} OPERANDS={:X?})",
+            "{:?} NEXT INST={} (OPCODE={:X} OPERANDS={:X?})",
             self.cpu,
             format_opcode(self.opcode, self.operands.as_slice()),
             self.opcode,
@@ -161,14 +161,14 @@ impl Nes {
             self.read_byte(pc + 1),
             self.read_byte(pc + 2),
         ]);
+        self.previous_states.push_back(NesState::new(&self, &inst));
+        if self.previous_states.len() > NUMBER_STORED_STATES {
+            self.previous_states.pop_front();
+        }
         // Add instruction for debugging purposes
         match self.decode_and_execute(&inst) {
             Ok((bytes, cycles)) => {
                 self.cpu.p_c = self.cpu.p_c.wrapping_add(bytes);
-                self.previous_states.push_back(NesState::new(&self, &inst));
-                if self.previous_states.len() > NUMBER_STORED_STATES {
-                    self.previous_states.pop_front();
-                }
                 return Ok(cycles as u32);
             }
             Err(s) => {
