@@ -125,8 +125,19 @@ impl Mapper for SxRom {
             }
         }
     }
+    // Todo: dedup
     fn write_ppu(&mut self, ppu_addr: usize, mem: &mut CartridgeMemory, value: u8) {
-        unimplemented!("Write PPU");
+        let mode = (self.control & 0x10) >> 4;
+        let addr = if mode == 0 {
+            bank_addr(0x2000, (self.chr_bank_0 & 0x1E) >> 1, ppu_addr)
+        } else {
+            if ppu_addr < 0x1000 {
+                bank_addr(0x1000, self.chr_bank_0, ppu_addr)
+            } else {
+                bank_addr(0x1000, self.chr_bank_1, ppu_addr)
+            }
+        };
+        mem.write_chr(addr, value);
     }
     fn nametable_arrangement(&self) -> Option<NametableArrangement> {
         Some(match self.control & 0x03 {

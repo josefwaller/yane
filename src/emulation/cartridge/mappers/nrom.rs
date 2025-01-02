@@ -39,6 +39,11 @@ impl Mapper for NRom {
         mem.chr_ram[ppu_addr % mem.chr_ram.len()]
     }
     fn write_ppu(&mut self, ppu_addr: usize, mem: &mut CartridgeMemory, value: u8) {
-        todo!("Write PPU")
+        if mem.chr_ram.len() > 0 {
+            let len = mem.chr_ram.len();
+            mem.chr_ram[ppu_addr % len] = value;
+        } else {
+            warn!("Trying to write to CHR RAM but there is none present");
+        }
     }
 }

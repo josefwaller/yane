@@ -19,10 +19,6 @@ pub struct Ppu {
     pub status: u8,
     /// The OAMADDR register
     pub oam_addr: u8,
-    /// The PPUADDR register
-    pub addr: u16,
-    // Temporary register holding most significant byte of the address
-    temp_addr_msb: u8,
     /// The PPUDATA register (actually the read buffer)
     pub data: u8,
     /// The OAMDMA register
@@ -60,8 +56,6 @@ impl Ppu {
             mask: 0,
             status: 0xA0,
             oam_addr: 0,
-            addr: 0,
-            temp_addr_msb: 0,
             data: 0,
             oam_dma: None,
             palette_ram: [0; 0x20],
@@ -97,10 +91,6 @@ impl Ppu {
                 v
             }
             7 => {
-                if self.in_vblank() {
-                    self.coarse_x_inc();
-                    self.fine_y_inc();
-                }
                 // Set decay value to what's read
                 let v = self.read_vram(cartridge);
                 self.open_bus = v;
@@ -139,16 +129,6 @@ impl Ppu {
             }
             7 => {
                 self.write_vram(value, cartridge);
-                if self.in_vblank() {
-                    self.fine_y_inc();
-                    self.coarse_x_inc();
-                } else {
-                    if self.ctrl & 0x04 == 0 {
-                        self.coarse_x_inc();
-                    } else {
-                        self.fine_y_inc();
-                    }
-                }
             }
             _ => panic!("This should never happen. Addr is {:#X}", addr),
         }
@@ -164,12 +144,10 @@ impl Ppu {
     pub fn write_to_addr(&mut self, value: u8) {
         if self.w {
             // Set address
-            self.addr = ((self.temp_addr_msb as u16) << 8) + value as u16;
             self.t = (self.t & 0xFF00) | value as u32;
             self.v = self.t;
         } else {
             // Set the most significant byte to the temp register
-            self.temp_addr_msb = value;
             self.t = (self.t & 0x00FF) | (value as u32 & 0x3F) << 8;
         }
         self.w = !self.w;
@@ -198,197 +176,208 @@ impl Ppu {
             } else {
                 (self.dot.0 + 1, self.dot.1)
             };
-            if self.dot.0 == 0 {
-                if self.dot.1 == 0 {
-                    self.v = self.t;
-                }
-                // Refresh scanline sprites
-                self.scanline_sprites = [None; 256];
-                let sprite_height = if self.is_8x16_sprites() { 16 } else { 8 };
-                // Get the 8 objs on the scanline
-                let objs: Vec<usize> = self
-                    .oam
-                    .chunks(4)
-                    .enumerate()
-                    .filter(|(_i, obj)| {
-                        (obj[0] as u32 + 1) <= self.dot.1
-                            && obj[0] as u32 + 1 + sprite_height > self.dot.1
-                    })
-                    .map(|(i, _obj)| i)
-                    .collect();
-                // Check for sprite 0 hit
-                if self.is_sprite_rendering_enabled() || self.is_background_rendering_enabled() {
-                    if objs.len() > 8 {
-                        // Check in an incorrectly implemented fashion
-                        // Where instead of checking the coordinates horizontally, we start diagonally right-down from
-                        // the last sprite on the scanline
-                        let last_obj = &self.oam[(4 * objs[7])..(4 * objs[7] + 4)];
-                        (objs[8]..64).enumerate().for_each(|(i, obj_i)| {
-                            let x = last_obj[3] as u32 + i as u32;
-                            let y = last_obj[0] as u32 + i as u32;
-                            if x < 256
-                                && y < 240
-                                && self.oam[4 * obj_i] == last_obj[0].wrapping_add(i as u8)
-                                && self.oam[4 * obj_i + 3] == last_obj[3].wrapping_add(i as u8)
-                            {
-                                self.status |= 0x20;
-                            }
-                        });
+            if self.is_background_rendering_enabled() || self.is_sprite_rendering_enabled() {
+                if self.dot.0 == 0 {
+                    if self.dot.1 == 261 {
+                        // Copy vertical component from T to V
+                        self.v = (self.v & 0x041F) | (self.t & 0x3BE0);
                     }
-                }
-                // Add them to the scanline
-                objs.iter()
-                    .take(if settings.scanline_sprite_limit {
-                        8
-                    } else {
-                        64
-                    })
-                    .for_each(|i| {
-                        let obj = &self.oam[(4 * i)..(4 * i + 4)];
-                        let flip_hor = (obj[2] & 0x40) != 0;
-                        let flip_vert = (obj[2] & 0x80) != 0;
-                        let palette_index = 16 + 4 * (obj[2] & 0x03) as usize;
-                        let y_off = if flip_vert {
-                            (sprite_height - 1 - (self.dot.1 - (obj[0] as u32 + 1))) as usize
-                        } else {
-                            (self.dot.1 - (obj[0] as u32 + 1)) as usize
-                        };
-
-                        let (mut tile_low, mut tile_high) = if self.is_8x16_sprites() {
-                            let tile_addr = 0x1000 * (obj[1] & 0x01) as usize
-                                + 16 * (obj[1] & 0xFE) as usize
-                                + if y_off > 7 { 16 + y_off % 8 } else { y_off };
-                            (
-                                cartridge.read_ppu(tile_addr) as usize,
-                                cartridge.read_ppu(tile_addr + 8) as usize,
-                            )
-                        } else {
-                            let tile_addr =
-                                self.spr_pattern_table_addr() + 16 * obj[1] as usize + y_off;
-                            (
-                                cartridge.read_ppu(tile_addr) as usize,
-                                cartridge.read_ppu(tile_addr + 8) as usize,
-                            )
-                        };
-                        // Optimization - shift tile_high left by one so combining it with tile_low is simply
-                        // (tile_high & 0x02) + (tile_lot & 0x01)
-                        tile_high <<= 1;
-                        let palette = if settings.use_debug_palette {
-                            &DEBUG_PALETTE
-                        } else {
-                            &self.palette_ram
-                        };
-                        (0..8).for_each(|j| {
-                            let pixel_index =
-                                (tile_low as usize & 0x01) + (tile_high as usize & 0x02);
-                            let x = obj[3] as usize + if flip_hor { j } else { 7 - j };
-                            if pixel_index != 0 && x < 256 {
-                                self.scanline_sprites[x].get_or_insert((
-                                    *i,
-                                    palette[palette_index + pixel_index] as usize,
-                                ));
-                            }
-                            tile_low >>= 1;
-                            tile_high >>= 1;
+                    // Refresh scanline sprites
+                    self.scanline_sprites = [None; 256];
+                    let sprite_height = if self.is_8x16_sprites() { 16 } else { 8 };
+                    // Get the 8 objs on the scanline
+                    let objs: Vec<usize> = self
+                        .oam
+                        .chunks(4)
+                        .enumerate()
+                        .filter(|(_i, obj)| {
+                            (obj[0] as u32 + 1) <= self.dot.1
+                                && obj[0] as u32 + 1 + sprite_height > self.dot.1
                         })
-                    });
-            }
-            if self.dot.0 < 256 + 8 {
-                if self.dot.1 < 240 {
-                    match self.dot.0 % 8 {
-                        2 => {
-                            // Fetch nametable
+                        .map(|(i, _obj)| i)
+                        .collect();
+                    // Check for sprite overflow
+                    if self.is_sprite_rendering_enabled() || self.is_background_rendering_enabled()
+                    {
+                        if objs.len() > 8 {
+                            // Check in an incorrectly implemented fashion
+                            // Where instead of checking the coordinates horizontally, we start diagonally right-down from
+                            // the last sprite on the scanline
+                            let last_obj = &self.oam[(4 * objs[7])..(4 * objs[7] + 4)];
+                            (objs[8]..64).enumerate().for_each(|(i, obj_i)| {
+                                let x = last_obj[3] as u32 + i as u32;
+                                let y = last_obj[0] as u32 + i as u32;
+                                if x < 256
+                                    && y < 240
+                                    && self.oam[4 * obj_i] == last_obj[0].wrapping_add(i as u8)
+                                    && self.oam[4 * obj_i + 3] == last_obj[3].wrapping_add(i as u8)
+                                {
+                                    self.status |= 0x20;
+                                }
+                            });
                         }
-                        4 => {
-                            // Fetch attribute table
-                        }
-                        6 => {
-                            // Fetch LSB
-                        }
-                        7 => {
-                            // Fetch MSB
-                            // Also set output
-                            // Get nametable
-                            let nt_addr = cartridge
-                                .transform_nametable_addr(0x2000 + (self.v as usize & 0xFFF));
-                            let nt_num = self.nametable_ram[nt_addr] as usize;
-                            // Get palette index
-                            let palette_byte_addr = cartridge.transform_nametable_addr(
-                                (0x23C0
-                                    + (self.v & 0xC00)
-                                    + ((self.v >> 4) & 0x38)
-                                    + ((self.v >> 2) & 0x07))
-                                    as usize,
-                            );
-                            let palette_byte = self.nametable_ram[palette_byte_addr];
-                            let palette_shift = ((self.v & 0x40) >> 4) + ((self.v & 0x02) >> 0);
-                            let palette_index = ((palette_byte >> palette_shift) as usize) & 0x03;
-                            // Get high/low byte of tile
-                            let fine_y = ((self.v & 0x7000) >> 12) as usize;
-                            let mut tile_low = cartridge
-                                .read_ppu(self.nametable_tile_addr() + 16 * nt_num + fine_y)
-                                as usize;
-                            let mut tile_high = cartridge
-                                .read_ppu(self.nametable_tile_addr() + 16 * nt_num + 8 + fine_y)
-                                as usize;
-                            // Add tile data to output
+                    }
+                    // Add them to the scanline
+                    objs.iter()
+                        .take(if settings.scanline_sprite_limit {
+                            8
+                        } else {
+                            64
+                        })
+                        .for_each(|i| {
+                            let obj = &self.oam[(4 * i)..(4 * i + 4)];
+                            let flip_hor = (obj[2] & 0x40) != 0;
+                            let flip_vert = (obj[2] & 0x80) != 0;
+                            let palette_index = 16 + 4 * (obj[2] & 0x03) as usize;
+                            let y_off = if flip_vert {
+                                (sprite_height - 1 - (self.dot.1 - (obj[0] as u32 + 1))) as usize
+                            } else {
+                                (self.dot.1 - (obj[0] as u32 + 1)) as usize
+                            };
+
+                            let (mut tile_low, mut tile_high) = if self.is_8x16_sprites() {
+                                let tile_addr = 0x1000 * (obj[1] & 0x01) as usize
+                                    + 16 * (obj[1] & 0xFE) as usize
+                                    + if y_off > 7 { 16 + y_off % 8 } else { y_off };
+                                (
+                                    cartridge.read_ppu(tile_addr) as usize,
+                                    cartridge.read_ppu(tile_addr + 8) as usize,
+                                )
+                            } else {
+                                let tile_addr =
+                                    self.spr_pattern_table_addr() + 16 * obj[1] as usize + y_off;
+                                (
+                                    cartridge.read_ppu(tile_addr) as usize,
+                                    cartridge.read_ppu(tile_addr + 8) as usize,
+                                )
+                            };
+                            // Optimization - shift tile_high left by one so combining it with tile_low is simply
+                            // (tile_high & 0x02) + (tile_lot & 0x01)
                             tile_high <<= 1;
-                            (0..8).for_each(|i| {
-                                let palette = if settings.use_debug_palette {
-                                    &DEBUG_PALETTE
-                                } else {
-                                    &self.palette_ram
-                                };
-                                let x: isize = self.dot.0 as isize - i as isize - self.x as isize;
-                                if x >= 0 && x < 256 {
-                                    // Initially set output to background
-                                    let mut output = if self.is_background_rendering_enabled() {
-                                        let index = (tile_low & 0x01) + (tile_high & 0x02);
-                                        if index == 0 {
-                                            None
-                                        } else {
-                                            Some(palette[4 * palette_index + index] as usize)
-                                        }
-                                    } else {
-                                        None
-                                    };
-                                    // Check for sprite
-                                    if let Some((j, p)) = self.scanline_sprites[x as usize] {
-                                        if self.is_sprite_rendering_enabled() {
-                                            // Check for sprite 0 hit
-                                            if !self.sprite_zero_hit()
-                                                && j == 0
-                                                && output.is_some()
-                                                && x < 255
-                                                && (x > 7
-                                                    || (!self.sprite_left_clipping()
-                                                        && !self.background_left_clipping()))
-                                            {
-                                                self.status |= 0x40;
-                                            }
-                                            if self.oam[4 * j + 2] & 0x20 == 0
-                                                || output == None
-                                                || settings.always_sprites_on_top
-                                            {
-                                                output = Some(p);
-                                            }
-                                        }
-                                    }
-                                    self.output[self.dot.1 as usize][x as usize] =
-                                        output.unwrap_or(self.palette_ram[0] as usize);
+                            let palette = if settings.use_debug_palette {
+                                &DEBUG_PALETTE
+                            } else {
+                                &self.palette_ram
+                            };
+                            (0..8).for_each(|j| {
+                                let pixel_index =
+                                    (tile_low as usize & 0x01) + (tile_high as usize & 0x02);
+                                let x = obj[3] as usize + if flip_hor { j } else { 7 - j };
+                                if pixel_index != 0 && x < 256 {
+                                    self.scanline_sprites[x].get_or_insert((
+                                        *i,
+                                        palette[palette_index + pixel_index] as usize,
+                                    ));
                                 }
                                 tile_low >>= 1;
                                 tile_high >>= 1;
-                            });
-                            self.coarse_x_inc();
-                        }
-                        _ => {}
-                    }
+                            })
+                        });
                 }
-            } else if self.dot.0 == 256 + 8 {
-                self.fine_y_inc();
-                // Copy horizontal nametable and coarse X
-                self.v = (self.v & !0x41F) + (self.t & 0x41F);
+                if self.dot.0 < 256 + 8 {
+                    if self.dot.1 < 240 {
+                        match self.dot.0 % 8 {
+                            2 => {
+                                // Fetch nametable
+                            }
+                            4 => {
+                                // Fetch attribute table
+                            }
+                            6 => {
+                                // Fetch LSB
+                            }
+                            7 => {
+                                // Fetch MSB
+                                // Also set output
+                                // Get nametable
+                                let nt_addr = cartridge
+                                    .transform_nametable_addr(0x2000 + (self.v as usize & 0xFFF));
+                                let nt_num = self.nametable_ram[nt_addr] as usize;
+                                // Get palette index
+                                let palette_byte_addr = cartridge.transform_nametable_addr(
+                                    (0x23C0
+                                        + (self.v & 0xC00)
+                                        + ((self.v >> 4) & 0x38)
+                                        + ((self.v >> 2) & 0x07))
+                                        as usize,
+                                );
+                                let palette_byte = self.nametable_ram[palette_byte_addr];
+                                let palette_shift = ((self.v & 0x40) >> 4) + ((self.v & 0x02) >> 0);
+                                let palette_index =
+                                    ((palette_byte >> palette_shift) as usize) & 0x03;
+                                // Get high/low byte of tile
+                                let fine_y = ((self.v & 0x7000) >> 12) as usize;
+                                let mut tile_low = cartridge
+                                    .read_ppu(self.nametable_tile_addr() + 16 * nt_num + fine_y)
+                                    as usize;
+                                let mut tile_high = cartridge
+                                    .read_ppu(self.nametable_tile_addr() + 16 * nt_num + 8 + fine_y)
+                                    as usize;
+                                // Add tile data to output
+                                tile_high <<= 1;
+                                (0..8).for_each(|i| {
+                                    let palette = if settings.use_debug_palette {
+                                        &DEBUG_PALETTE
+                                    } else {
+                                        &self.palette_ram
+                                    };
+                                    let x: isize =
+                                        self.dot.0 as isize - i as isize - self.x as isize;
+                                    if x >= 0 && x < 256 {
+                                        // Initially set output to background
+                                        let mut output = if self.is_background_rendering_enabled() {
+                                            let index = (tile_low & 0x01) + (tile_high & 0x02);
+                                            if index == 0 {
+                                                None
+                                            } else {
+                                                Some(palette[4 * palette_index + index] as usize)
+                                            }
+                                        } else {
+                                            None
+                                        };
+                                        // Check for sprite
+                                        if let Some((j, p)) = self.scanline_sprites[x as usize] {
+                                            if self.is_sprite_rendering_enabled() {
+                                                // Check for sprite 0 hit
+                                                if !self.sprite_zero_hit()
+                                                    && j == 0
+                                                    && output.is_some()
+                                                    && x < 255
+                                                    && (x > 7
+                                                        || (!self.sprite_left_clipping()
+                                                            && !self.background_left_clipping()))
+                                                {
+                                                    self.status |= 0x40;
+                                                }
+                                                if self.oam[4 * j + 2] & 0x20 == 0
+                                                    || output == None
+                                                    || settings.always_sprites_on_top
+                                                {
+                                                    output = Some(p);
+                                                }
+                                            }
+                                        }
+                                        self.output[self.dot.1 as usize][x as usize] =
+                                            output.unwrap_or(self.palette_ram[0] as usize);
+                                    }
+                                    tile_low >>= 1;
+                                    tile_high >>= 1;
+                                });
+                                self.coarse_x_inc();
+                            }
+                            _ => {}
+                        }
+                    }
+                } else if self.dot.0 == 256 + 8 && !self.in_vblank() {
+                    self.fine_y_inc();
+                    // Copy horizontal nametable and coarse X
+                    self.v = (self.v & !0x41F) + (self.t & 0x41F);
+                }
+            } else {
+                // Set to black
+                if self.dot.0 < 256 && self.dot.1 < 240 {
+                    self.output[self.dot.1 as usize][self.dot.0 as usize] = 0x0F;
+                }
             }
             // Passes the timing test
             if self.dot == (13, 241) {
@@ -431,44 +420,54 @@ impl Ppu {
     }
 
     pub fn in_vblank(&self) -> bool {
-        // self.dot.0 + DOTS_PER_SCANLINE * self.dot.1 > 1 + DOTS_PER_SCANLINE * 241 || self.dot.1 == 0
-        self.dot.1 < 1 || self.dot.1 > 240
+        self.dot.1 >= 240
     }
     /// Write a single byte to VRAM at `PPUADDR`
     /// Increments `PPUADDR` by 1 or by 32 depending `PPUSTATUS`
     fn write_vram(&mut self, value: u8, cartridge: &mut Cartridge) {
-        if self.addr < 0x2000 {
-            cartridge.write_chr(self.addr as usize, value);
-        } else if self.addr < 0x3000 {
-            self.nametable_ram[cartridge.transform_nametable_addr(self.addr as usize)] = value;
-        } else if self.addr >= 0x3F00 {
-            let palette_index = Ppu::get_palette_index(self.addr);
+        let addr = self.v & 0x3FFF;
+        if addr < 0x2000 {
+            cartridge.write_ppu(addr as usize, value);
+        } else if addr < 0x3000 {
+            self.nametable_ram[cartridge.transform_nametable_addr(addr as usize)] = value;
+        } else if addr >= 0x3F00 {
+            let palette_index = Ppu::get_palette_index(addr as u16);
             self.palette_ram[palette_index] = value;
         }
-        self.inc_addr();
+        if self.in_vblank() || !self.is_background_rendering_enabled() {
+            self.inc_addr();
+        } else {
+            self.coarse_x_inc();
+            self.fine_y_inc();
+        }
     }
 
     /// Read a single byte from VRAM
     fn read_vram(&mut self, cartridge: &Cartridge) -> u8 {
-        let addr = self.addr;
-        self.inc_addr();
-        if self.addr < 0x2000 {
+        let addr = self.v & 0x3FFF;
+        if self.in_vblank() || !self.is_background_rendering_enabled() {
+            self.inc_addr();
+        } else {
+            self.coarse_x_inc();
+            self.fine_y_inc();
+        }
+        if addr < 0x2000 {
             // Set buffer to cartridge read value and return old buffer
             let b = self.data;
             self.data = cartridge.read_ppu(addr as usize);
             return b;
         }
-        if self.addr < 0x3F00 {
+        if addr < 0x3F00 {
             // Update buffer to nametable value and return old buffer
             let b = self.data;
             self.data = self.nametable_ram[cartridge.transform_nametable_addr(addr as usize)];
             return b;
         }
         // Palette ram updates the buffer but also returns the current value
-        let palette_index = Ppu::get_palette_index(addr);
+        let palette_index = Ppu::get_palette_index(addr as u16);
         let b = (self.open_bus & 0xC0) | (self.palette_ram[palette_index] & 0x3F);
         // Read the mirrored nametable byte into memory
-        self.data = self.nametable_ram[addr as usize % self.nametable_ram.len()];
+        self.data = self.nametable_ram[cartridge.transform_nametable_addr(addr as usize)];
         b
     }
 
@@ -482,9 +481,8 @@ impl Ppu {
     }
 
     fn inc_addr(&mut self) {
-        self.addr = self
-            .addr
-            .wrapping_add(if self.ctrl & 0x04 == 0 { 1 } else { 32 });
+        // V is 14 bits long, not 16
+        self.v = (self.v + if self.ctrl & 0x04 == 0 { 1 } else { 32 }) % 0x3FFF;
     }
 
     pub fn is_8x16_sprites(&self) -> bool {

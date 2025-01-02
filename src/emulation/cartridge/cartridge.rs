@@ -28,6 +28,15 @@ impl CartridgeMemory {
             self.chr_rom[addr % self.chr_rom.len()]
         }
     }
+    pub fn write_chr(&mut self, addr: usize, value: u8) {
+        if self.chr_rom.len() == 0 {
+            let i = addr % self.chr_ram.len();
+            self.chr_ram[i] = value;
+        } else {
+            let i = addr % self.chr_rom.len();
+            self.chr_rom[i] = value;
+        }
+    }
 }
 
 /// An NES cartridge, or perhaps more accurately, an iNES file.
@@ -149,15 +158,18 @@ impl Cartridge {
     pub fn read_ppu(&self, addr: usize) -> u8 {
         self.mapper.read_ppu(addr, &self.memory)
     }
+    pub fn write_ppu(&mut self, addr: usize, value: u8) {
+        self.mapper.write_ppu(addr, &mut self.memory, value);
+    }
     /// Write a byte to the cartridge's memory given an address in PPU memory space
     /// Usually writes tot CHR RAM.
     /// Todo: Use mapper here?
-    pub fn write_chr(&mut self, addr: usize, value: u8) {
-        // TBA - only do this if there is CHR RAM
-        if addr < self.memory.chr_ram.len() {
-            self.memory.chr_ram[addr] = value;
-        }
-    }
+    // pub fn write_chr(&mut self, addr: usize, value: u8) {
+    //     // TBA - only do this if there is CHR RAM
+    //     if addr < self.memory.chr_ram.len() {
+    //         self.memory.chr_ram[addr] = value;
+    //     }
+    // }
     pub fn get_pattern_table(&self) -> &[u8] {
         if self.memory.chr_ram.len() == 0 {
             return self.memory.chr_rom.as_slice();

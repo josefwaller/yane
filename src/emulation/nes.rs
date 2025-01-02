@@ -792,11 +792,29 @@ impl Nes {
     pub fn write_abs(&mut self, addr: &[u8], value: u8) {
         self.write_byte(Nes::get_absolute_addr(addr), value)
     }
+    // Check whether an absolute address with offset (i.e. $1234, X) would cross a page
+    fn addr_offset_is_page_cross(addr: &[u8], offset: u8) -> bool {
+        return addr[0] as u16 + offset as u16 > 0xFF;
+    }
     // Read using absolute addressing with an offset
     fn read_abs_offset(&mut self, addr: &[u8], offset: u8) -> u8 {
+        if Nes::addr_offset_is_page_cross(addr, offset) {
+            // Do a dummy read
+            self.read_byte(
+                (Nes::get_absolute_addr(addr) & 0xFF00)
+                    | (Nes::get_absolute_addr_offset(addr, offset) & 0x00FF),
+            );
+        }
         self.read_byte(Nes::get_absolute_addr_offset(addr, offset))
     }
     fn write_abs_offset(&mut self, addr: &[u8], offset: u8, value: u8) {
+        if Nes::addr_offset_is_page_cross(addr, offset) {
+            // Do a dummy read
+            self.read_byte(
+                (Nes::get_absolute_addr(addr) & 0xFF00)
+                    | (Nes::get_absolute_addr_offset(addr, offset) & 0x00FF),
+            );
+        }
         self.write_byte(Nes::get_absolute_addr_offset(addr, offset), value)
     }
     /// Read a byte from memory using absolute addressing with X register offset.

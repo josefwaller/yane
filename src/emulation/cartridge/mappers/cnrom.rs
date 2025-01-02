@@ -25,6 +25,6 @@ impl Mapper for CnRom {
         mem.chr_rom[bank_addr(0x2000, self.chr_bank_select, ppu_addr) % mem.chr_rom.len()]
     }
     fn write_ppu(&mut self, ppu_addr: usize, mem: &mut crate::CartridgeMemory, value: u8) {
-        unimplemented!("Write PPU for CnRom");
+        // unimplemented!("Write PPU for CnRom");
     }
 }
