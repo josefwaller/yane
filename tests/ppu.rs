@@ -11,7 +11,7 @@ fn test_oam_ram() {
 }
 #[test]
 fn test_vbl_timing() {
-    rom_test!("./test_roms/ppu_vbl_timing.nes");
+    rom_test!("./test_roms/ppu_vbl_clear_timing.nes");
 }
 #[test]
 fn test_vram_access() {

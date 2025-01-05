@@ -133,7 +133,7 @@ fn main() {
                 if frame_count == 600 {
                     frame_count = 0;
                     let now = Instant::now();
-                    debug!(
+                    info!(
                         "Over last 600 frames: Avg FPS: {}, duration: {:?}, avg cycles: {}, avg wait time {:#?}",
                         600.0
                             / (now.duration_since(last_hundred_frames).as_millis() as f32 / 1000.0),

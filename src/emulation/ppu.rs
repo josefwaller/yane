@@ -380,7 +380,7 @@ impl Ppu {
                 }
             }
             // Passes the timing test
-            if self.dot == (13, 241) {
+            if self.dot == (1, 241) {
                 // Set vblank
                 self.status |= 0x80;
                 to_return = true;
