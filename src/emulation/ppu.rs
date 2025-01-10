@@ -430,6 +430,10 @@ impl Ppu {
     pub fn in_vblank(&self) -> bool {
         self.dot.1 >= 240
     }
+    pub fn can_access_vram(&self) -> bool {
+        self.in_vblank()
+            || (!self.is_background_rendering_enabled() && !self.is_sprite_rendering_enabled())
+    }
     /// Write a single byte to VRAM at `PPUADDR`
     /// Increments `PPUADDR` by 1 or by 32 depending `PPUSTATUS`
     fn write_vram(&mut self, value: u8, cartridge: &mut Cartridge) {
@@ -442,7 +446,7 @@ impl Ppu {
             let palette_index = Ppu::get_palette_index(addr as u16);
             self.palette_ram[palette_index] = value;
         }
-        if self.in_vblank() || !self.is_background_rendering_enabled() {
+        if self.can_access_vram() {
             self.inc_addr();
         } else {
             self.coarse_x_inc();
@@ -453,7 +457,7 @@ impl Ppu {
     /// Read a single byte from VRAM
     fn read_vram(&mut self, cartridge: &Cartridge) -> u8 {
         let addr = self.v & 0x3FFF;
-        if self.in_vblank() || !self.is_background_rendering_enabled() {
+        if self.can_access_vram() {
             self.inc_addr();
         } else {
             self.coarse_x_inc();
