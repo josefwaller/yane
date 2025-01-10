@@ -32,6 +32,14 @@ impl Mapper for UxRom {
         mem.chr_ram[ppu_addr % mem.chr_ram.len()]
     }
     fn write_ppu(&mut self, ppu_addr: usize, mem: &mut CartridgeMemory, value: u8) {
-        unimplemented!("Write PPU")
+        if mem.chr_ram.len() == 0 {
+            warn!(
+                "Tring to write to CHR RAM when there is none (Address = {:X})",
+                ppu_addr
+            );
+        } else {
+            let l = mem.chr_ram.len();
+            mem.chr_ram[ppu_addr % l] = value;
+        }
     }
 }

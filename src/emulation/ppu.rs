@@ -46,6 +46,8 @@ pub struct Ppu {
     open_bus: u8,
     // Cycles since open bus was written
     open_bus_dots: u32,
+    // Cycles since status byte was read
+    status_dots: u32,
 }
 
 impl Ppu {
@@ -69,6 +71,7 @@ impl Ppu {
             output: [[0; 256]; 240],
             open_bus: 0,
             open_bus_dots: 0,
+            status_dots: 0,
         }
     }
 
@@ -81,6 +84,7 @@ impl Ppu {
                 self.status &= 0x7F;
                 // Clear W
                 self.w = false;
+                self.status_dots = 0;
                 (status & 0xE0) | (self.open_bus & 0x1F)
             }
             4 => {
@@ -167,6 +171,7 @@ impl Ppu {
         // Todo: tidy
         let mut to_return = false;
         (0..dots).for_each(|_| {
+            self.status_dots = self.status_dots.saturating_add(1);
             self.dot = if self.dot.0 == DOTS_PER_SCANLINE - 1 {
                 if self.dot.1 == SCANLINES_PER_FRAME - 1 {
                     (0, 0)
@@ -383,7 +388,10 @@ impl Ppu {
             if self.dot == (1, 241) {
                 // Set vblank
                 self.status |= 0x80;
-                to_return = true;
+                // Skip NMI if we read VBlank recently
+                if self.status_dots > 3 {
+                    to_return = true;
+                }
             } else if self.dot == (1, 261) {
                 // Clear VBlank, sprite overflow and sprite 0 hit flags
                 self.status &= 0x1F;
