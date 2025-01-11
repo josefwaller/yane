@@ -6,6 +6,7 @@ use log::*;
 const DOTS_PER_SCANLINE: u32 = 341;
 const SCANLINES_PER_FRAME: u32 = 262;
 const DOTS_PER_OPEN_BUS_DECAY: u32 = 1_789_000 / 3;
+const BLACK: usize = 0x0F;
 
 #[derive(Debug)]
 pub struct Ppu {
@@ -109,28 +110,46 @@ impl Ppu {
         self.open_bus = value;
         self.open_bus_dots = 0;
         match addr % 8 {
+            // PPUCTRL
             0 => {
                 self.ctrl = value;
                 self.t = (self.t & !0x0C00) | (((value & 0x03) as u32) << 10);
             }
+            // PPUMASK
             1 => self.mask = value,
+            // PPUSTATUS
             2 => self.w = false,
+            // OAMADDR
             3 => self.oam_addr = value,
+            // OAMDATA
             4 => self.write_oam(0, value),
+            // PPUSCROLL
             5 => {
                 if self.w {
+                    // Second write (Y)
                     self.t = (self.t & 0x0C1F)
                         | (((value & 0x07) as u32) << 12)
                         | (((value & 0x0F8) as u32) << 2);
                 } else {
+                    // First write (X)
                     self.t = (self.t & 0xFFE0) | (value >> 3) as u32;
                     self.x = (value & 0x07) as u32;
                 }
                 self.w = !self.w;
             }
+            // PPUADDR
             6 => {
-                self.write_to_addr(value);
+                if self.w {
+                    // Second write (LSB)
+                    self.t = (self.t & 0xFF00) | value as u32;
+                    self.v = self.t;
+                } else {
+                    // First write (MSB)
+                    self.t = (self.t & 0x00FF) | (value as u32 & 0x3F) << 8;
+                }
+                self.w = !self.w;
             }
+            // PPUDATA
             7 => {
                 self.write_vram(value, cartridge);
             }
@@ -145,17 +164,6 @@ impl Ppu {
         self.oam_addr = self.oam_addr.wrapping_add(1);
     }
 
-    pub fn write_to_addr(&mut self, value: u8) {
-        if self.w {
-            // Set address
-            self.t = (self.t & 0xFF00) | value as u32;
-            self.v = self.t;
-        } else {
-            // Set the most significant byte to the temp register
-            self.t = (self.t & 0x00FF) | (value as u32 & 0x3F) << 8;
-        }
-        self.w = !self.w;
-    }
     // Return whether to trigger an NMI
     pub fn advance_dots(
         &mut self,
@@ -185,7 +193,7 @@ impl Ppu {
                 if self.dot.0 == 0 {
                     if self.dot.1 == 261 {
                         // Copy vertical component from T to V
-                        self.v = (self.v & 0x041F) | (self.t & 0x3BE0);
+                        self.v = (self.v & 0x041F) | (self.t & !0x041F);
                     }
                     // Refresh scanline sprites
                     self.scanline_sprites = [None; 256];
@@ -202,25 +210,22 @@ impl Ppu {
                         .map(|(i, _obj)| i)
                         .collect();
                     // Check for sprite overflow
-                    if self.is_sprite_rendering_enabled() || self.is_background_rendering_enabled()
-                    {
-                        if objs.len() > 8 {
-                            // Check in an incorrectly implemented fashion
-                            // Where instead of checking the coordinates horizontally, we start diagonally right-down from
-                            // the last sprite on the scanline
-                            let last_obj = &self.oam[(4 * objs[7])..(4 * objs[7] + 4)];
-                            (objs[8]..64).enumerate().for_each(|(i, obj_i)| {
-                                let x = last_obj[3] as u32 + i as u32;
-                                let y = last_obj[0] as u32 + i as u32;
-                                if x < 256
-                                    && y < 240
-                                    && self.oam[4 * obj_i] == last_obj[0].wrapping_add(i as u8)
-                                    && self.oam[4 * obj_i + 3] == last_obj[3].wrapping_add(i as u8)
-                                {
-                                    self.status |= 0x20;
-                                }
-                            });
-                        }
+                    if objs.len() > 8 {
+                        // Check in an incorrectly implemented fashion
+                        // Where instead of checking the coordinates horizontally, we start diagonally right-down from
+                        // the last sprite on the scanline
+                        let last_obj = &self.oam[(4 * objs[7])..(4 * objs[7] + 4)];
+                        (objs[8]..64).enumerate().for_each(|(i, obj_i)| {
+                            let x = last_obj[3] as u32 + i as u32;
+                            let y = last_obj[0] as u32 + i as u32;
+                            if x < 256
+                                && y < 240
+                                && self.oam[4 * obj_i] == last_obj[0].wrapping_add(i as u8)
+                                && self.oam[4 * obj_i + 3] == last_obj[3].wrapping_add(i as u8)
+                            {
+                                self.status |= 0x20;
+                            }
+                        });
                     }
                     // Add them to the scanline
                     objs.iter()
@@ -279,7 +284,12 @@ impl Ppu {
                             })
                         });
                 }
-                if self.dot.0 < 256 + 8 {
+                // Add a border around
+                if (self.dot.1 < 8 || (self.dot.1 > 240 - 8 && self.dot.1 < 240))
+                    && self.dot.0 < 256
+                {
+                    self.output[self.dot.1 as usize][self.dot.0 as usize] = BLACK;
+                } else if self.dot.0 < 256 + 8 {
                     if self.dot.1 < 240 {
                         match self.dot.0 % 8 {
                             2 => {
@@ -296,7 +306,7 @@ impl Ppu {
                                 // Also set output
                                 // Get nametable
                                 let nt_addr = cartridge
-                                    .transform_nametable_addr(0x2000 + (self.v as usize & 0xFFF));
+                                    .transform_nametable_addr(0x2000 + (self.v as usize & 0x0FFF));
                                 let nt_num = self.nametable_ram[nt_addr] as usize;
                                 // Get palette index
                                 let palette_byte_addr = cartridge.transform_nametable_addr(
@@ -373,7 +383,7 @@ impl Ppu {
                             _ => {}
                         }
                     }
-                } else if self.dot.0 == 256 + 8 && !self.in_vblank() {
+                } else if self.dot.0 == 256 + 8 && !self.can_access_vram() {
                     self.fine_y_inc();
                     // Copy horizontal nametable and coarse X
                     self.v = (self.v & !0x41F) + (self.t & 0x41F);
@@ -417,6 +427,8 @@ impl Ppu {
             if self.v & 0x3E0 == 0x3A0 {
                 // Switch vertical nametable and reset both coarse and fine Y
                 self.v ^ (0x800 + 0x3A0 + 0x7000)
+            } else if self.v & 0x3E0 == 0x3E0 {
+                self.v ^ (0x7000 | 0x3E0)
             } else {
                 // Reset fine Y and increment coarse Y
                 self.v - 0x7000 + 0x20

@@ -14,7 +14,7 @@ pub trait Mapper {
     fn get_debug_string(&self) -> String {
         "".to_string()
     }
-    fn advance_cpu_cycles(&mut self, cycles: u32) {}
+    fn advance_cpu_cycles(&mut self, _cycles: u32) {}
 }
 
 pub fn get_mapper(mapper_id: usize) -> Box<dyn Mapper> {

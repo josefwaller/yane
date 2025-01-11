@@ -21,7 +21,7 @@ impl Mapper for UxRom {
         let final_addr = (cpu_addr - 0x8000 + self.bank * BANK_SIZE);
         mem.prg_rom[final_addr % mem.prg_rom.len()]
     }
-    fn write_cpu(&mut self, cpu_addr: usize, mem: &mut CartridgeMemory, value: u8) {
+    fn write_cpu(&mut self, _cpu_addr: usize, _mem: &mut CartridgeMemory, value: u8) {
         self.bank = value as usize;
     }
     fn read_ppu(&self, ppu_addr: usize, mem: &CartridgeMemory) -> u8 {
