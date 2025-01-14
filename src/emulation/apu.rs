@@ -159,7 +159,6 @@ impl AudioRegister for TriangleRegister {
     fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
         if self.enabled {
-            self.sequencer = 0;
             self.timer = 0;
         } else {
             self.length_counter.load = 0;
@@ -272,8 +271,7 @@ pub struct Apu {
     pub dmc_register: DmcRegister,
     irq_inhibit: bool,
     irq_flag: bool,
-    // false = 0, true = 1
-    mode: bool,
+    mode: u32,
     // Timer to get to next step
     cycles: i32,
     // Queue of audio samples
@@ -289,7 +287,7 @@ impl Apu {
             dmc_register: DmcRegister::default(),
             irq_inhibit: true,
             irq_flag: false,
-            mode: false,
+            mode: 0,
             cycles: 0,
             queue: Vec::new(),
         }
@@ -361,9 +359,8 @@ impl Apu {
                 d.set_enabled((value & 0x10) != 0);
             }
             0x4017 => {
-                self.mode = (value & 0x80) != 0;
-                let offset = if self.cycles % 2 == 0 { 3 } else { 4 };
-                if self.mode {
+                self.mode = (value as u32 & 0x80) >> 7;
+                if self.mode == 1 {
                     self.on_half_frame();
                     self.on_quater_frame();
                 }
@@ -372,7 +369,6 @@ impl Apu {
                 } else {
                     self.cycles = -4;
                 }
-                // self.cycles = 0;
                 self.irq_inhibit = (value & 0x40) != 0;
                 if self.irq_inhibit {
                     self.irq_flag = false;
@@ -416,7 +412,8 @@ impl Apu {
             }
             1 => {
                 reg.sweep_enabled = (value & 0x80) != 0;
-                reg.sweep_period = (value as usize & 0x70) >> 4;
+                reg.sweep_period = ((value as usize & 0x70) >> 4) + 1;
+                reg.sweep_divider = reg.sweep_period;
                 reg.sweep_negate = (value & 0x08) != 0;
                 reg.sweep_shift = (value & 0x07) as usize;
             }
@@ -435,7 +432,7 @@ impl Apu {
                 // Restart sequencer
                 reg.sequencer = 0;
             }
-            _ => {} // _ => panic!("Invalid address given to APU"),
+            _ => panic!("Should never happen"),
         }
     }
     pub fn advance_cpu_cycles(&mut self, cpu_cycles: u32, cartridge: &mut Cartridge) {
@@ -445,21 +442,29 @@ impl Apu {
                 self.queue.push(self.mixer_output());
             }
             self.cycles += 1;
-            if STEPS.contains(&self.cycles) {
-                if self.cycles != STEPS[2] || self.mode == false {
+            if self.mode == 0 {
+                if self.cycles == STEPS[0] {
                     self.on_quater_frame();
-                }
-                if self.cycles == STEPS[1] {
+                } else if self.cycles == STEPS[1] {
+                    self.on_quater_frame();
                     self.on_half_frame();
-                } else if (!self.mode && self.cycles == STEPS[3])
-                    || (self.mode && self.cycles == STEPS[4])
-                {
+                } else if self.cycles == STEPS[2] {
+                    self.on_quater_frame();
+                } else if self.cycles == 29828 {
+                    self.on_quater_frame();
                     self.on_half_frame();
-                    if !self.mode {
-                        self.irq_flag = !self.irq_inhibit;
-                    }
-                    // Restart cycle
                     self.cycles = 0;
+                    self.irq_flag = !self.irq_inhibit;
+                }
+            } else if self.mode == 1 {
+                if STEPS[0..3].contains(&self.cycles) || STEPS[4] == self.cycles {
+                    self.on_quater_frame();
+                    if self.cycles == STEPS[1] || self.cycles == STEPS[4] {
+                        self.on_half_frame();
+                        if self.cycles == STEPS[4] {
+                            self.cycles = 0;
+                        }
+                    }
                 }
             }
             // Pulse registers are clocked every other CPU cycle
@@ -476,7 +481,7 @@ impl Apu {
             // This is done to stop a weird clicking sound when the wave is suddenly cut off/on.
             // `timer` and `sequencer` are both set to 0 on re-enable so it doesn't make any difference
             self.triangle_register.timer = (self.triangle_register.timer + 1)
-                % max(self.triangle_register.timer_reload as u32, 1);
+                % (self.triangle_register.timer_reload as u32 + 1);
             if self.triangle_register.timer == 0 {
                 self.triangle_register.sequencer = (self.triangle_register.sequencer + 1) % 32;
                 // If the triangle register should be muted and we just finished a wave
@@ -538,33 +543,43 @@ impl Apu {
         }
     }
     pub fn on_half_frame(&mut self) {
-        self.pulse_registers.iter_mut().for_each(|reg| {
-            // Clock length halt counter
-            reg.length_counter.clock();
-            // Clock sweep divider
-            if reg.sweep_divider == 0 {
-                // Compute sweep change
-                let sweep_change = reg.timer_reload >> reg.sweep_shift;
-                reg.sweep_target_period = max(
-                    reg.timer_reload as i32
-                        + if reg.sweep_negate {
-                            -(sweep_change as i32) - 1
-                        } else {
-                            -(sweep_change as i32)
-                        },
-                    0,
-                ) as usize;
-                if reg.sweep_enabled
-                    && reg.timer_reload >= 8
-                    && reg.sweep_shift > 0
-                    && reg.sweep_target_period < 0x7FF
-                {
-                    reg.timer_reload = reg.sweep_target_period;
+        self.pulse_registers
+            .iter_mut()
+            .enumerate()
+            .for_each(|(i, reg)| {
+                // Clock length halt counter
+                reg.length_counter.clock();
+                // Clock sweep divider
+                if reg.sweep_divider == 0 {
+                    // Reset divider
+                    reg.sweep_divider = reg.sweep_period;
+                    // Compute sweep change
+                    let sweep_change = reg.timer_reload >> reg.sweep_shift;
+                    reg.sweep_target_period = max(
+                        reg.timer_reload as i32
+                            + if reg.sweep_negate {
+                                // Pulse 1 (i = 0) negates to one's complement, Puse 2 uses two's complement
+                                -(if i == 0 {
+                                    sweep_change + 1
+                                } else {
+                                    sweep_change
+                                } as i32)
+                            } else {
+                                sweep_change as i32
+                            },
+                        0,
+                    ) as usize;
+                    if reg.sweep_enabled
+                        && reg.timer_reload >= 8
+                        && reg.sweep_shift > 0
+                        && reg.sweep_target_period < 0x7FF
+                    {
+                        reg.timer_reload = reg.sweep_target_period;
+                    }
+                } else {
+                    reg.sweep_divider -= 1;
                 }
-            } else {
-                reg.sweep_divider -= 1;
-            }
-        });
+            });
         self.triangle_register.length_counter.clock();
         self.noise_register.length_counter.clock();
     }
