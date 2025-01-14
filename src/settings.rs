@@ -16,6 +16,8 @@ pub struct Settings {
     pub scanline_sprite_limit: bool,
     // Whether to always draw sprites on top of the background
     pub always_sprites_on_top: bool,
+    // Whether to record audio
+    pub record_audio: bool,
 }
 
 impl Default for Settings {
@@ -24,10 +26,11 @@ impl Default for Settings {
             oam_debug: false,
             use_debug_palette: false,
             paused: false,
-            volume: 0.0,
+            volume: 1.0,
             speed: 1.0,
             scanline_sprite_limit: true,
             always_sprites_on_top: false,
+            record_audio: false,
         }
     }
 }

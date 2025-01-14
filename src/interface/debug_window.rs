@@ -1,4 +1,4 @@
-use std::cmp::min;
+use std::{cmp::min, time::Duration};
 
 use log::*;
 
@@ -335,6 +335,9 @@ impl DebugWindow {
                             imgui::Image::new(TextureId::new(2), [64.0 * 8.0, 60.0 * 8.0])
                                 .build(&ui);
                         }
+                    }
+                    if ui.collapsing_header("Audio", TreeNodeFlags::empty()) {
+                        ui.checkbox("Record?", &mut settings.record_audio);
                     }
                 });
             let draw_data = self.imgui.render();

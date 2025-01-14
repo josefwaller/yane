@@ -10,10 +10,12 @@ use std::{
     ffi::OsStr,
     fs::OpenOptions,
     io::BufReader,
+    path::Path,
     time::{Duration, Instant},
 };
 use std::{ffi::OsString, thread::sleep};
 use std::{fs::File, path::PathBuf};
+use wavers::{write, Samples};
 use yane::{
     Cartridge, DebugWindow, Nes, Screen, Settings, Window, CPU_CYCLES_PER_OAM,
     CPU_CYCLES_PER_SCANLINE, CPU_CYCLES_PER_VBLANK,
@@ -183,6 +185,11 @@ fn main() {
                 delta += emu_elapsed;
             }
         }
+        // Save audio recording
+
+        let data = window.audio.all_samples.into_boxed_slice();
+        let samples = Samples::new(data);
+        write(&Path::new("./sample.wav"), &samples, 1_789_000, 1).unwrap();
         // Save game if we want to
         if nes.cartridge.has_battery_backed_ram() {
             info!("Writing savedata to to {:#?}", savedata_path);

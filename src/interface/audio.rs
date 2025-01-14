@@ -7,12 +7,14 @@ use sdl2::{
     audio::{AudioQueue, AudioSpecDesired},
     Sdl,
 };
+use wavers::Samples;
 
 pub struct Audio {
     queue: AudioQueue<f32>,
     resampler: SincFixedIn<f32>,
     data_queue: Vec<f32>,
     last_speed: f32,
+    pub all_samples: Vec<f32>,
 }
 
 impl Audio {
@@ -52,6 +54,7 @@ impl Audio {
             resampler,
             data_queue: Vec::<f32>::new(),
             last_speed: 1.0,
+            all_samples: Vec::new(),
         }
     }
     pub fn update_audio(&mut self, nes: &mut Nes, settings: &Settings) {
@@ -60,7 +63,7 @@ impl Audio {
             info!("Queue is too big, clearing (was {})", self.queue.size());
             self.queue.clear();
         } else if self.queue.size() == 0 {
-            // warn!("Queue is empty!");
+            warn!("Queue is empty!");
         }
         // Get and transform data
         let data = nes
@@ -70,6 +73,9 @@ impl Audio {
             .map(|x| settings.volume * x)
             .collect::<Vec<f32>>();
         self.data_queue.extend_from_slice(&data);
+        if settings.record_audio {
+            self.all_samples.extend_from_slice(&data);
+        }
         // Downsample to audio output rate
         let input_size = self.resampler.input_frames_next();
         let mut out = vec![vec![0.0; self.resampler.output_frames_max()]; 1];

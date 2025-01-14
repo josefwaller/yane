@@ -5,7 +5,7 @@ use sdl2::{keyboard::Keycode, video::GLContext, Sdl, VideoSubsystem};
 pub struct Window {
     window: sdl2::video::Window,
     gl_context: GLContext,
-    audio: Audio,
+    pub audio: Audio,
     screen: Screen,
 }
 

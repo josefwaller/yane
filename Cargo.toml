@@ -16,6 +16,7 @@ rubato = "0.16.1"
 sdl2 = "0.37.0"
 simplelog = "0.12.2"
 test-case = "3.3.1"
+wavers = "1.5.1"
 
 [features]
 default = ["gui"]
