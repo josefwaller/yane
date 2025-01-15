@@ -338,6 +338,11 @@ impl DebugWindow {
                     }
                     if ui.collapsing_header("Audio", TreeNodeFlags::empty()) {
                         ui.checkbox("Record?", &mut settings.record_audio);
+                        ui.text(format!("Pulse 0 : {:?}", nes.apu.pulse_registers[0]));
+                        ui.text(format!("Pulse 1 : {:?}", nes.apu.pulse_registers[1]));
+                        ui.text(format!("Triangle: {:?}", nes.apu.triangle_register));
+                        ui.text(format!("Noise   : {:?}", nes.apu.noise_register));
+                        ui.text(format!("DMC     : {:?}", nes.apu.dmc_register));
                     }
                 });
             let draw_data = self.imgui.render();

@@ -1,4 +1,5 @@
 use std::cmp::max;
+use std::fmt::Debug;
 
 use log::*;
 
@@ -65,7 +66,7 @@ impl Envelope {
         }
     }
 }
-#[derive(Clone, Copy, Default, Debug)]
+#[derive(Clone, Copy, Default)]
 pub struct PulseRegister {
     /// The index of the duty to use
     pub duty: u32,
@@ -107,12 +108,7 @@ impl AudioRegister for PulseRegister {
             || self.timer_reload < 8
     }
     fn value(&self) -> u32 {
-        if !self.enabled
-            || self.sweep_target_period > 0x7FF
-            || self.length_counter.muted()
-            || self.timer_reload < 8
-            || DUTY_CYCLES[self.duty as usize][self.sequencer] == 0
-        {
+        if self.muted() || DUTY_CYCLES[self.duty as usize][self.sequencer] == 0 {
             0
         } else {
             self.envelope.value()
@@ -125,12 +121,27 @@ impl AudioRegister for PulseRegister {
         }
     }
 }
+impl Debug for PulseRegister {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "enabled={} timer={:3X} target_period={:X} duty={:X} length={:?} sweep=[enabled={} divider={:X}]",
+            self.enabled,
+            self.timer_reload,
+            self.sweep_target_period,
+            self.duty,
+            self.length_counter,
+            self.sweep_enabled,
+            self.sweep_divider
+        )
+    }
+}
 const LENGTH_TABLE: [usize; 0x20] = [
     0x0A, 0xFE, 0x14, 0x02, 0x28, 0x04, 0x50, 0x06, 0xA0, 0x08, 0x3C, 0x0A, 0x0E, 0x0C, 0x1A, 0x0E,
     0x0C, 0x10, 0x18, 0x12, 0x30, 0x14, 0x60, 0x16, 0xC0, 0x18, 0x48, 0x1A, 0x10, 0x1C, 0x20, 0x1E,
 ];
 
-#[derive(Clone, Copy, Default, Debug)]
+#[derive(Clone, Copy, Default)]
 pub struct TriangleRegister {
     pub length_counter: LengthCounter,
     pub linear_counter: usize,
@@ -141,6 +152,15 @@ pub struct TriangleRegister {
     pub enabled: bool,
     pub sequencer: u32,
     pub timer: u32,
+}
+impl Debug for TriangleRegister {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "enabled={} timer={:3X} length={:?} linear={:X}",
+            self.enabled, self.timer_reload, self.length_counter, self.linear_counter
+        )
+    }
 }
 impl AudioRegister for TriangleRegister {
     fn muted(&self) -> bool {
@@ -169,7 +189,7 @@ impl AudioRegister for TriangleRegister {
 const NOISE_TIMER_PERIODS: [u32; 16] = [
     4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068,
 ];
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct NoiseRegister {
     pub length_counter: LengthCounter,
     pub enabled: bool,
@@ -180,6 +200,15 @@ pub struct NoiseRegister {
     pub mode: bool,
     // This is actually 15 bits wide
     pub shift: u16,
+}
+impl Debug for NoiseRegister {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "enabled={} timer={:3X} length={:?}",
+            self.enabled, self.timer, self.length_counter
+        )
+    }
 }
 
 impl Default for NoiseRegister {
@@ -219,7 +248,7 @@ const DMC_RATES: [u32; 16] = [
     428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54,
 ];
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct DmcRegister {
     enabled: bool,
     irq_enabled: bool,
@@ -238,6 +267,20 @@ pub struct DmcRegister {
     bits_left: u32,
     output: u32,
     silent: bool,
+}
+impl Debug for DmcRegister {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "enabled={} timer={:3X} repeat={} sample_addr={:X} sample_len={:X} IRQ={}",
+            self.enabled,
+            self.time_reload,
+            self.repeat,
+            self.sample_addr,
+            self.sample_len,
+            self.irq_enabled,
+        )
+    }
 }
 impl AudioRegister for DmcRegister {
     fn muted(&self) -> bool {
