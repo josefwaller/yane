@@ -14,7 +14,7 @@ pub trait AudioRegister {
     fn set_enabled(&mut self, enabled: bool);
 }
 
-#[derive(Clone, Copy, Default, Debug)]
+#[derive(Clone, Copy, Default)]
 pub struct LengthCounter {
     pub halt: bool,
     pub load: usize,
@@ -27,6 +27,11 @@ impl LengthCounter {
         if !self.halt && self.load > 0 {
             self.load -= 1;
         }
+    }
+}
+impl Debug for LengthCounter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "halt={} load={:X}", self.halt, self.load)
     }
 }
 #[derive(Clone, Copy, Default, Debug)]
@@ -125,14 +130,15 @@ impl Debug for PulseRegister {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "enabled={} timer={:3X} target_period={:X} duty={:X} length={:?} sweep=[enabled={} divider={:X}]",
+            "on={} timer={:3X} target_period={:X} divider={:X} duty={:X} length=[{:?}] sweep=[on={} shift={:X}]",
             self.enabled,
             self.timer_reload,
             self.sweep_target_period,
+            self.sweep_divider,
             self.duty,
             self.length_counter,
             self.sweep_enabled,
-            self.sweep_divider
+            self.sweep_shift
         )
     }
 }
@@ -157,7 +163,7 @@ impl Debug for TriangleRegister {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "enabled={} timer={:3X} length={:?} linear={:X}",
+            "on={} timer={:3X} length=[{:?}] linear={:X}",
             self.enabled, self.timer_reload, self.length_counter, self.linear_counter
         )
     }
@@ -205,7 +211,7 @@ impl Debug for NoiseRegister {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "enabled={} timer={:3X} length={:?}",
+            "on={} timer={:3X} length=[{:?}]",
             self.enabled, self.timer, self.length_counter
         )
     }
@@ -272,7 +278,7 @@ impl Debug for DmcRegister {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "enabled={} timer={:3X} repeat={} sample_addr={:X} sample_len={:X} IRQ={}",
+            "on={} timer={:3X} repeat={} sample_addr={:X} sample_len={:X} IRQ={}",
             self.enabled,
             self.time_reload,
             self.repeat,
@@ -457,6 +463,10 @@ impl Apu {
                 reg.sweep_enabled = (value & 0x80) != 0;
                 reg.sweep_period = ((value as usize & 0x70) >> 4) + 1;
                 reg.sweep_divider = reg.sweep_period;
+                debug!(
+                    "Set sweep to {:X} for pulse {:X}",
+                    reg.sweep_divider, pulse_index
+                );
                 reg.sweep_negate = (value & 0x08) != 0;
                 reg.sweep_shift = (value & 0x07) as usize;
             }
@@ -512,12 +522,31 @@ impl Apu {
             }
             // Pulse registers are clocked every other CPU cycle
             if self.cycles % 2 == 0 {
-                self.pulse_registers.iter_mut().for_each(|p| {
-                    p.timer = (p.timer + 1) % p.timer_reload.max(1);
-                    if p.timer == 0 {
-                        p.sequencer = (p.sequencer + 1) % 8;
-                    }
-                });
+                self.pulse_registers
+                    .iter_mut()
+                    .enumerate()
+                    .for_each(|(i, p)| {
+                        p.timer = (p.timer + 1) % p.timer_reload.max(1);
+                        if p.timer == 0 {
+                            p.sequencer = (p.sequencer + 1) % 8;
+                        }
+                        // Compute sweep change
+                        let sweep_change = p.timer_reload >> p.sweep_shift;
+                        p.sweep_target_period = max(
+                            p.timer_reload as i32
+                                + if p.sweep_negate {
+                                    // Pulse 1 (i = 0) negates to one's complement, Puse 2 uses two's complement
+                                    -(if i == 0 {
+                                        sweep_change + 1
+                                    } else {
+                                        sweep_change
+                                    } as i32)
+                                } else {
+                                    sweep_change as i32
+                                },
+                            0,
+                        ) as usize;
+                    });
             }
             // We cheat a bit here
             // We always clock the triangle register, and then if it's muted, we just ensure the current wave finishes
@@ -596,22 +625,6 @@ impl Apu {
                 if reg.sweep_divider == 0 {
                     // Reset divider
                     reg.sweep_divider = reg.sweep_period;
-                    // Compute sweep change
-                    let sweep_change = reg.timer_reload >> reg.sweep_shift;
-                    reg.sweep_target_period = max(
-                        reg.timer_reload as i32
-                            + if reg.sweep_negate {
-                                // Pulse 1 (i = 0) negates to one's complement, Puse 2 uses two's complement
-                                -(if i == 0 {
-                                    sweep_change + 1
-                                } else {
-                                    sweep_change
-                                } as i32)
-                            } else {
-                                sweep_change as i32
-                            },
-                        0,
-                    ) as usize;
                     if reg.sweep_enabled
                         && reg.timer_reload >= 8
                         && reg.sweep_shift > 0

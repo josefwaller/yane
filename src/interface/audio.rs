@@ -62,7 +62,7 @@ impl Audio {
         if self.queue.size() > 16 * 2000 {
             info!("Queue is too big, clearing (was {})", self.queue.size());
             self.queue.clear();
-        } else if self.queue.size() == 0 {
+        } else if self.queue.size() == 0 && !settings.paused {
             warn!("Queue is empty!");
         }
         // Get and transform data
