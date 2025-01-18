@@ -463,10 +463,6 @@ impl Apu {
                 reg.sweep_enabled = (value & 0x80) != 0;
                 reg.sweep_period = ((value as usize & 0x70) >> 4) + 1;
                 reg.sweep_divider = reg.sweep_period;
-                debug!(
-                    "Set sweep to {:X} for pulse {:X}",
-                    reg.sweep_divider, pulse_index
-                );
                 reg.sweep_negate = (value & 0x08) != 0;
                 reg.sweep_shift = (value & 0x07) as usize;
             }
