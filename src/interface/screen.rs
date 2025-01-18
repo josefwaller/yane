@@ -122,7 +122,14 @@ impl Screen {
                 glow::UNSIGNED_BYTE,
                 Some(&texture_data),
             );
-            // debug!("{:X?}", texture_data);
+            set_uniform!(
+                self.gl,
+                self.screen_program,
+                "screenSize",
+                uniform_2_f32,
+                settings.screen_size.0 as f32,
+                settings.screen_size.1 as f32
+            );
             check_error!(self.gl);
             let loc = self
                 .gl

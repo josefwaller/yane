@@ -1,4 +1,4 @@
-use crate::{utils, Audio, Controller, Nes, Screen, Settings};
+use crate::{set_uniform, utils, Audio, Controller, Nes, Screen, Settings};
 use sdl2::{keyboard::Keycode, video::GLContext, Sdl, VideoSubsystem};
 
 /// A wrapper around `Screen` that provides an SDL2 GL context, and handles input through SDL2.

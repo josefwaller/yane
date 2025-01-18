@@ -6,7 +6,6 @@ use log::*;
 const DOTS_PER_SCANLINE: u32 = 341;
 const SCANLINES_PER_FRAME: u32 = 262;
 const DOTS_PER_OPEN_BUS_DECAY: u32 = 1_789_000 / 3;
-const BLACK: usize = 0x0F;
 
 #[derive(Debug)]
 pub struct Ppu {
@@ -284,12 +283,7 @@ impl Ppu {
                             })
                         });
                 }
-                // Add a border around
-                if (self.dot.1 < 8 || (self.dot.1 > 240 - 8 && self.dot.1 < 240))
-                    && self.dot.0 < 256
-                {
-                    self.output[self.dot.1 as usize][self.dot.0 as usize] = BLACK;
-                } else if self.dot.0 < 256 + 8 {
+                if self.dot.0 < 256 + 8 {
                     if self.dot.1 < 240 {
                         match self.dot.0 % 8 {
                             2 => {

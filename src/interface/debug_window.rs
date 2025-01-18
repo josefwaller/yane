@@ -283,6 +283,19 @@ impl DebugWindow {
                     );
                     ui.slider("Volume", 0.0, 10.0, &mut settings.volume);
                     ui.slider("Speed", 0.1, 3.0, &mut settings.speed);
+                    if let Some(c) = ui.begin_combo(
+                        "Screen Size",
+                        format!("{}x{}px", settings.screen_size.0, settings.screen_size.1),
+                    ) {
+                        [(256, 240), (256, 224), (240, 212), (224, 192)]
+                            .iter()
+                            .for_each(|res| {
+                                if ui.selectable(format!("{}x{}px", res.0, res.1)) {
+                                    settings.screen_size = *res;
+                                }
+                            });
+                        c.end();
+                    }
                     ui.same_line();
                     if ui.button("Reset to 1") {
                         settings.speed = 1.0;

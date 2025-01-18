@@ -18,6 +18,8 @@ pub struct Settings {
     pub always_sprites_on_top: bool,
     // Whether to record audio
     pub record_audio: bool,
+    // Screen output size, only used by window
+    pub screen_size: (u32, u32),
 }
 
 impl Default for Settings {
@@ -31,6 +33,7 @@ impl Default for Settings {
             scanline_sprite_limit: true,
             always_sprites_on_top: false,
             record_audio: false,
+            screen_size: (256, 240),
         }
     }
 }
