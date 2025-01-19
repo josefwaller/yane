@@ -1,5 +1,5 @@
 use super::{
-    mappers::{CnRom, NRom, SxRom, UxRom},
+    mappers::{CnRom, NRom, SxRom, TxRom, UxRom},
     CartridgeMemory, NametableArrangement,
 };
 pub trait Mapper {
@@ -23,10 +23,15 @@ pub fn get_mapper(mapper_id: usize) -> Box<dyn Mapper> {
         1 => Box::new(SxRom::default()),
         2 => Box::new(UxRom::default()),
         3 => Box::new(CnRom::default()),
+        4 => Box::new(TxRom::default()),
         _ => panic!("Unsupported mapper: {}", mapper_id),
     }
 }
 
 pub fn bank_addr(bank_size: usize, bank_num: usize, offset: usize) -> usize {
     bank_size * bank_num + (offset % bank_size)
+}
+// Get the number of banks in a given section of memory
+pub fn num_banks(bank_size: usize, mem: &[u8]) -> usize {
+    (mem.len() - 1) / bank_size + 1
 }

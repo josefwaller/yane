@@ -2,10 +2,7 @@ use std::{collections::VecDeque, fmt::Debug};
 
 use log::*;
 
-use crate::{
-    opcodes::*, Apu, Cartridge, Controller, Cpu, Ppu, Screen, Settings, CPU_CYCLES_PER_OAM,
-    CPU_CYCLES_PER_SCANLINE,
-};
+use crate::{opcodes::*, Apu, Cartridge, Controller, Cpu, Ppu, Settings, CPU_CYCLES_PER_OAM};
 pub struct NesState {
     cpu: Cpu,
     opcode: u8,
@@ -158,8 +155,8 @@ impl Nes {
         let mut inst: [u8; 3] = [0; 3];
         inst.copy_from_slice(&[
             self.read_byte(pc),
-            self.read_byte(pc + 1),
-            self.read_byte(pc + 2),
+            self.read_byte((pc as u16).wrapping_add(1) as usize),
+            self.read_byte((pc as u16).wrapping_add(2) as usize),
         ]);
         self.previous_states.push_back(NesState::new(&self, &inst));
         if self.previous_states.len() > NUMBER_STORED_STATES {

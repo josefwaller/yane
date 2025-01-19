@@ -112,6 +112,14 @@ impl Cartridge {
             nametable_arrangement
         );
         info!(
+            "Cartridge {} using an alternative nametable arrangement",
+            if (bytes[6] & 0x08) == 0 {
+                "isn't"
+            } else {
+                "is"
+            }
+        );
+        info!(
             "Cartridge is using {} mapper (0x{:X})",
             mapper_id, mapper_id
         );

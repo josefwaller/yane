@@ -6,3 +6,5 @@ mod sxrom;
 pub use sxrom::SxRom;
 mod cnrom;
 pub use cnrom::CnRom;
+mod txrom;
+pub use txrom::TxRom;
