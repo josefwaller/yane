@@ -111,7 +111,7 @@ impl Nes {
     pub fn read_byte(&mut self, addr: usize) -> u8 {
         return match addr {
             0..0x2000 => self.mem[addr % 0x0800],
-            0x2000..0x4000 => self.ppu.read_byte(addr, &self.cartridge),
+            0x2000..0x4000 => self.ppu.read_byte(addr, &mut self.cartridge),
             0x4016 => self.read_controller_bit(0),
             0x4017 => self.read_controller_bit(1),
             0x4000..0x4020 => self.apu.read_byte(addr),
@@ -180,10 +180,14 @@ impl Nes {
     }
 
     pub fn on_nmi(&mut self) {
+        self.interrupt_to_addr(0xFFFA);
+    }
+    fn interrupt_to_addr(&mut self, addr: usize) {
         self.push_to_stack_u16(self.cpu.p_c);
         self.push_to_stack(self.cpu.s_r.to_byte());
         // Go to NMI vector
-        self.cpu.p_c = ((self.read_byte(0xFFFB) as u16) << 8) + self.read_byte(0xFFFA) as u16;
+        self.cpu.p_c = ((self.read_byte(addr + 1) as u16) << 8) + self.read_byte(addr) as u16;
+        self.cpu.s_r.i = true;
     }
 
     /// Decode and then execute first byte of `opcode` as an NES opcode.
@@ -659,14 +663,21 @@ impl Nes {
             cycles += c;
             if self
                 .ppu
-                .advance_dots(3 * c as u32, &self.cartridge, settings)
+                .advance_dots(3 * c as u32, &mut self.cartridge, settings)
                 && self.ppu.get_nmi_enabled()
             {
                 self.on_nmi();
                 cycles += 7;
                 self.apu.advance_cpu_cycles(7, &mut self.cartridge);
                 self.cartridge.advance_cpu_cycles(7);
-                self.ppu.advance_dots(21, &self.cartridge, settings);
+                self.ppu.advance_dots(21, &mut self.cartridge, settings);
+            }
+            // Check for interrupt
+            if !self.cpu.s_r.i {
+                if let Some(addr) = self.cartridge.mapper.irq_addr() {
+                    debug!("IRQ to {:X}", addr);
+                    self.interrupt_to_addr(addr);
+                }
             }
             // If we have finished VBlank and are rendering the next frame
             if scanline != 0 && self.ppu.scanline() == 0 {

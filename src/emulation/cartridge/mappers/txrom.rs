@@ -9,6 +9,13 @@ pub struct TxRom {
     chr_banks: [u32; 6],
     prg_mode: u32,
     chr_mode: u32,
+    // IRQ stuff
+    irq_enable: bool,
+    irq_reload: bool,
+    irq_counter: u32,
+    irq_latch: u32,
+    last_ppu_addr: u32,
+    generate_irq: bool,
     // Bank select, i.e. which bank we are setting
     // 0-5: Editing CHR bank
     // 6-7: Editing PRG bank seelct
@@ -23,6 +30,12 @@ impl Default for TxRom {
             chr_banks: [0; 6],
             prg_mode: 0,
             chr_mode: 0,
+            irq_enable: false,
+            irq_reload: false,
+            irq_counter: 0,
+            irq_latch: 0,
+            generate_irq: false,
+            last_ppu_addr: 0,
             bank_select: 0,
             nametable: NametableArrangement::Horizontal,
         }
@@ -106,15 +119,26 @@ impl Mapper for TxRom {
                 // PRG RAM protection (todo)
             }
         } else if cpu_addr < 0xE000 {
+            if cpu_addr % 2 == 0 {
+                self.irq_latch = value as u32;
+            } else {
+                self.irq_reload = true;
+            }
         } else {
             if cpu_addr % 2 == 0 {
-                debug!("IRQ disable");
+                if self.irq_enable {}
+                self.irq_enable = false;
+                self.generate_irq = false;
             } else {
-                debug!("IRQ enable");
+                if !self.irq_enable {}
+                self.irq_enable = true;
             }
         }
     }
-    fn read_ppu(&self, ppu_addr: usize, mem: &crate::CartridgeMemory) -> u8 {
+    fn read_ppu(&mut self, ppu_addr: usize, mem: &crate::CartridgeMemory) -> u8 {
+        self.read_ppu_debug(ppu_addr, mem)
+    }
+    fn read_ppu_debug(&self, ppu_addr: usize, mem: &crate::CartridgeMemory) -> u8 {
         let (bank_size, bank_num) = if self.chr_mode == 0 {
             if ppu_addr < 0x1000 {
                 (0x800, self.chr_banks[ppu_addr / 0x800] / 2)
@@ -131,7 +155,39 @@ impl Mapper for TxRom {
         mem.read_chr(bank_addr(bank_size, bank_num as usize, ppu_addr))
     }
     fn write_ppu(&mut self, ppu_addr: usize, mem: &mut crate::CartridgeMemory, value: u8) {}
+    fn set_addr_value(&mut self, ppu_addr: u32) {
+        // Update IRQ
+        if self.last_ppu_addr == 0 && ppu_addr & 0x1000 != 0 {
+            // Check for reload or decrement
+            if self.irq_counter == 0 || self.irq_reload {
+                self.irq_counter = self.irq_latch;
+                debug!("Reload IRQ to {:X}", self.irq_counter);
+                self.irq_reload = false;
+            } else {
+                self.irq_counter -= 1;
+                debug!("Decrement counter to {:X}", self.irq_counter);
+            }
+            // Check for interrupt
+            if self.irq_counter == 0 {
+                if self.irq_enable {
+                    self.generate_irq = true;
+                } else {
+                    debug!("Would generate IRQ but is disabled");
+                }
+            }
+        }
+        self.last_ppu_addr = ppu_addr & 0x1000;
+    }
     fn nametable_arrangement(&self) -> Option<NametableArrangement> {
         Some(self.nametable)
+    }
+    fn irq_addr(&mut self) -> Option<usize> {
+        if self.generate_irq {
+            debug!("Generate IRQ");
+            self.generate_irq = false;
+            Some(0xFFFE)
+        } else {
+            None
+        }
     }
 }

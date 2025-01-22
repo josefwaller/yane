@@ -32,7 +32,7 @@ impl Mapper for NRom {
             mem.prg_ram[(addr - 0x6000) % len] = value;
         }
     }
-    fn read_ppu(&self, ppu_addr: usize, mem: &CartridgeMemory) -> u8 {
+    fn read_ppu_debug(&self, ppu_addr: usize, mem: &CartridgeMemory) -> u8 {
         if mem.chr_ram.len() == 0 {
             return mem.chr_rom[ppu_addr % mem.chr_rom.len()];
         }

@@ -4,10 +4,15 @@ use super::{
 };
 pub trait Mapper {
     // Read/write a byte using various memory spaces
+    // Used by games, for debug reading use read_ppu_debug
     fn read_cpu(&self, cpu_addr: usize, mem: &CartridgeMemory) -> u8;
     fn write_cpu(&mut self, cpu_addr: usize, mem: &mut CartridgeMemory, value: u8);
-    fn read_ppu(&self, ppu_addr: usize, mem: &CartridgeMemory) -> u8;
+    fn read_ppu(&mut self, ppu_addr: usize, mem: &CartridgeMemory) -> u8 {
+        self.read_ppu_debug(ppu_addr, mem)
+    }
     fn write_ppu(&mut self, ppu_addr: usize, mem: &mut CartridgeMemory, value: u8);
+    // Read PPU for debug purposes only, not changing the cartridge state at all
+    fn read_ppu_debug(&self, ppu_addr: usize, mem: &CartridgeMemory) -> u8;
     fn nametable_arrangement(&self) -> Option<NametableArrangement> {
         None
     }
@@ -15,6 +20,11 @@ pub trait Mapper {
         "".to_string()
     }
     fn advance_cpu_cycles(&mut self, _cycles: u32) {}
+    fn set_addr_value(&mut self, _addr: u32) {}
+    // Get the address if the CPU has generated an IRQ, or None if it hasn't
+    fn irq_addr(&mut self) -> Option<usize> {
+        None
+    }
 }
 
 pub fn get_mapper(mapper_id: usize) -> Box<dyn Mapper> {

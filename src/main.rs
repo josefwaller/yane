@@ -128,7 +128,6 @@ fn main() {
                         break;
                     }
                 };
-                // debug!("{} CPU cycles elapsed", cycles_to_wait);
                 frame_cycles += cycles_to_wait;
                 // Debug log FPS info
                 frame_count += 1;

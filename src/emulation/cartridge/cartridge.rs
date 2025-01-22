@@ -46,7 +46,7 @@ pub struct Cartridge {
     /// Nametable mirroring arrangement
     nametable_arrangement: NametableArrangement,
     // Mapper
-    mapper: Box<dyn Mapper>,
+    pub mapper: Box<dyn Mapper>,
     // Whether the cartridge has battery backed RAM and should be saved
     has_battery_ram: bool,
 }
@@ -163,7 +163,7 @@ impl Cartridge {
     }
     /// Read a byte in the cartridge's memory given an address in PPU memory space
     /// Usually reads from CHR ROM/RAM.
-    pub fn read_ppu(&self, addr: usize) -> u8 {
+    pub fn read_ppu(&mut self, addr: usize) -> u8 {
         self.mapper.read_ppu(addr, &self.memory)
     }
     pub fn write_ppu(&mut self, addr: usize, value: u8) {

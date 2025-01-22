@@ -24,7 +24,7 @@ impl Mapper for UxRom {
     fn write_cpu(&mut self, _cpu_addr: usize, _mem: &mut CartridgeMemory, value: u8) {
         self.bank = value as usize;
     }
-    fn read_ppu(&self, ppu_addr: usize, mem: &CartridgeMemory) -> u8 {
+    fn read_ppu_debug(&self, ppu_addr: usize, mem: &CartridgeMemory) -> u8 {
         // No switching
         if mem.chr_ram.len() == 0 {
             return mem.chr_rom[ppu_addr % mem.chr_rom.len()];

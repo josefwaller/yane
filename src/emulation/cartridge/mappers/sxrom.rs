@@ -69,7 +69,7 @@ impl Mapper for SxRom {
             mem.prg_rom[addr % mem.prg_rom.len()]
         }
     }
-    fn read_ppu(&self, ppu_addr: usize, mem: &CartridgeMemory) -> u8 {
+    fn read_ppu_debug(&self, ppu_addr: usize, mem: &CartridgeMemory) -> u8 {
         let mode = (self.control & 0x10) >> 4;
         let addr = if mode == 0 {
             bank_addr(0x2000, (self.chr_bank_0 & 0x1E) >> 1, ppu_addr)

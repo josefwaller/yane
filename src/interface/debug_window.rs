@@ -211,7 +211,13 @@ impl DebugWindow {
                                 let palette_byte = nes.ppu.nametable_ram[palette_byte_addr];
                                 let palette = (palette_byte >> palette_shift) & 0x03;
                                 (0..0x10).map(move |j| {
-                                    (nes.cartridge.read_ppu(tile_addr + j), palette as usize)
+                                    (
+                                        // This needs to not go through the cartridge in order to avoid triggering interrupts through counting
+                                        nes.cartridge
+                                            .mapper
+                                            .read_ppu_debug(tile_addr + j, &nes.cartridge.memory),
+                                        palette as usize,
+                                    )
                                 })
                             })
                         })

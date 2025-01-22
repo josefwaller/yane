@@ -76,7 +76,7 @@ impl Ppu {
     }
 
     /// Read a byte from the PPU register given an address in CPU space
-    pub fn read_byte(&mut self, addr: usize, cartridge: &Cartridge) -> u8 {
+    pub fn read_byte(&mut self, addr: usize, cartridge: &mut Cartridge) -> u8 {
         match addr % 8 {
             2 => {
                 // VBLANK is cleared on read
@@ -146,6 +146,8 @@ impl Ppu {
                     // First write (MSB)
                     self.t = (self.t & 0x00FF) | (value as u32 & 0x3F) << 8;
                 }
+                // Refresh controller ADDR pin values
+                cartridge.mapper.set_addr_value(self.t as u32);
                 self.w = !self.w;
             }
             // PPUDATA
@@ -163,11 +165,107 @@ impl Ppu {
         self.oam_addr = self.oam_addr.wrapping_add(1);
     }
 
+    // Refresh `scanline_sprites` by fetching the first 8 sprites on the scanline given
+    // May set the overflow flag.
+    // Note that this is done at the end of the scanline, so these sprites will show up on the next scanline (and thus will appear at Y + 1)
+    fn refresh_scanline_sprites(
+        &mut self,
+        scanline: u32,
+        cartridge: &mut Cartridge,
+        settings: &Settings,
+    ) {
+        // Refresh scanline sprites
+        self.scanline_sprites = [None; 256];
+        if scanline < 240 {
+            let sprite_height = if self.is_8x16_sprites() { 16 } else { 8 };
+            // Get the 8 objs on the scanline (actually on the next scanline, since sprites will be draw on the next one)
+            let objs: Vec<usize> = self
+                .oam
+                .chunks(4)
+                .enumerate()
+                .filter(|(_i, obj)| {
+                    (obj[0] as u32) <= scanline && obj[0] as u32 + sprite_height > scanline
+                })
+                .map(|(i, _obj)| i)
+                .collect();
+            // Check for sprite overflow
+            if objs.len() > 8 {
+                // Check in an incorrectly implemented fashion
+                // Where instead of checking the coordinates horizontally, we start diagonally right-down from
+                // the last sprite on the scanline
+                let last_obj = &self.oam[(4 * objs[7])..(4 * objs[7] + 4)];
+                (objs[8]..64).enumerate().for_each(|(i, obj_i)| {
+                    let x = last_obj[3] as u32 + i as u32;
+                    let y = last_obj[0] as u32 + i as u32;
+                    if x < 256
+                        && y < 240
+                        && self.oam[4 * obj_i] == last_obj[0].wrapping_add(i as u8)
+                        && self.oam[4 * obj_i + 3] == last_obj[3].wrapping_add(i as u8)
+                    {
+                        self.status |= 0x20;
+                    }
+                });
+            }
+            // Add them to the scanline
+            objs.iter()
+                .take(if settings.scanline_sprite_limit {
+                    8
+                } else {
+                    64
+                })
+                .for_each(|i| {
+                    let obj = &self.oam[(4 * i)..(4 * i + 4)];
+                    let flip_hor = (obj[2] & 0x40) != 0;
+                    let flip_vert = (obj[2] & 0x80) != 0;
+                    let palette_index = 16 + 4 * (obj[2] & 0x03) as usize;
+                    let y_off = if flip_vert {
+                        (sprite_height - 1 - (scanline - (obj[0] as u32))) as usize
+                    } else {
+                        (scanline - (obj[0] as u32)) as usize
+                    };
+
+                    let (mut tile_low, mut tile_high) = if self.is_8x16_sprites() {
+                        let tile_addr = 0x1000 * (obj[1] & 0x01) as usize
+                            + 16 * (obj[1] & 0xFE) as usize
+                            + if y_off > 7 { 16 + y_off % 8 } else { y_off };
+                        (
+                            cartridge.read_ppu(tile_addr) as usize,
+                            cartridge.read_ppu(tile_addr + 8) as usize,
+                        )
+                    } else {
+                        let tile_addr =
+                            self.spr_pattern_table_addr() + 16 * obj[1] as usize + y_off;
+                        (
+                            cartridge.read_ppu(tile_addr) as usize,
+                            cartridge.read_ppu(tile_addr + 8) as usize,
+                        )
+                    };
+                    // Optimization - shift tile_high left by one so combining it with tile_low is simply
+                    // (tile_high & 0x02) + (tile_lot & 0x01)
+                    tile_high <<= 1;
+                    let palette = if settings.use_debug_palette {
+                        &DEBUG_PALETTE
+                    } else {
+                        &self.palette_ram
+                    };
+                    (0..8).for_each(|j| {
+                        let pixel_index = (tile_low as usize & 0x01) + (tile_high as usize & 0x02);
+                        let x = obj[3] as usize + if flip_hor { j } else { 7 - j };
+                        if pixel_index != 0 && x < 256 {
+                            self.scanline_sprites[x]
+                                .get_or_insert((*i, palette[palette_index + pixel_index] as usize));
+                        }
+                        tile_low >>= 1;
+                        tile_high >>= 1;
+                    })
+                });
+        }
+    }
     // Return whether to trigger an NMI
     pub fn advance_dots(
         &mut self,
         dots: u32,
-        cartridge: &Cartridge,
+        cartridge: &mut Cartridge,
         settings_opt: Option<Settings>,
     ) -> bool {
         let settings = settings_opt.unwrap_or_default();
@@ -189,99 +287,13 @@ impl Ppu {
                 (self.dot.0 + 1, self.dot.1)
             };
             if self.is_background_rendering_enabled() || self.is_sprite_rendering_enabled() {
-                if self.dot.0 == 0 {
-                    if self.dot.1 == 261 {
-                        // Copy vertical component from T to V
-                        self.v = (self.v & 0x041F) | (self.t & !0x041F);
-                    }
+                if self.dot == (0, 261) {
+                    // Copy vertical component from T to V
+                    self.v = (self.v & 0x041F) | (self.t & !0x041F);
+                }
+                if self.dot.0 == 256 + 8 {
                     // Refresh scanline sprites
-                    self.scanline_sprites = [None; 256];
-                    let sprite_height = if self.is_8x16_sprites() { 16 } else { 8 };
-                    // Get the 8 objs on the scanline
-                    let objs: Vec<usize> = self
-                        .oam
-                        .chunks(4)
-                        .enumerate()
-                        .filter(|(_i, obj)| {
-                            (obj[0] as u32 + 1) <= self.dot.1
-                                && obj[0] as u32 + 1 + sprite_height > self.dot.1
-                        })
-                        .map(|(i, _obj)| i)
-                        .collect();
-                    // Check for sprite overflow
-                    if objs.len() > 8 {
-                        // Check in an incorrectly implemented fashion
-                        // Where instead of checking the coordinates horizontally, we start diagonally right-down from
-                        // the last sprite on the scanline
-                        let last_obj = &self.oam[(4 * objs[7])..(4 * objs[7] + 4)];
-                        (objs[8]..64).enumerate().for_each(|(i, obj_i)| {
-                            let x = last_obj[3] as u32 + i as u32;
-                            let y = last_obj[0] as u32 + i as u32;
-                            if x < 256
-                                && y < 240
-                                && self.oam[4 * obj_i] == last_obj[0].wrapping_add(i as u8)
-                                && self.oam[4 * obj_i + 3] == last_obj[3].wrapping_add(i as u8)
-                            {
-                                self.status |= 0x20;
-                            }
-                        });
-                    }
-                    // Add them to the scanline
-                    objs.iter()
-                        .take(if settings.scanline_sprite_limit {
-                            8
-                        } else {
-                            64
-                        })
-                        .for_each(|i| {
-                            let obj = &self.oam[(4 * i)..(4 * i + 4)];
-                            let flip_hor = (obj[2] & 0x40) != 0;
-                            let flip_vert = (obj[2] & 0x80) != 0;
-                            let palette_index = 16 + 4 * (obj[2] & 0x03) as usize;
-                            let y_off = if flip_vert {
-                                (sprite_height - 1 - (self.dot.1 - (obj[0] as u32 + 1))) as usize
-                            } else {
-                                (self.dot.1 - (obj[0] as u32 + 1)) as usize
-                            };
-
-                            let (mut tile_low, mut tile_high) = if self.is_8x16_sprites() {
-                                let tile_addr = 0x1000 * (obj[1] & 0x01) as usize
-                                    + 16 * (obj[1] & 0xFE) as usize
-                                    + if y_off > 7 { 16 + y_off % 8 } else { y_off };
-                                (
-                                    cartridge.read_ppu(tile_addr) as usize,
-                                    cartridge.read_ppu(tile_addr + 8) as usize,
-                                )
-                            } else {
-                                let tile_addr =
-                                    self.spr_pattern_table_addr() + 16 * obj[1] as usize + y_off;
-                                (
-                                    cartridge.read_ppu(tile_addr) as usize,
-                                    cartridge.read_ppu(tile_addr + 8) as usize,
-                                )
-                            };
-                            // Optimization - shift tile_high left by one so combining it with tile_low is simply
-                            // (tile_high & 0x02) + (tile_lot & 0x01)
-                            tile_high <<= 1;
-                            let palette = if settings.use_debug_palette {
-                                &DEBUG_PALETTE
-                            } else {
-                                &self.palette_ram
-                            };
-                            (0..8).for_each(|j| {
-                                let pixel_index =
-                                    (tile_low as usize & 0x01) + (tile_high as usize & 0x02);
-                                let x = obj[3] as usize + if flip_hor { j } else { 7 - j };
-                                if pixel_index != 0 && x < 256 {
-                                    self.scanline_sprites[x].get_or_insert((
-                                        *i,
-                                        palette[palette_index + pixel_index] as usize,
-                                    ));
-                                }
-                                tile_low >>= 1;
-                                tile_high >>= 1;
-                            })
-                        });
+                    self.refresh_scanline_sprites(self.dot.1, cartridge, &settings);
                 }
                 if self.dot.0 < 256 + 8 {
                     if self.dot.1 < 240 {
@@ -461,7 +473,7 @@ impl Ppu {
     }
 
     /// Read a single byte from VRAM
-    fn read_vram(&mut self, cartridge: &Cartridge) -> u8 {
+    fn read_vram(&mut self, cartridge: &mut Cartridge) -> u8 {
         let addr = self.v & 0x3FFF;
         if self.can_access_vram() {
             self.inc_addr();

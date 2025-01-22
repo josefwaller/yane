@@ -21,7 +21,7 @@ impl Mapper for CnRom {
             self.chr_bank_select = (value & 0x03) as usize;
         }
     }
-    fn read_ppu(&self, ppu_addr: usize, mem: &crate::CartridgeMemory) -> u8 {
+    fn read_ppu_debug(&self, ppu_addr: usize, mem: &crate::CartridgeMemory) -> u8 {
         mem.chr_rom[bank_addr(0x2000, self.chr_bank_select, ppu_addr) % mem.chr_rom.len()]
     }
     fn write_ppu(&mut self, ppu_addr: usize, mem: &mut crate::CartridgeMemory, value: u8) {
