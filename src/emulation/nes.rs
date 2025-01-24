@@ -675,7 +675,6 @@ impl Nes {
             // Check for interrupt
             if !self.cpu.s_r.i {
                 if let Some(addr) = self.cartridge.mapper.irq_addr() {
-                    debug!("IRQ to {:X}", addr);
                     self.interrupt_to_addr(addr);
                 }
             }

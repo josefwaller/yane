@@ -5,3 +5,8 @@ use yane::*;
 fn test_clocking() {
     rom_test!("./test_roms/mmc3_clocking.nes");
 }
+
+#[test]
+fn test_details() {
+    rom_test!("./test_roms/mmc3_details.nes");
+}

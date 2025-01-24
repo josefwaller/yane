@@ -1,10 +1,18 @@
+use std::cmp::{max, min};
+
 use crate::Settings;
 
 use super::{cartridge, Cartridge, NametableArrangement, DEBUG_PALETTE};
 use log::*;
 
+/// Number of dots per scanline
 const DOTS_PER_SCANLINE: u32 = 341;
+/// Number of scanlines per frame
 const SCANLINES_PER_FRAME: u32 = 262;
+/// Index of the prerender scanline
+const PRERENDER_SCANLINE: u32 = SCANLINES_PER_FRAME - 1;
+/// Number of render scanlines (scanlines during rendering)
+const RENDER_SCANLINES: u32 = 240;
 const DOTS_PER_OPEN_BUS_DECAY: u32 = 1_789_000 / 3;
 
 #[derive(Debug)]
@@ -142,12 +150,12 @@ impl Ppu {
                     // Second write (LSB)
                     self.t = (self.t & 0xFF00) | value as u32;
                     self.v = self.t;
+                    // Refresh controller ADDR pin values
+                    cartridge.mapper.set_addr_value(self.v as u32);
                 } else {
                     // First write (MSB)
                     self.t = (self.t & 0x00FF) | (value as u32 & 0x3F) << 8;
                 }
-                // Refresh controller ADDR pin values
-                cartridge.mapper.set_addr_value(self.t as u32);
                 self.w = !self.w;
             }
             // PPUDATA
@@ -176,7 +184,7 @@ impl Ppu {
     ) {
         // Refresh scanline sprites
         self.scanline_sprites = [None; 256];
-        if scanline < 240 {
+        if scanline < RENDER_SCANLINES || scanline == PRERENDER_SCANLINE {
             let sprite_height = if self.is_8x16_sprites() { 16 } else { 8 };
             // Get the 8 objs on the scanline (actually on the next scanline, since sprites will be draw on the next one)
             let objs: Vec<usize> = self
@@ -259,6 +267,15 @@ impl Ppu {
                         tile_high >>= 1;
                     })
                 });
+            // We now do dummy fetches to 0xFF for however many spriets we have left
+            // This is required for the MMC3 interupts to work
+            (0..(8 - min(objs.len(), 8))).for_each(|_| {
+                cartridge.read_ppu(if self.is_8x16_sprites() {
+                    0x10FE
+                } else {
+                    self.spr_pattern_table_addr() + 0xFF
+                });
+            });
         }
     }
     // Return whether to trigger an NMI
@@ -275,6 +292,7 @@ impl Ppu {
         }
         // Todo: tidy
         let mut to_return = false;
+        // Dots 0-239 are the visible scanlines, 261 is the pre-render scanline
         (0..dots).for_each(|_| {
             self.status_dots = self.status_dots.saturating_add(1);
             self.dot = if self.dot.0 == DOTS_PER_SCANLINE - 1 {
@@ -287,7 +305,7 @@ impl Ppu {
                 (self.dot.0 + 1, self.dot.1)
             };
             if self.is_background_rendering_enabled() || self.is_sprite_rendering_enabled() {
-                if self.dot == (0, 261) {
+                if self.dot == (0, PRERENDER_SCANLINE) {
                     // Copy vertical component from T to V
                     self.v = (self.v & 0x041F) | (self.t & !0x041F);
                 }
@@ -296,7 +314,7 @@ impl Ppu {
                     self.refresh_scanline_sprites(self.dot.1, cartridge, &settings);
                 }
                 if self.dot.0 < 256 + 8 {
-                    if self.dot.1 < 240 {
+                    if self.dot.1 < RENDER_SCANLINES || self.dot.1 == PRERENDER_SCANLINE {
                         match self.dot.0 % 8 {
                             2 => {
                                 // Fetch nametable
@@ -363,6 +381,7 @@ impl Ppu {
                                                 if !self.sprite_zero_hit()
                                                     && j == 0
                                                     && output.is_some()
+                                                    && self.dot.1 > 0
                                                     && x < 255
                                                     && (x > 7
                                                         || (!self.sprite_left_clipping()
@@ -378,8 +397,10 @@ impl Ppu {
                                                 }
                                             }
                                         }
-                                        self.output[self.dot.1 as usize][x as usize] =
-                                            output.unwrap_or(self.palette_ram[0] as usize);
+                                        if self.dot.1 < RENDER_SCANLINES {
+                                            self.output[self.dot.1 as usize][x as usize] =
+                                                output.unwrap_or(self.palette_ram[0] as usize);
+                                        }
                                     }
                                     tile_low >>= 1;
                                     tile_high >>= 1;
@@ -396,7 +417,7 @@ impl Ppu {
                 }
             } else {
                 // Set to black
-                if self.dot.0 < 256 && self.dot.1 < 240 {
+                if self.dot.0 < 256 && self.dot.1 < RENDER_SCANLINES {
                     self.output[self.dot.1 as usize][self.dot.0 as usize] = 0x0F;
                 }
             }
@@ -408,7 +429,7 @@ impl Ppu {
                 if self.status_dots > 3 {
                     to_return = true;
                 }
-            } else if self.dot == (1, 261) {
+            } else if self.dot == (1, PRERENDER_SCANLINE) {
                 // Clear VBlank, sprite overflow and sprite 0 hit flags
                 self.status &= 0x1F;
             }

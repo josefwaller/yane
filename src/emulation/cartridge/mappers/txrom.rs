@@ -136,6 +136,8 @@ impl Mapper for TxRom {
         }
     }
     fn read_ppu(&mut self, ppu_addr: usize, mem: &crate::CartridgeMemory) -> u8 {
+        // Refresh controller ADDR pin values
+        self.set_addr_value(ppu_addr as u32);
         self.read_ppu_debug(ppu_addr, mem)
     }
     fn read_ppu_debug(&self, ppu_addr: usize, mem: &crate::CartridgeMemory) -> u8 {
@@ -161,18 +163,14 @@ impl Mapper for TxRom {
             // Check for reload or decrement
             if self.irq_counter == 0 || self.irq_reload {
                 self.irq_counter = self.irq_latch;
-                debug!("Reload IRQ to {:X}", self.irq_counter);
                 self.irq_reload = false;
             } else {
                 self.irq_counter -= 1;
-                debug!("Decrement counter to {:X}", self.irq_counter);
             }
             // Check for interrupt
             if self.irq_counter == 0 {
                 if self.irq_enable {
                     self.generate_irq = true;
-                } else {
-                    debug!("Would generate IRQ but is disabled");
                 }
             }
         }
@@ -183,7 +181,6 @@ impl Mapper for TxRom {
     }
     fn irq_addr(&mut self) -> Option<usize> {
         if self.generate_irq {
-            debug!("Generate IRQ");
             self.generate_irq = false;
             Some(0xFFFE)
         } else {
