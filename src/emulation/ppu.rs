@@ -39,7 +39,7 @@ pub struct Ppu {
     // W register, false = 0
     w: bool,
     // (x, y) coordinate of dot (pixel) being processed
-    dot: (u32, u32),
+    pub dot: (u32, u32),
     // t register
     t: u32,
     // v register
@@ -312,10 +312,10 @@ impl Ppu {
                 // IF we are in the visible picture
                 if self.dot.1 < RENDER_SCANLINES || self.dot.1 == PRERENDER_SCANLINE {
                     // Fetch sprites to render at dot 263
-                    if self.dot.0 == 263 {
+                    if self.dot.0 == 260 {
                         // Refresh scanline sprites
                         self.refresh_scanline_sprites(self.dot.1, cartridge, &settings);
-                    } else if self.dot.0 < 263 && self.dot.0 % 8 == 7 {
+                    } else if self.dot.0 <= 256 && self.dot.0 % 8 == 7 {
                         // Get nametable
                         let nt_addr =
                             cartridge.transform_nametable_addr(0x2000 + (self.v as usize & 0x0FFF));
@@ -393,7 +393,7 @@ impl Ppu {
                         self.coarse_x_inc();
                     }
                 }
-                if self.dot.0 == 256 + 8 && !self.can_access_vram() {
+                if self.dot.0 == 256 && !self.can_access_vram() {
                     self.fine_y_inc();
                     // Copy horizontal nametable and coarse X
                     self.v = (self.v & !0x41F) + (self.t & 0x41F);
@@ -404,7 +404,6 @@ impl Ppu {
                     self.output[self.dot.1 as usize][self.dot.0 as usize] = 0x0F;
                 }
             }
-            // Passes the timing test
             if self.dot == (1, 241) {
                 // Set vblank
                 self.status |= 0x80;
