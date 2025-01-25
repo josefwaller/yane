@@ -309,108 +309,91 @@ impl Ppu {
                     // Copy vertical component from T to V
                     self.v = (self.v & 0x041F) | (self.t & !0x041F);
                 }
-                if self.dot.0 == 256 + 8 {
-                    // Refresh scanline sprites
-                    self.refresh_scanline_sprites(self.dot.1, cartridge, &settings);
-                }
-                if self.dot.0 < 256 + 8 {
-                    if self.dot.1 < RENDER_SCANLINES || self.dot.1 == PRERENDER_SCANLINE {
-                        match self.dot.0 % 8 {
-                            2 => {
-                                // Fetch nametable
-                            }
-                            4 => {
-                                // Fetch attribute table
-                            }
-                            6 => {
-                                // Fetch LSB
-                            }
-                            7 => {
-                                // Fetch MSB
-                                // Also set output
-                                // Get nametable
-                                let nt_addr = cartridge
-                                    .transform_nametable_addr(0x2000 + (self.v as usize & 0x0FFF));
-                                let nt_num = self.nametable_ram[nt_addr] as usize;
-                                // Get palette index
-                                let palette_byte_addr = cartridge.transform_nametable_addr(
-                                    (0x23C0
-                                        + (self.v & 0xC00)
-                                        + ((self.v >> 4) & 0x38)
-                                        + ((self.v >> 2) & 0x07))
-                                        as usize,
-                                );
-                                let palette_byte = self.nametable_ram[palette_byte_addr];
-                                let palette_shift = ((self.v & 0x40) >> 4) + ((self.v & 0x02) >> 0);
-                                let palette_index =
-                                    ((palette_byte >> palette_shift) as usize) & 0x03;
-                                // Get high/low byte of tile
-                                let fine_y = ((self.v & 0x7000) >> 12) as usize;
-                                let mut tile_low = cartridge
-                                    .read_ppu(self.nametable_tile_addr() + 16 * nt_num + fine_y)
-                                    as usize;
-                                let mut tile_high = cartridge
-                                    .read_ppu(self.nametable_tile_addr() + 16 * nt_num + 8 + fine_y)
-                                    as usize;
-                                // Add tile data to output
-                                tile_high <<= 1;
-                                (0..8).for_each(|i| {
-                                    let palette = if settings.use_debug_palette {
-                                        &DEBUG_PALETTE
+                // IF we are in the visible picture
+                if self.dot.1 < RENDER_SCANLINES || self.dot.1 == PRERENDER_SCANLINE {
+                    // Fetch sprites to render at dot 263
+                    if self.dot.0 == 263 {
+                        // Refresh scanline sprites
+                        self.refresh_scanline_sprites(self.dot.1, cartridge, &settings);
+                    } else if self.dot.0 < 263 && self.dot.0 % 8 == 7 {
+                        // Get nametable
+                        let nt_addr =
+                            cartridge.transform_nametable_addr(0x2000 + (self.v as usize & 0x0FFF));
+                        let nt_num = self.nametable_ram[nt_addr] as usize;
+                        // Get palette index
+                        let palette_byte_addr = cartridge.transform_nametable_addr(
+                            (0x23C0
+                                + (self.v & 0xC00)
+                                + ((self.v >> 4) & 0x38)
+                                + ((self.v >> 2) & 0x07)) as usize,
+                        );
+                        let palette_byte = self.nametable_ram[palette_byte_addr];
+                        let palette_shift = ((self.v & 0x40) >> 4) + ((self.v & 0x02) >> 0);
+                        let palette_index = ((palette_byte >> palette_shift) as usize) & 0x03;
+                        // Get high/low byte of tile
+                        let fine_y = ((self.v & 0x7000) >> 12) as usize;
+                        let mut tile_low = cartridge
+                            .read_ppu(self.nametable_tile_addr() + 16 * nt_num + fine_y)
+                            as usize;
+                        let mut tile_high = cartridge
+                            .read_ppu(self.nametable_tile_addr() + 16 * nt_num + 8 + fine_y)
+                            as usize;
+                        // Add tile data to output
+                        tile_high <<= 1;
+                        (0..8).for_each(|i| {
+                            let palette = if settings.use_debug_palette {
+                                &DEBUG_PALETTE
+                            } else {
+                                &self.palette_ram
+                            };
+                            let x: isize = self.dot.0 as isize - i as isize - self.x as isize;
+                            if x >= 0 && x < 256 {
+                                // Initially set output to background
+                                let mut output = if self.is_background_rendering_enabled() {
+                                    let index = (tile_low & 0x01) + (tile_high & 0x02);
+                                    if index == 0 {
+                                        None
                                     } else {
-                                        &self.palette_ram
-                                    };
-                                    let x: isize =
-                                        self.dot.0 as isize - i as isize - self.x as isize;
-                                    if x >= 0 && x < 256 {
-                                        // Initially set output to background
-                                        let mut output = if self.is_background_rendering_enabled() {
-                                            let index = (tile_low & 0x01) + (tile_high & 0x02);
-                                            if index == 0 {
-                                                None
-                                            } else {
-                                                Some(palette[4 * palette_index + index] as usize)
-                                            }
-                                        } else {
-                                            None
-                                        };
-                                        // Check for sprite
-                                        if let Some((j, p)) = self.scanline_sprites[x as usize] {
-                                            if self.is_sprite_rendering_enabled() {
-                                                // Check for sprite 0 hit
-                                                if !self.sprite_zero_hit()
-                                                    && j == 0
-                                                    && output.is_some()
-                                                    && self.dot.1 > 0
-                                                    && x < 255
-                                                    && (x > 7
-                                                        || (!self.sprite_left_clipping()
-                                                            && !self.background_left_clipping()))
-                                                {
-                                                    self.status |= 0x40;
-                                                }
-                                                if self.oam[4 * j + 2] & 0x20 == 0
-                                                    || output == None
-                                                    || settings.always_sprites_on_top
-                                                {
-                                                    output = Some(p);
-                                                }
-                                            }
+                                        Some(palette[4 * palette_index + index] as usize)
+                                    }
+                                } else {
+                                    None
+                                };
+                                // Check for sprite
+                                if let Some((j, p)) = self.scanline_sprites[x as usize] {
+                                    if self.is_sprite_rendering_enabled() {
+                                        // Check for sprite 0 hit
+                                        if !self.sprite_zero_hit()
+                                            && j == 0
+                                            && output.is_some()
+                                            && self.dot.1 > 0
+                                            && x < 255
+                                            && (x > 7
+                                                || (!self.sprite_left_clipping()
+                                                    && !self.background_left_clipping()))
+                                        {
+                                            self.status |= 0x40;
                                         }
-                                        if self.dot.1 < RENDER_SCANLINES {
-                                            self.output[self.dot.1 as usize][x as usize] =
-                                                output.unwrap_or(self.palette_ram[0] as usize);
+                                        if self.oam[4 * j + 2] & 0x20 == 0
+                                            || output == None
+                                            || settings.always_sprites_on_top
+                                        {
+                                            output = Some(p);
                                         }
                                     }
-                                    tile_low >>= 1;
-                                    tile_high >>= 1;
-                                });
-                                self.coarse_x_inc();
+                                }
+                                if self.dot.1 < RENDER_SCANLINES {
+                                    self.output[self.dot.1 as usize][x as usize] =
+                                        output.unwrap_or(self.palette_ram[0] as usize);
+                                }
                             }
-                            _ => {}
-                        }
+                            tile_low >>= 1;
+                            tile_high >>= 1;
+                        });
+                        self.coarse_x_inc();
                     }
-                } else if self.dot.0 == 256 + 8 && !self.can_access_vram() {
+                }
+                if self.dot.0 == 256 + 8 && !self.can_access_vram() {
                     self.fine_y_inc();
                     // Copy horizontal nametable and coarse X
                     self.v = (self.v & !0x41F) + (self.t & 0x41F);
@@ -486,7 +469,7 @@ impl Ppu {
             self.palette_ram[palette_index] = value;
         }
         if self.can_access_vram() {
-            self.inc_addr();
+            self.inc_addr(cartridge);
         } else {
             self.coarse_x_inc();
             self.fine_y_inc();
@@ -497,7 +480,7 @@ impl Ppu {
     fn read_vram(&mut self, cartridge: &mut Cartridge) -> u8 {
         let addr = self.v & 0x3FFF;
         if self.can_access_vram() {
-            self.inc_addr();
+            self.inc_addr(cartridge);
         } else {
             self.coarse_x_inc();
             self.fine_y_inc();
@@ -531,9 +514,10 @@ impl Ppu {
         }
     }
 
-    fn inc_addr(&mut self) {
+    fn inc_addr(&mut self, cartridge: &mut Cartridge) {
         // V is 14 bits long, not 16
         self.v = (self.v + if self.ctrl & 0x04 == 0 { 1 } else { 32 }) % 0x3FFF;
+        cartridge.mapper.set_addr_value(self.v);
     }
 
     pub fn is_8x16_sprites(&self) -> bool {

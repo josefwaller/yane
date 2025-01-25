@@ -61,9 +61,6 @@ fn test_nestest_log() {
     }
 }
 
-fn get_hex(s: &String, start: usize, len: usize) -> u8 {
-    get_hex_u16(s, start, len) as u8
-}
 fn get_hex_u16(s: &String, start: usize, len: usize) -> u16 {
     u16::from_str_radix(&s[start..min(start + len, s.len())], 16).unwrap()
 }

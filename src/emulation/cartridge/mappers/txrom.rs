@@ -156,7 +156,7 @@ impl Mapper for TxRom {
         };
         mem.read_chr(bank_addr(bank_size, bank_num as usize, ppu_addr))
     }
-    fn write_ppu(&mut self, ppu_addr: usize, mem: &mut crate::CartridgeMemory, value: u8) {}
+    fn write_ppu(&mut self, _ppu_addr: usize, _mem: &mut crate::CartridgeMemory, _value: u8) {}
     fn set_addr_value(&mut self, ppu_addr: u32) {
         // Update IRQ
         if self.last_ppu_addr == 0 && ppu_addr & 0x1000 != 0 {
