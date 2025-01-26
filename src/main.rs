@@ -6,19 +6,15 @@ use sdl2::{
 use simplelog::{
     ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger,
 };
+use std::thread::sleep;
+use std::{fs::File, path::PathBuf};
 use std::{
-    ffi::OsStr,
-    fs::OpenOptions,
-    io::BufReader,
     path::Path,
     time::{Duration, Instant},
 };
-use std::{ffi::OsString, thread::sleep};
-use std::{fs::File, path::PathBuf};
 use wavers::{write, Samples};
 use yane::{
-    Cartridge, DebugWindow, Nes, Screen, Settings, Window, CPU_CYCLES_PER_OAM,
-    CPU_CYCLES_PER_SCANLINE, CPU_CYCLES_PER_VBLANK,
+    Cartridge, DebugWindow, Nes, Settings, Window, CPU_CYCLES_PER_SCANLINE, CPU_CYCLES_PER_VBLANK,
 };
 
 fn main() {

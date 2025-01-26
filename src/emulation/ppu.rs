@@ -312,7 +312,7 @@ impl Ppu {
                 // IF we are in the visible picture
                 if self.dot.1 < RENDER_SCANLINES || self.dot.1 == PRERENDER_SCANLINE {
                     // Fetch sprites to render at dot 263
-                    if self.dot.0 == 260 {
+                    if self.dot.0 == 263 {
                         // Refresh scanline sprites
                         self.refresh_scanline_sprites(self.dot.1, cartridge, &settings);
                     } else if self.dot.0 <= 256 && self.dot.0 % 8 == 7 {

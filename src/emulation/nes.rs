@@ -655,7 +655,14 @@ impl Nes {
             // If we are in VBlank
             if self.ppu.in_vblank() {
                 if self.check_oam_dma() {
-                    c += CPU_CYCLES_PER_OAM as u32;
+                    c += CPU_CYCLES_PER_OAM;
+                }
+            }
+            // Check for cartridge interrupt
+            if !self.cpu.s_r.i {
+                if let Some(addr) = self.cartridge.mapper.irq_addr() {
+                    self.interrupt_to_addr(addr);
+                    c += 7;
                 }
             }
             self.apu.advance_cpu_cycles(c, &mut self.cartridge);
@@ -671,12 +678,6 @@ impl Nes {
                 self.apu.advance_cpu_cycles(7, &mut self.cartridge);
                 self.cartridge.advance_cpu_cycles(7);
                 self.ppu.advance_dots(21, &mut self.cartridge, settings);
-            }
-            // Check for interrupt
-            if !self.cpu.s_r.i {
-                if let Some(addr) = self.cartridge.mapper.irq_addr() {
-                    self.interrupt_to_addr(addr);
-                }
             }
             // If we have finished VBlank and are rendering the next frame
             if scanline != 0 && self.ppu.scanline() == 0 {
