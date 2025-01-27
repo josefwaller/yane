@@ -57,32 +57,13 @@ macro_rules! release_button {
     };
 }
 
-// This is just used for both background snapshot macros
-#[macro_export]
-macro_rules! get_screen_str_vec {
-    ($nes: ident) => {
-        $nes.ppu
-            .nametable_ram
-            .chunks(32)
-            .map(|row| {
-                row.iter()
-                    .map(|r| format!("{:2X?}", r))
-                    .collect::<Vec<String>>()
-                    .join(" ")
-            })
-            .collect::<Vec<String>>()
-    };
-}
-
 #[macro_export]
 macro_rules! assert_background_snapshot {
     ($nes: ident) => {
         // Compare background
-        let screen = get_screen_str_vec!($nes);
-        insta::assert_debug_snapshot!(screen.as_slice());
+        insta::assert_debug_snapshot!($nes.ppu.nametable_ram.as_slice());
     };
     ($name: literal, $nes: ident) => {
-        let screen = get_screen_str_vec!($nes);
-        insta::assert_debug_snapshot!($name, screen.as_slice());
+        insta::assert_debug_snapshot!($name, $nes.ppu.nametable_ram.as_slice());
     };
 }
