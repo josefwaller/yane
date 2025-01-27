@@ -642,22 +642,26 @@ impl Nes {
         }
     }
     /// Advance the NES by 1 frame, approx 29780 cycles.
-    /// Just finishes rendering the frame if the NES is halfway done rendering one.
+    /// Technically will just advance the NES to the next VBlank.
     /// Returns the total number of cycles ran.
     pub fn advance_frame(&mut self, settings: Option<Settings>) -> Result<u32, String> {
         let settings = settings.unwrap_or_default();
         let mut cycles = 0;
+        let mut has_been_out_of_vblank = !self.ppu.in_vblank();
         loop {
-            let scanline = self.ppu.scanline();
+            // Advance the CPU by 1 instruction
             let mut c = match self.step() {
                 Ok(x) => x as u32,
                 Err(e) => return Err(e),
             };
             // If we are in VBlank
             if self.ppu.in_vblank() {
+                // Check for OAM DMA
                 if self.check_oam_dma() {
                     c += CPU_CYCLES_PER_OAM;
                 }
+            } else {
+                has_been_out_of_vblank = true;
             }
             // Check for cartridge interrupt
             if !self.cpu.s_r.i {
@@ -680,8 +684,8 @@ impl Nes {
                 self.cartridge.advance_cpu_cycles(7);
                 self.ppu.advance_dots(21, &mut self.cartridge, &settings);
             }
-            // If we have finished VBlank and are rendering the next frame
-            if scanline != 0 && self.ppu.scanline() == 0 {
+            // If we have been out of vblank at some time and now are back in vblank
+            if has_been_out_of_vblank && self.ppu.in_vblank() {
                 break;
             }
         }
