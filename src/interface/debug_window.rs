@@ -1,5 +1,6 @@
 use std::{cmp::min, time::Duration};
 
+use clipboard::{ClipboardContext, ClipboardProvider};
 use log::*;
 
 use crate::{
@@ -365,6 +366,15 @@ impl DebugWindow {
                             image.build(&ui);
                         }
                         if ui.collapsing_header("Nametables", TreeNodeFlags::empty()) {
+                            if ui.button("Copy snapshot to keyboard") {
+                                let mut ctx: ClipboardContext = ClipboardProvider::new().unwrap();
+                                if ctx
+                                    .set_contents(format!("{:?}", nes.ppu.nametable_ram))
+                                    .is_err()
+                                {
+                                    error!("Unable to set contents of clipboard");
+                                }
+                            }
                             let f = ui.push_font(self.small_font);
                             ui.text(DebugWindow::format_nametable_text(&nes.ppu, &nes.cartridge));
                             f.pop();
