@@ -106,7 +106,9 @@ fn main() {
             if Instant::now().duration_since(last_debug_window_render) >= DEBUG_WINDOW_REFRESH_RATE
             {
                 last_debug_window_render += DEBUG_WINDOW_REFRESH_RATE;
-                debug_window.render(&nes, &event_pump, &mut settings);
+                if debug_window.render(&mut nes, &event_pump, &mut settings) {
+                    nes.reset();
+                }
                 window.screen().set_settings(settings.clone());
             }
             // Update window

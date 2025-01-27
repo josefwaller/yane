@@ -906,6 +906,11 @@ impl Nes {
         let addr = self.indirect_indexed_addr(addr);
         self.write_byte(addr as usize, value)
     }
+    /// Reset the NES.
+    /// Triggers a reset interrupt using the interrupt vector at 0xFFFE.
+    pub fn reset(&mut self) {
+        self.interrupt_to_addr(0xFFFC);
+    }
     // Return true if a page is crossed by an operation using the absolute address and offset given
     // addr is in little endian form
     fn page_crossed_abs(addr: &[u8], offset: u8) -> bool {

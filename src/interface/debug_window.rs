@@ -141,7 +141,9 @@ impl DebugWindow {
             .flatten()
             .collect()
     }
-    pub fn render(&mut self, nes: &Nes, event_pump: &EventPump, settings: &mut Settings) {
+    // Returns true if the NES should reset
+    pub fn render(&mut self, nes: &Nes, event_pump: &EventPump, settings: &mut Settings) -> bool {
+        let chr_tex_num: i32 = 1;
         unsafe {
             self.window.gl_make_current(&self.gl_context).unwrap();
             let gl = self.renderer.gl_context();
@@ -163,7 +165,6 @@ impl DebugWindow {
                 vec![self.palette_index],
             );
             check_error!(gl);
-            let chr_tex_num: i32 = 1;
             gl.active_texture(glow::TEXTURE0 + chr_tex_num as u32);
             check_error!(gl);
             gl.bind_texture(glow::TEXTURE_2D, Some(self.chr_tex));
@@ -274,129 +275,130 @@ impl DebugWindow {
             }
             gl.clear_color(0.0, 0.0, 0.0, 1.0);
             gl.clear(glow::COLOR_BUFFER_BIT);
+        }
 
-            // Draw imgui
-            self.platform
-                .prepare_frame(&mut self.imgui, &self.window, event_pump);
-            let ui = self.imgui.new_frame();
-            ui.window("Debug Settings")
-                .position([0.0, 0.0], imgui::Condition::Always)
-                .size(
-                    [self.window.size().0 as f32, self.window.size().1 as f32],
-                    imgui::Condition::Always,
-                )
-                .build(|| {
-                    ui.checkbox("Debug OAM", &mut settings.oam_debug);
-                    if ui.checkbox("Paused", &mut settings.paused) {
-                        info!(
-                            "Manual pause {}",
-                            if settings.paused {
-                                "checked"
-                            } else {
-                                "unchecked"
-                            }
-                        );
-                    }
-                    ui.checkbox("Scanline sprite limit", &mut settings.scanline_sprite_limit);
-                    ui.checkbox(
-                        "Always draw sprites on top of background",
-                        &mut settings.always_sprites_on_top,
+        let mut to_return = false;
+
+        // Draw imgui
+        self.platform
+            .prepare_frame(&mut self.imgui, &self.window, event_pump);
+        let ui = self.imgui.new_frame();
+        ui.window("Debug Settings")
+            .position([0.0, 0.0], imgui::Condition::Always)
+            .size(
+                [self.window.size().0 as f32, self.window.size().1 as f32],
+                imgui::Condition::Always,
+            )
+            .build(|| {
+                to_return = ui.button("Reset");
+                ui.checkbox("Debug OAM", &mut settings.oam_debug);
+                if ui.checkbox("Paused", &mut settings.paused) {
+                    info!(
+                        "Manual pause {}",
+                        if settings.paused {
+                            "checked"
+                        } else {
+                            "unchecked"
+                        }
                     );
-                    ui.slider("Volume", 0.0, 10.0, &mut settings.volume);
-                    ui.slider("Speed", 0.1, 3.0, &mut settings.speed);
-                    if let Some(c) = ui.begin_combo(
-                        "Screen Size",
-                        format!("{}x{}px", settings.screen_size.0, settings.screen_size.1),
-                    ) {
-                        [(256, 240), (256, 224), (240, 212), (224, 192)]
-                            .iter()
-                            .for_each(|res| {
-                                if ui.selectable(format!("{}x{}px", res.0, res.1)) {
-                                    settings.screen_size = *res;
+                }
+                ui.checkbox("Scanline sprite limit", &mut settings.scanline_sprite_limit);
+                ui.checkbox(
+                    "Always draw sprites on top of background",
+                    &mut settings.always_sprites_on_top,
+                );
+                ui.slider("Volume", 0.0, 10.0, &mut settings.volume);
+                ui.slider("Speed", 0.1, 3.0, &mut settings.speed);
+                if let Some(c) = ui.begin_combo(
+                    "Screen Size",
+                    format!("{}x{}px", settings.screen_size.0, settings.screen_size.1),
+                ) {
+                    [(256, 240), (256, 224), (240, 212), (224, 192)]
+                        .iter()
+                        .for_each(|res| {
+                            if ui.selectable(format!("{}x{}px", res.0, res.1)) {
+                                settings.screen_size = *res;
+                            }
+                        });
+                    c.end();
+                }
+                ui.same_line();
+                if ui.button("Reset to 1") {
+                    settings.speed = 1.0;
+                }
+                let s = nes.cartridge.debug_string();
+                if !s.is_empty() {
+                    ui.text(s);
+                }
+                if ui.collapsing_header("Previous Instructions", TreeNodeFlags::empty()) {
+                    nes.previous_states.iter().rev().take(0x20).for_each(|s| {
+                        ui.text(format!("{:?}", s));
+                    });
+                }
+                if ui.collapsing_header("Graphics Debug", TreeNodeFlags::empty()) {
+                    ui.checkbox("Debug palette", &mut settings.use_debug_palette);
+                    if ui.collapsing_header("CHR ROM/RAM", TreeNodeFlags::empty()) {
+                        if let Some(c) =
+                            ui.begin_combo("Palette", format!("Palette {}", self.palette_index))
+                        {
+                            (0..8).for_each(|i| {
+                                let label = format!("Palette {}", i);
+                                if ui.selectable(label) {
+                                    self.palette_index = i;
                                 }
                             });
-                        c.end();
-                    }
-                    ui.same_line();
-                    if ui.button("Reset to 1") {
-                        settings.speed = 1.0;
-                    }
-                    let s = nes.cartridge.debug_string();
-                    if !s.is_empty() {
-                        ui.text(s);
-                    }
-                    if ui.collapsing_header("Previous Instructions", TreeNodeFlags::empty()) {
-                        nes.previous_states.iter().rev().take(0x20).for_each(|s| {
-                            ui.text(format!("{:?}", s));
-                        });
-                    }
-                    if ui.collapsing_header("Graphics Debug", TreeNodeFlags::empty()) {
-                        ui.checkbox("Debug palette", &mut settings.use_debug_palette);
-                        if ui.collapsing_header("CHR ROM/RAM", TreeNodeFlags::empty()) {
-                            if let Some(c) =
-                                ui.begin_combo("Palette", format!("Palette {}", self.palette_index))
-                            {
-                                (0..8).for_each(|i| {
-                                    let label = format!("Palette {}", i);
-                                    if ui.selectable(label) {
-                                        self.palette_index = i;
+                            c.end();
+                        }
+                        if let Some(c) = ui.begin_combo("Page", format!("Page {}", self.tile_page))
+                        {
+                            (0..(self.num_tiles / (self.num_columns * self.num_rows))).for_each(
+                                |i| {
+                                    if ui.selectable(format!("Page {}", i)) {
+                                        self.tile_page = i;
                                     }
-                                });
-                                c.end();
-                            }
-                            if let Some(c) =
-                                ui.begin_combo("Page", format!("Page {}", self.tile_page))
+                                },
+                            );
+                            c.end();
+                        }
+                        ui.slider("Scale", 0.01, 10.0, &mut self.chr_size);
+                        let size = [
+                            self.chr_size * 8.0 * self.num_columns as f32,
+                            self.chr_size * 8.0 * self.num_rows as f32,
+                        ];
+                        let image = imgui::Image::new(TextureId::new(chr_tex_num as usize), size);
+                        image.build(&ui);
+                    }
+                    if ui.collapsing_header("Nametables", TreeNodeFlags::empty()) {
+                        if ui.button("Copy snapshot to keyboard") {
+                            let mut ctx: ClipboardContext = ClipboardProvider::new().unwrap();
+                            if ctx
+                                .set_contents(format!("{:?}", nes.ppu.nametable_ram))
+                                .is_err()
                             {
-                                (0..(self.num_tiles / (self.num_columns * self.num_rows)))
-                                    .for_each(|i| {
-                                        if ui.selectable(format!("Page {}", i)) {
-                                            self.tile_page = i;
-                                        }
-                                    });
-                                c.end();
+                                error!("Unable to set contents of clipboard");
                             }
-                            ui.slider("Scale", 0.01, 10.0, &mut self.chr_size);
-                            let size = [
-                                self.chr_size * 8.0 * self.num_columns as f32,
-                                self.chr_size * 8.0 * self.num_rows as f32,
-                            ];
-                            check_error!(gl);
-                            let image =
-                                imgui::Image::new(TextureId::new(chr_tex_num as usize), size);
-                            image.build(&ui);
                         }
-                        if ui.collapsing_header("Nametables", TreeNodeFlags::empty()) {
-                            if ui.button("Copy snapshot to keyboard") {
-                                let mut ctx: ClipboardContext = ClipboardProvider::new().unwrap();
-                                if ctx
-                                    .set_contents(format!("{:?}", nes.ppu.nametable_ram))
-                                    .is_err()
-                                {
-                                    error!("Unable to set contents of clipboard");
-                                }
-                            }
-                            let f = ui.push_font(self.small_font);
-                            ui.text(DebugWindow::format_nametable_text(&nes.ppu, &nes.cartridge));
-                            f.pop();
-                            imgui::Image::new(TextureId::new(2), [64.0 * 8.0, 60.0 * 8.0])
-                                .build(&ui);
-                        }
+                        let f = ui.push_font(self.small_font);
+                        ui.text(DebugWindow::format_nametable_text(&nes.ppu, &nes.cartridge));
+                        f.pop();
+                        imgui::Image::new(TextureId::new(2), [64.0 * 8.0, 60.0 * 8.0]).build(&ui);
                     }
-                    if ui.collapsing_header("Audio", TreeNodeFlags::empty()) {
-                        ui.checkbox("Record?", &mut settings.record_audio);
-                        ui.text(format!("Pulse 0 : {:?}", nes.apu.pulse_registers[0]));
-                        ui.text(format!("Pulse 1 : {:?}", nes.apu.pulse_registers[1]));
-                        ui.text(format!("Triangle: {:?}", nes.apu.triangle_register));
-                        ui.text(format!("Noise   : {:?}", nes.apu.noise_register));
-                        ui.text(format!("DMC     : {:?}", nes.apu.dmc_register));
-                    }
-                });
-            let draw_data = self.imgui.render();
-            self.renderer
-                .render(draw_data)
-                .expect("Error rendering DearImGui");
-        }
+                }
+                if ui.collapsing_header("Audio", TreeNodeFlags::empty()) {
+                    ui.checkbox("Record?", &mut settings.record_audio);
+                    ui.text(format!("Pulse 0 : {:?}", nes.apu.pulse_registers[0]));
+                    ui.text(format!("Pulse 1 : {:?}", nes.apu.pulse_registers[1]));
+                    ui.text(format!("Triangle: {:?}", nes.apu.triangle_register));
+                    ui.text(format!("Noise   : {:?}", nes.apu.noise_register));
+                    ui.text(format!("DMC     : {:?}", nes.apu.dmc_register));
+                }
+            });
+        let draw_data = self.imgui.render();
+        self.renderer
+            .render(draw_data)
+            .expect("Error rendering DearImGui");
         self.window.gl_swap_window();
+        return to_return;
     }
     fn format_nametable_text(ppu: &Ppu, cartridge: &Cartridge) -> String {
         [
