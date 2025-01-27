@@ -9,17 +9,10 @@ pub struct Screen {
     gl: Context,
     // palette: [[f32; 3]; 0x40],
     palette: [[u8; 3]; 0x40],
-    chr_tex: NativeTexture,
     // Stuff for rendering to screen
     screen_texture: NativeTexture,
     screen_program: NativeProgram,
     screen_vao: NativeVertexArray,
-    // Stuff for rendering a bunch of tiles at once
-    tile_program: NativeProgram,
-    tile_vao: NativeVertexArray,
-    // Stuff for rendering a scanline
-    scanline_program: NativeProgram,
-    scanline_vao: NativeVertexArray,
     // Program for rendering a primitve using wireframe
     wireframe_program: NativeProgram,
     wireframe_vao: NativeVertexArray,
@@ -30,37 +23,12 @@ impl Screen {
     // TODO: Rename
     pub fn new(gl: Context) -> Screen {
         unsafe {
-            // Send CHR ROM/RAM data
-            let chr_tex = gl.create_texture().unwrap();
-            // Create tile program
-            let tile_program = create_program(
-                &gl,
-                include_str!("../shaders/tiles.vert"),
-                include_str!("../shaders/tile.frag"),
-            );
-            // Create tile vertices
-            let tile_vao = create_f32_slice_vao(
-                &gl,
-                [[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]].as_flattened(),
-                2,
-            );
-
             let (screen_vao, screen_program, screen_texture) =
                 create_screen_texture(&gl, (256, 240));
             // Load pallete data and convert to RGB values
             let palette_data: &[u8] = include_bytes!("../2C02G_wiki.pal");
-            let palette: [[u8; 3]; 64] = core::array::from_fn(|i| {
-                core::array::from_fn(|j| palette_data[3 * i + j]) // as f32 / 255.0)
-            });
-            // Create scanline program
-            let scanline_program = create_program(
-                &gl,
-                include_str!("../shaders/scanline.vert"),
-                include_str!("../shaders/color.frag"),
-            );
-            let scanline_vao =
-                create_f32_slice_vao(&gl, [[0.0, 0.0], [1.0, 0.0]].as_flattened(), 2);
-
+            let palette: [[u8; 3]; 64] =
+                core::array::from_fn(|i| core::array::from_fn(|j| palette_data[3 * i + j]));
             let wireframe_program = create_program(
                 &gl,
                 include_str!("../shaders/wireframe.vert"),
@@ -78,11 +46,6 @@ impl Screen {
                 screen_texture,
                 screen_vao,
                 palette,
-                chr_tex,
-                tile_program,
-                tile_vao,
-                scanline_program,
-                scanline_vao,
                 wireframe_program,
                 wireframe_vao,
                 settings: Settings::default(),
@@ -148,6 +111,15 @@ impl Screen {
             if settings.oam_debug {
                 self.gl.use_program(Some(self.wireframe_program));
                 self.gl.bind_vertex_array(Some(self.wireframe_vao));
+                check_error!(self.gl);
+                set_uniform!(
+                    self.gl,
+                    self.wireframe_program,
+                    "screenSize",
+                    uniform_2_f32,
+                    settings.screen_size.0 as f32,
+                    settings.screen_size.1 as f32
+                );
                 check_error!(self.gl);
                 nes.ppu.oam.chunks(4).enumerate().for_each(|(i, obj)| {
                     set_uniform!(
