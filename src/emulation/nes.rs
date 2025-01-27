@@ -645,6 +645,7 @@ impl Nes {
     /// Just finishes rendering the frame if the NES is halfway done rendering one.
     /// Returns the total number of cycles ran.
     pub fn advance_frame(&mut self, settings: Option<Settings>) -> Result<u32, String> {
+        let settings = settings.unwrap_or_default();
         let mut cycles = 0;
         loop {
             let scanline = self.ppu.scanline();
@@ -670,14 +671,14 @@ impl Nes {
             cycles += c;
             if self
                 .ppu
-                .advance_dots(3 * c as u32, &mut self.cartridge, settings)
+                .advance_dots(3 * c as u32, &mut self.cartridge, &settings)
                 && self.ppu.get_nmi_enabled()
             {
                 self.on_nmi();
                 cycles += 7;
                 self.apu.advance_cpu_cycles(7, &mut self.cartridge);
                 self.cartridge.advance_cpu_cycles(7);
-                self.ppu.advance_dots(21, &mut self.cartridge, settings);
+                self.ppu.advance_dots(21, &mut self.cartridge, &settings);
             }
             // If we have finished VBlank and are rendering the next frame
             if scanline != 0 && self.ppu.scanline() == 0 {

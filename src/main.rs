@@ -119,7 +119,7 @@ fn main() {
             } else {
                 // Advance 1 frame
                 window.make_gl_current();
-                let cycles_to_wait = match nes.advance_frame(Some(settings)) {
+                let cycles_to_wait = match nes.advance_frame(Some(settings.clone())) {
                     Ok(c) => c,
                     Err(e) => {
                         error!("Error encountered while advancing emulator: {:X?}", e);
@@ -173,7 +173,13 @@ fn main() {
 
         let data = window.audio.all_samples.into_boxed_slice();
         let samples = Samples::new(data);
-        write(&Path::new("./sample.wav"), &samples, 1_789_000, 1).unwrap();
+        write(
+            &Path::new(format!("./{}.wav", settings.record_audio_filename).as_str()),
+            &samples,
+            1_789_000,
+            1,
+        )
+        .unwrap();
         // Save game if we want to
         if nes.cartridge.has_battery_backed_ram() {
             info!("Writing savedata to to {:#?}", savedata_path);

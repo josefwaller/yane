@@ -283,9 +283,8 @@ impl Ppu {
         &mut self,
         dots: u32,
         cartridge: &mut Cartridge,
-        settings_opt: Option<Settings>,
+        settings: &Settings,
     ) -> bool {
-        let settings = settings_opt.unwrap_or_default();
         self.open_bus_dots += dots;
         if self.open_bus_dots >= DOTS_PER_OPEN_BUS_DECAY && self.open_bus != 0 {
             self.open_bus = 0;

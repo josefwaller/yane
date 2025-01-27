@@ -385,6 +385,11 @@ impl DebugWindow {
                     }
                 }
                 if ui.collapsing_header("Audio", TreeNodeFlags::empty()) {
+                    ui.input_text(
+                        "Recording file name (.wav)",
+                        &mut settings.record_audio_filename,
+                    )
+                    .build();
                     ui.checkbox("Record?", &mut settings.record_audio);
                     ui.text(format!("Pulse 0 : {:?}", nes.apu.pulse_registers[0]));
                     ui.text(format!("Pulse 1 : {:?}", nes.apu.pulse_registers[1]));
