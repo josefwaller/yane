@@ -360,29 +360,29 @@ impl Ppu {
                                     None
                                 };
                                 // Check for sprite
-                                if let Some((j, p)) = self.scanline_sprites[x as usize] {
-                                    if self.is_sprite_rendering_enabled() {
-                                        // Check for sprite 0 hit
-                                        if !self.sprite_zero_hit()
-                                            && j == 0
-                                            && output.is_some()
-                                            && self.dot.1 > 0
-                                            && x < 255
-                                            && (x > 7
-                                                || (!self.sprite_left_clipping()
-                                                    && !self.background_left_clipping()))
-                                        {
-                                            self.status |= 0x40;
-                                        }
-                                        if self.oam[4 * j + 2] & 0x20 == 0
-                                            || output == None
-                                            || settings.always_sprites_on_top
-                                        {
-                                            output = Some(p);
+                                if self.dot.1 < RENDER_SCANLINES {
+                                    if let Some((j, p)) = self.scanline_sprites[x as usize] {
+                                        if self.is_sprite_rendering_enabled() {
+                                            // Check for sprite 0 hit
+                                            if !self.sprite_zero_hit()
+                                                && j == 0
+                                                && output.is_some()
+                                                && self.dot.1 > 0
+                                                && x < 255
+                                                && (x > 7
+                                                    || (!self.sprite_left_clipping()
+                                                        && !self.background_left_clipping()))
+                                            {
+                                                self.status |= 0x40;
+                                            }
+                                            if self.oam[4 * j + 2] & 0x20 == 0
+                                                || output == None
+                                                || settings.always_sprites_on_top
+                                            {
+                                                output = Some(p);
+                                            }
                                         }
                                     }
-                                }
-                                if self.dot.1 < RENDER_SCANLINES {
                                     self.output[self.dot.1 as usize][x as usize] =
                                         output.unwrap_or(self.palette_ram[0] as usize);
                                 }

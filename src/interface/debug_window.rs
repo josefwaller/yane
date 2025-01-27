@@ -2,9 +2,11 @@ use std::{cmp::min, time::Duration};
 
 use log::*;
 
-use crate::{check_error, utils::*, NametableArrangement, Nes, Settings, DEBUG_PALETTE};
+use crate::{
+    check_error, utils::*, Cartridge, NametableArrangement, Nes, Ppu, Settings, DEBUG_PALETTE,
+};
 use glow::{HasContext, NativeProgram, NativeTexture, VertexArray};
-use imgui::{Condition::FirstUseEver, TextureId, TreeNodeFlags};
+use imgui::{Condition::FirstUseEver, FontId, TextureId, TreeNodeFlags};
 use imgui_glow_renderer::AutoRenderer;
 use imgui_sdl2_support::SdlPlatform;
 use sdl2::{event::Event, sys::Always, EventPump, Sdl, VideoSubsystem};
@@ -28,6 +30,9 @@ pub struct DebugWindow {
     chr_size: f32,
     // Update nametable every 6 "ticks" (should be around 10 Hz)
     nametable_timer: u32,
+    // Fonts
+    default_font: FontId,
+    small_font: FontId,
 
     chr_tex: NativeTexture,
     nametable_tex: NativeTexture,
@@ -49,9 +54,16 @@ impl DebugWindow {
         let mut imgui = imgui::Context::create();
         imgui.set_ini_filename(None);
         imgui.set_log_filename(None);
-        imgui
+        let default_font = imgui
             .fonts()
             .add_font(&[imgui::FontSource::DefaultFontData { config: None }]);
+        let mut small_config = imgui::FontConfig::default();
+        small_config.size_pixels = 9.0;
+        let small_font = imgui
+            .fonts()
+            .add_font(&[imgui::FontSource::DefaultFontData {
+                config: Some(small_config),
+            }]);
 
         unsafe {
             let palette_data: &[u8] = include_bytes!("../2C02G_wiki.pal");
@@ -79,6 +91,8 @@ impl DebugWindow {
                 chr_tex,
                 nametable_tex,
                 nametable_timer: 0,
+                default_font,
+                small_font,
             }
         }
     }
@@ -351,6 +365,9 @@ impl DebugWindow {
                             image.build(&ui);
                         }
                         if ui.collapsing_header("Nametables", TreeNodeFlags::empty()) {
+                            let f = ui.push_font(self.small_font);
+                            ui.text(DebugWindow::format_nametable_text(&nes.ppu, &nes.cartridge));
+                            f.pop();
                             imgui::Image::new(TextureId::new(2), [64.0 * 8.0, 60.0 * 8.0])
                                 .build(&ui);
                         }
@@ -370,5 +387,56 @@ impl DebugWindow {
                 .expect("Error rendering DearImGui");
         }
         self.window.gl_swap_window();
+    }
+    fn format_nametable_text(ppu: &Ppu, cartridge: &Cartridge) -> String {
+        [
+            [
+                ppu.top_left_nametable_addr(),
+                ppu.top_right_nametable_addr(),
+            ],
+            [
+                ppu.bot_left_nametable_addr(),
+                ppu.bot_right_nametable_addr(),
+            ],
+        ]
+        .into_iter()
+        .map(|nts| {
+            nts.map(|nt| {
+                (0..30)
+                    .map(|y| {
+                        (0..32)
+                            .map(|x| {
+                                ppu.nametable_ram
+                                    [cartridge.transform_nametable_addr(nt + 32 * y + x)]
+                            })
+                            .collect::<Vec<u8>>()
+                    })
+                    // Collect into a vector since we still need to merge the left and right
+                    .collect::<Vec<Vec<u8>>>()
+            })
+            .into_iter()
+            .fold(vec![Vec::<u8>::new(); 30], |mut a, e| {
+                // Combine left and right rows into full row
+                e.into_iter().enumerate().for_each(|(i, row)| {
+                    let l = a.len();
+                    a[i % l].extend_from_slice(row.as_slice());
+                });
+                a
+            })
+        })
+        // Combine the two halves into one big image
+        .fold(String::new(), |a, e| {
+            // Combine top and bottom nametables
+            format!(
+                "{}{}",
+                a,
+                e.into_iter().fold(String::new(), |a, e| format!(
+                    "{}{}\n",
+                    a,
+                    e.into_iter()
+                        .fold(String::new(), |a, e| format!("{}{:2X}", a, e))
+                ))
+            )
+        })
     }
 }
