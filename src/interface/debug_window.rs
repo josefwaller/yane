@@ -309,6 +309,10 @@ impl DebugWindow {
                 );
                 ui.slider("Volume", 0.0, 10.0, &mut settings.volume);
                 ui.slider("Speed", 0.1, 3.0, &mut settings.speed);
+                ui.same_line();
+                if ui.button("Reset to 1") {
+                    settings.speed = 1.0;
+                }
                 if let Some(c) = ui.begin_combo(
                     "Screen Size",
                     format!("{}x{}px", settings.screen_size.0, settings.screen_size.1),
@@ -321,10 +325,6 @@ impl DebugWindow {
                             }
                         });
                     c.end();
-                }
-                ui.same_line();
-                if ui.button("Reset to 1") {
-                    settings.speed = 1.0;
                 }
                 let s = nes.cartridge.debug_string();
                 if !s.is_empty() {
