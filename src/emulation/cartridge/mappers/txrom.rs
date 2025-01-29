@@ -45,7 +45,7 @@ impl Default for TxRom {
 impl Mapper for TxRom {
     fn read_cpu(&self, cpu_addr: usize, mem: &crate::CartridgeMemory) -> u8 {
         if cpu_addr < 0x6000 {
-            warn!("Invalid address {:X}", cpu_addr);
+            warn!("Trying to read PRG RAM where there is none: {:X}", cpu_addr);
             0
         } else if cpu_addr < 0x8000 {
             if mem.prg_ram.len() == 0 {

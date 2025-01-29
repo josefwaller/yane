@@ -3,313 +3,19 @@ use std::fmt::Debug;
 
 use log::*;
 
-use super::Cartridge;
+use crate::Cartridge;
 
-pub trait AudioRegister {
-    /// Return whether the register has been muted
-    fn muted(&self) -> bool;
-    fn value(&self) -> u32 {
-        0
-    }
-    fn set_enabled(&mut self, enabled: bool);
-}
+use super::{DmcRegister, NoiseRegister, PulseRegister, TriangleRegister, DMC_RATES};
 
-#[derive(Clone, Copy, Default)]
-pub struct LengthCounter {
-    pub halt: bool,
-    pub load: usize,
-}
-impl LengthCounter {
-    fn muted(&self) -> bool {
-        self.load == 0
-    }
-    fn clock(&mut self) {
-        if !self.halt && self.load > 0 {
-            self.load -= 1;
-        }
-    }
-}
-impl Debug for LengthCounter {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "halt={} load={:X}", self.halt, self.load)
-    }
-}
-#[derive(Clone, Copy, Default, Debug)]
-pub struct Envelope {
-    /// Constant volume flag
-    pub constant: bool,
-    /// Volume value (either the volume or the volume reload value)
-    pub volume: usize,
-    /// Current value of the volume divider
-    pub divider: usize,
-    /// Current value of the volume decay
-    pub decay: usize,
-}
-impl Envelope {
-    pub fn clock(&mut self, restart: bool) {
-        // Clock volume divider
-        if self.divider == 0 {
-            self.divider = self.volume;
-            // Clock volume decay
-            if self.decay == 0 {
-                // Reset if loop flag is set
-                if restart {
-                    self.decay = 0xF;
-                }
-            } else {
-                self.decay -= 1;
-            }
-        } else {
-            self.divider -= 1;
-        }
-    }
-    pub fn value(&self) -> u32 {
-        if self.constant {
-            self.volume as u32
-        } else {
-            self.decay as u32
-        }
-    }
-}
-#[derive(Clone, Copy, Default)]
-pub struct PulseRegister {
-    /// The index of the duty to use
-    pub duty: u32,
-    /// The period of the pulse wave
-    pub timer: usize,
-    // The amount to reload the timer with when it hits 0
-    pub timer_reload: usize,
-    /// The envelope
-    pub envelope: Envelope,
-    pub length_counter: LengthCounter,
-    // Sweep enabled flag
-    pub sweep_enabled: bool,
-    /// Sweep period
-    pub sweep_period: usize,
-    pub sweep_target_period: usize,
-    /// Sweep divider
-    pub sweep_divider: usize,
-    /// Sweep negate flag
-    pub sweep_negate: bool,
-    /// Sweep shift amount
-    pub sweep_shift: usize,
-    // Whether the register is enabled
-    pub enabled: bool,
-    // Sequencer, i.e. the index of the pulse value currently being sent ot the mixer
-    pub sequencer: usize,
-}
-const DUTY_CYCLES: [[u32; 8]; 4] = [
-    [0, 1, 0, 0, 0, 0, 0, 0],
-    [0, 1, 1, 0, 0, 0, 0, 0],
-    [0, 1, 1, 1, 1, 0, 0, 0],
-    [1, 0, 0, 1, 1, 1, 1, 1],
-];
-impl AudioRegister for PulseRegister {
-    fn muted(&self) -> bool {
-        // Conditions for register being disabled
-        !self.enabled
-            || self.sweep_target_period > 0x7FF
-            || self.length_counter.muted()
-            || self.timer_reload < 8
-    }
-    fn value(&self) -> u32 {
-        if self.muted() || DUTY_CYCLES[self.duty as usize][self.sequencer] == 0 {
-            0
-        } else {
-            self.envelope.value()
-        }
-    }
-    fn set_enabled(&mut self, enabled: bool) {
-        self.enabled = enabled;
-        if !self.enabled {
-            self.length_counter.load = 0;
-        }
-    }
-}
-impl Debug for PulseRegister {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "on={} timer={:3X} target_period={:X} divider={:X} duty={:X} length=[{:?}] sweep=[on={} shift={:X}]",
-            self.enabled,
-            self.timer_reload,
-            self.sweep_target_period,
-            self.sweep_divider,
-            self.duty,
-            self.length_counter,
-            self.sweep_enabled,
-            self.sweep_shift
-        )
-    }
-}
 const LENGTH_TABLE: [usize; 0x20] = [
     0x0A, 0xFE, 0x14, 0x02, 0x28, 0x04, 0x50, 0x06, 0xA0, 0x08, 0x3C, 0x0A, 0x0E, 0x0C, 0x1A, 0x0E,
     0x0C, 0x10, 0x18, 0x12, 0x30, 0x14, 0x60, 0x16, 0xC0, 0x18, 0x48, 0x1A, 0x10, 0x1C, 0x20, 0x1E,
 ];
 
-#[derive(Clone, Copy, Default)]
-pub struct TriangleRegister {
-    pub length_counter: LengthCounter,
-    pub linear_counter: usize,
-    // Linear counter reload value
-    pub linear_counter_reload: usize,
-    pub reload_flag: bool,
-    pub timer_reload: u32,
-    pub enabled: bool,
-    pub sequencer: u32,
-    pub timer: u32,
-}
-impl Debug for TriangleRegister {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "on={} timer={:3X} length=[{:?}] linear={:X}",
-            self.enabled, self.timer_reload, self.length_counter, self.linear_counter
-        )
-    }
-}
-impl AudioRegister for TriangleRegister {
-    fn muted(&self) -> bool {
-        !self.enabled
-            || self.length_counter.muted()
-            || self.timer_reload < 2
-            || self.linear_counter == 0
-    }
-    fn value(&self) -> u32 {
-        if self.sequencer <= 15 {
-            self.sequencer
-        } else {
-            31 - self.sequencer
-        }
-    }
-    fn set_enabled(&mut self, enabled: bool) {
-        self.enabled = enabled;
-        if self.enabled {
-            self.timer = 0;
-        } else {
-            self.length_counter.load = 0;
-        }
-    }
-}
-
 const NOISE_TIMER_PERIODS: [u32; 16] = [
     4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068,
 ];
-#[derive(Clone, Copy)]
-pub struct NoiseRegister {
-    pub length_counter: LengthCounter,
-    pub enabled: bool,
-    pub timer: u32,
-    pub timer_reload: u32,
-    pub envelope: Envelope,
-    // false = 0, true = 1
-    pub mode: bool,
-    // This is actually 15 bits wide
-    pub shift: u16,
-}
-impl Debug for NoiseRegister {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "on={} timer={:3X} length=[{:?}]",
-            self.enabled, self.timer, self.length_counter
-        )
-    }
-}
 
-impl Default for NoiseRegister {
-    fn default() -> Self {
-        NoiseRegister {
-            length_counter: LengthCounter::default(),
-            enabled: false,
-            timer: 0,
-            timer_reload: 0,
-            envelope: Envelope::default(),
-            mode: false,
-            shift: 1,
-        }
-    }
-}
-
-impl AudioRegister for NoiseRegister {
-    fn muted(&self) -> bool {
-        !self.enabled || self.length_counter.muted() || self.shift & 0x01 == 1
-    }
-    fn value(&self) -> u32 {
-        if self.muted() {
-            0
-        } else {
-            self.envelope.value()
-        }
-    }
-    fn set_enabled(&mut self, enabled: bool) {
-        self.enabled = enabled;
-        if !self.enabled {
-            self.length_counter.load = 0;
-        }
-    }
-}
-
-const DMC_RATES: [u32; 16] = [
-    428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54,
-];
-
-#[derive(Clone, Default)]
-pub struct DmcRegister {
-    enabled: bool,
-    irq_enabled: bool,
-    repeat: bool,
-    rate: u32,
-    timer: u32,
-    time_reload: u32,
-    // Address of the sample, in CPU memory space
-    sample_addr: usize,
-    // Length of hte sample in bytes
-    sample_len: usize,
-    // Number of bytes remaining in the sample
-    bytes_remaining: usize,
-    // Byte of the sample currently in buffer
-    sample: u8,
-    bits_left: u32,
-    output: u32,
-    silent: bool,
-}
-impl Debug for DmcRegister {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "on={} timer={:3X} repeat={} sample_addr={:X} sample_len={:X} IRQ={}",
-            self.enabled,
-            self.time_reload,
-            self.repeat,
-            self.sample_addr,
-            self.sample_len,
-            self.irq_enabled,
-        )
-    }
-}
-impl AudioRegister for DmcRegister {
-    fn muted(&self) -> bool {
-        false
-    }
-    fn value(&self) -> u32 {
-        if self.silent {
-            0
-        } else {
-            self.output
-        }
-    }
-    fn set_enabled(&mut self, enabled: bool) {
-        self.enabled = enabled;
-    }
-}
-impl DmcRegister {
-    pub fn load_sample(&mut self, cartridge: &mut Cartridge) {
-        let i = self.sample_len - self.bytes_remaining;
-        self.sample = cartridge.read_cpu(self.sample_addr + i);
-        self.bits_left = 7;
-    }
-}
 const STEPS: [i32; 5] = [7457, 14912, 22371, 29828, 37281];
 
 #[derive(Debug, Clone)]
@@ -384,6 +90,9 @@ impl Apu {
             }
             0x4010 => {
                 d.irq_enabled = (value & 0x80) != 0;
+                if !d.irq_enabled {
+                    d.irq_flag = false;
+                }
                 d.repeat = (value & 0x40) != 0;
                 d.rate = DMC_RATES[(value & 0x0F) as usize];
                 d.time_reload = d.rate;
@@ -392,13 +101,10 @@ impl Apu {
             0x4011 => d.output = (value & 0x7F) as u32,
             0x4012 => {
                 d.sample_addr = (value as usize * 64) + 0xC000;
-                d.silent = false;
+                d.sample_index = d.sample_addr;
             }
             0x4013 => {
                 d.sample_len = (value as usize) * 16 + 1;
-                // Cause an immediate reload
-                d.bits_left = 0;
-                d.bytes_remaining = d.sample_len;
             }
             0x4015 => {
                 self.pulse_registers[0].set_enabled((value & 0x01) != 0);
@@ -438,7 +144,8 @@ impl Apu {
         }
         match addr {
             0x4015 => {
-                let v = bit_flag!(self.irq_flag, 6)
+                let v = bit_flag!(self.dmc_register.irq_flag, 7)
+                    | bit_flag!(self.irq_flag, 6)
                     | bit_flag!(self.dmc_register.bytes_remaining > 0, 4)
                     | bit_flag!(self.noise_register.length_counter.load > 0, 3)
                     | bit_flag!(self.triangle_register.length_counter.load > 0, 2)
@@ -565,29 +272,36 @@ impl Apu {
                 n.shift = (n.shift >> 1) | (feedback << 14);
             }
             let d = &mut self.dmc_register;
-            if d.enabled {
-                d.timer = (d.timer + 1) % max(d.time_reload, 1);
-                if d.timer == 0 {
-                    if d.bits_left == 0 {
-                        // Go to next byte
-                        if d.bytes_remaining == 1 {
-                            if d.repeat {
-                                d.bytes_remaining = d.sample_len;
-                                d.load_sample(cartridge);
-                            } else {
-                                d.silent = true;
-                            }
-                        } else if d.bytes_remaining > 1 {
-                            // Load next sample
-                            d.bytes_remaining -= 1;
+            d.timer = (d.timer + 1) % max(d.time_reload, 1);
+            if d.timer == 0 {
+                if !d.silent {
+                    // Todo: Don't just clamp, check range
+                    d.output = (d.output as i32 + if (d.sample & 0x01) == 1 { 2 } else { -2 })
+                        .clamp(0, 127) as u32;
+                }
+                d.sample = d.sample >> 1;
+                d.bits_left = d.bits_left.saturating_sub(1);
+                // Check for next sample
+                if d.bits_left == 0 {
+                    // Go to next byte
+                    if d.bytes_remaining == 1 {
+                        if d.repeat {
+                            d.bytes_remaining = d.sample_len;
+                            d.sample_index = d.sample_addr;
                             d.load_sample(cartridge);
+                        } else {
+                            d.silent = true;
+                            d.bytes_remaining = 0;
+                            if d.irq_enabled {
+                                d.irq_flag = true;
+                            }
                         }
-                    } else {
-                        // Todo: Don't just clamp, check range
-                        d.output = (d.output as i32 + if (d.sample & 0x01) == 1 { 2 } else { -2 })
-                            .clamp(0, 127) as u32;
-                        d.sample = d.sample >> 1;
-                        d.bits_left -= 1;
+                    } else if d.bytes_remaining > 1 {
+                        // Load next sample
+                        d.bytes_remaining -= 1;
+                        d.sample_index += 1;
+                        d.load_sample(cartridge);
+                        d.silent = false;
                     }
                 }
             }

@@ -663,7 +663,7 @@ impl Nes {
             } else {
                 has_been_out_of_vblank = true;
             }
-            // Check for cartridge interrupt
+            // Check for cartridge or dmc interrupt interrupt
             if !self.cpu.s_r.i {
                 if let Some(addr) = self.cartridge.mapper.irq_addr() {
                     self.interrupt_to_addr(addr);
