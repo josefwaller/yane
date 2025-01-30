@@ -1,4 +1,7 @@
-use std::cmp::{max, min};
+use std::{
+    cmp::{max, min},
+    collections::VecDeque,
+};
 
 use crate::Settings;
 
@@ -56,6 +59,9 @@ pub struct Ppu {
     open_bus_dots: u32,
     // Cycles since status byte was read
     status_dots: u32,
+    // Tile buffer, PPU has a 2 tile slice buffer
+    // Note that each tile slice is 2 bytes with a palette index, so each entry corresponds to one slice
+    tile_buffer: VecDeque<(usize, usize, usize)>,
 }
 
 impl Ppu {
@@ -80,6 +86,7 @@ impl Ppu {
             open_bus: 0,
             open_bus_dots: 0,
             status_dots: 0,
+            tile_buffer: VecDeque::from([(0, 0, 0); 2]),
         }
     }
 
@@ -315,28 +322,13 @@ impl Ppu {
                         // Refresh scanline sprites
                         self.refresh_scanline_sprites(self.dot.1, cartridge, &settings);
                     } else if self.dot.0 <= 256 && self.dot.0 % 8 == 7 {
-                        // Get nametable
-                        let nt_addr =
-                            cartridge.transform_nametable_addr(0x2000 + (self.v as usize & 0x0FFF));
-                        let nt_num = self.nametable_ram[nt_addr] as usize;
-                        // Get palette index
-                        let palette_byte_addr = cartridge.transform_nametable_addr(
-                            (0x23C0
-                                + (self.v & 0xC00)
-                                + ((self.v >> 4) & 0x38)
-                                + ((self.v >> 2) & 0x07)) as usize,
-                        );
-                        let palette_byte = self.nametable_ram[palette_byte_addr];
-                        let palette_shift = ((self.v & 0x40) >> 4) + ((self.v & 0x02) >> 0);
-                        let palette_index = ((palette_byte >> palette_shift) as usize) & 0x03;
-                        // Get high/low byte of tile
-                        let fine_y = ((self.v & 0x7000) >> 12) as usize;
-                        let mut tile_low = cartridge
-                            .read_ppu(self.nametable_tile_addr() + 16 * nt_num + fine_y)
-                            as usize;
-                        let mut tile_high = cartridge
-                            .read_ppu(self.nametable_tile_addr() + 16 * nt_num + 8 + fine_y)
-                            as usize;
+                        self.read_tile_to_buffer(cartridge);
+                        self.coarse_x_inc();
+                        let (mut tile_low, mut tile_high, palette_index) =
+                            match self.tile_buffer.pop_front() {
+                                Some(v) => v,
+                                None => (0, 0, 0),
+                            };
                         // Add tile data to output
                         tile_high <<= 1;
                         (0..8).for_each(|i| {
@@ -389,6 +381,12 @@ impl Ppu {
                             tile_low >>= 1;
                             tile_high >>= 1;
                         });
+                    } else if self.dot.0 == 256 {
+                        // Empty buffer
+                        self.tile_buffer.clear();
+                    } else if [328, 336].contains(&self.dot.0) {
+                        // Fetch tiles for next line
+                        self.read_tile_to_buffer(cartridge);
                         self.coarse_x_inc();
                     }
                 }
@@ -416,6 +414,27 @@ impl Ppu {
             }
         });
         to_return
+    }
+
+    fn read_tile_to_buffer(&mut self, cartridge: &mut Cartridge) {
+        // Get nametable
+        let nt_addr = cartridge.transform_nametable_addr(0x2000 + (self.v as usize & 0x0FFF));
+        let nt_num = self.nametable_ram[nt_addr] as usize;
+        // Get palette index
+        let palette_byte_addr = cartridge.transform_nametable_addr(
+            (0x23C0 + (self.v & 0xC00) + ((self.v >> 4) & 0x38) + ((self.v >> 2) & 0x07)) as usize,
+        );
+        let palette_byte = self.nametable_ram[palette_byte_addr];
+        let palette_shift = ((self.v & 0x40) >> 4) + ((self.v & 0x02) >> 0);
+        let palette_index = ((palette_byte >> palette_shift) as usize) & 0x03;
+        // Get high/low byte of tile
+        let fine_y = ((self.v & 0x7000) >> 12) as usize;
+        let tile_low =
+            cartridge.read_ppu(self.nametable_tile_addr() + 16 * nt_num + fine_y) as usize;
+        let tile_high =
+            cartridge.read_ppu(self.nametable_tile_addr() + 16 * nt_num + 8 + fine_y) as usize;
+        self.tile_buffer
+            .push_back((tile_low, tile_high, palette_index));
     }
 
     // Coarse X increment on V
