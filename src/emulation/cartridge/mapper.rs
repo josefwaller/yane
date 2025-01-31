@@ -1,5 +1,5 @@
 use super::{
-    mappers::{CnRom, NRom, SxRom, TxRom, UxRom},
+    mappers::{CnRom, NRom, PxRom, SxRom, TxRom, UxRom},
     CartridgeMemory, NametableArrangement,
 };
 pub trait Mapper {
@@ -34,6 +34,7 @@ pub fn get_mapper(mapper_id: usize) -> Box<dyn Mapper> {
         2 => Box::new(UxRom::default()),
         3 => Box::new(CnRom::default()),
         4 => Box::new(TxRom::default()),
+        9 => Box::new(PxRom::default()),
         _ => panic!("Unsupported mapper: {}", mapper_id),
     }
 }

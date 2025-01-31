@@ -8,3 +8,5 @@ mod cnrom;
 pub use cnrom::CnRom;
 mod txrom;
 pub use txrom::TxRom;
+mod pxrom;
+pub use pxrom::PxRom;

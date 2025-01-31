@@ -34,7 +34,7 @@ impl Default for Settings {
             speed: 1.0,
             scanline_sprite_limit: true,
             always_sprites_on_top: false,
-            record_audio: true,
+            record_audio: false,
             record_audio_filename: "sample".to_string(),
             screen_size: (256, 240),
         }

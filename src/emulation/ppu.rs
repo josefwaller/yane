@@ -321,13 +321,16 @@ impl Ppu {
                     if self.dot.0 == 263 {
                         // Refresh scanline sprites
                         self.refresh_scanline_sprites(self.dot.1, cartridge, &settings);
-                    } else if self.dot.0 <= 256 && self.dot.0 % 8 == 7 {
+                    } else if self.dot.0 <= 255 && self.dot.0 % 8 == 7 {
                         self.read_tile_to_buffer(cartridge);
                         self.coarse_x_inc();
                         let (mut tile_low, mut tile_high, palette_index) =
                             match self.tile_buffer.pop_front() {
                                 Some(v) => v,
-                                None => (0, 0, 0),
+                                None => {
+                                    error!("Tile buffer is empty (this should never happen)");
+                                    (0, 0, 0)
+                                }
                             };
                         // Add tile data to output
                         tile_high <<= 1;
@@ -381,7 +384,7 @@ impl Ppu {
                             tile_low >>= 1;
                             tile_high >>= 1;
                         });
-                    } else if self.dot.0 == 256 {
+                    } else if self.dot.0 == 300 {
                         // Empty buffer
                         self.tile_buffer.clear();
                     } else if [328, 336].contains(&self.dot.0) {
