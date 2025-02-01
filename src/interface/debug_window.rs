@@ -313,6 +313,7 @@ impl DebugWindow {
                 if ui.button("Reset to 1") {
                     settings.speed = 1.0;
                 }
+                ui.checkbox("Verbose Logging", &mut settings.verbose_logging);
                 if let Some(c) = ui.begin_combo(
                     "Screen Size",
                     format!("{}x{}px", settings.screen_size.0, settings.screen_size.1),

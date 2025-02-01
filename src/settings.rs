@@ -22,6 +22,9 @@ pub struct Settings {
     pub record_audio_filename: String,
     // Screen output size, only used by window
     pub screen_size: (u32, u32),
+    // Whether to verbosely log a lot of things
+    // Mostly just used in development
+    pub verbose_logging: bool,
 }
 
 impl Default for Settings {
@@ -37,6 +40,7 @@ impl Default for Settings {
             record_audio: false,
             record_audio_filename: "sample".to_string(),
             screen_size: (256, 240),
+            verbose_logging: false,
         }
     }
 }

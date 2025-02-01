@@ -16,6 +16,8 @@ const SCANLINES_PER_FRAME: u32 = 262;
 const PRERENDER_SCANLINE: u32 = SCANLINES_PER_FRAME - 1;
 /// Number of render scanlines (scanlines during rendering)
 const RENDER_SCANLINES: u32 = 240;
+/// Visible dots per scanline
+const RENDER_DOTS: u32 = 256;
 const DOTS_PER_OPEN_BUS_DECAY: u32 = 1_789_000 / 3;
 
 #[derive(Debug)]
@@ -318,12 +320,33 @@ impl Ppu {
                 // IF we are in the visible picture
                 if self.dot.1 < RENDER_SCANLINES || self.dot.1 == PRERENDER_SCANLINE {
                     // Fetch sprites to render at dot 263
-                    if self.dot.0 == 263 {
+                    if self.dot.0 == 264 {
                         // Refresh scanline sprites
                         self.refresh_scanline_sprites(self.dot.1, cartridge, &settings);
-                    } else if self.dot.0 <= 255 && self.dot.0 % 8 == 7 {
+                    }
+                    // Check if we should fetch a tile
+                    if self.dot.0 < 256 && self.dot.0 % 8 == 7 {
                         self.read_tile_to_buffer(cartridge);
                         self.coarse_x_inc();
+                    } else if self.dot.0 == 300 {
+                        // Empty buffer
+                        self.tile_buffer.clear();
+                    } else if [328, 336].contains(&self.dot.0) {
+                        // Fetch tiles for next line
+                        self.read_tile_to_buffer(cartridge);
+                        self.coarse_x_inc();
+                    }
+                }
+                if self.dot.0 == 256 && !self.can_access_vram() {
+                    self.fine_y_inc();
+                    // Copy horizontal nametable and coarse X
+                    self.v = (self.v & !0x41F) + (self.t & 0x41F);
+                }
+            }
+            // Set output if we are in the visible picture
+            if self.dot.0 < RENDER_DOTS + 8 && self.dot.1 < RENDER_SCANLINES {
+                if self.is_background_rendering_enabled() || self.is_sprite_rendering_enabled() {
+                    if self.dot.0 % 8 == 7 {
                         let (mut tile_low, mut tile_high, palette_index) =
                             match self.tile_buffer.pop_front() {
                                 Some(v) => v,
@@ -377,6 +400,13 @@ impl Ppu {
                                             }
                                         }
                                     }
+                                    if settings.verbose_logging && x > 248 {
+                                        debug!(
+                                            "Setting output {:?} to {:X}",
+                                            (self.dot.1, x),
+                                            output.unwrap_or(self.palette_ram[0] as usize)
+                                        );
+                                    }
                                     self.output[self.dot.1 as usize][x as usize] =
                                         output.unwrap_or(self.palette_ram[0] as usize);
                                 }
@@ -384,26 +414,15 @@ impl Ppu {
                             tile_low >>= 1;
                             tile_high >>= 1;
                         });
-                    } else if self.dot.0 == 300 {
-                        // Empty buffer
-                        self.tile_buffer.clear();
-                    } else if [328, 336].contains(&self.dot.0) {
-                        // Fetch tiles for next line
-                        self.read_tile_to_buffer(cartridge);
-                        self.coarse_x_inc();
+                    }
+                } else {
+                    // Set to black
+                    if self.dot.0 < 256 && self.dot.1 < RENDER_SCANLINES {
+                        self.output[self.dot.1 as usize][self.dot.0 as usize] = 0x0F;
                     }
                 }
-                if self.dot.0 == 256 && !self.can_access_vram() {
-                    self.fine_y_inc();
-                    // Copy horizontal nametable and coarse X
-                    self.v = (self.v & !0x41F) + (self.t & 0x41F);
-                }
-            } else {
-                // Set to black
-                if self.dot.0 < 256 && self.dot.1 < RENDER_SCANLINES {
-                    self.output[self.dot.1 as usize][self.dot.0 as usize] = 0x0F;
-                }
             }
+
             if self.dot == (1, 241) {
                 // Set vblank
                 self.status |= 0x80;
