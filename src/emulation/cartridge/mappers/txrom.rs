@@ -179,6 +179,12 @@ impl Mapper for TxRom {
     fn nametable_arrangement(&self) -> Option<NametableArrangement> {
         Some(self.nametable)
     }
+    fn get_debug_string(&self) -> String {
+        format!(
+            "Counter enabled = {:}, reload = {:}",
+            self.irq_enable, self.irq_reload
+        )
+    }
     fn irq_addr(&mut self) -> Option<usize> {
         if self.generate_irq {
             self.generate_irq = false;

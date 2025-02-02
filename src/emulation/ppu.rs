@@ -61,9 +61,10 @@ pub struct Ppu {
     open_bus_dots: u32,
     // Cycles since status byte was read
     status_dots: u32,
-    // Tile buffer, PPU has a 2 tile slice buffer
-    // Note that each tile slice is 2 bytes with a palette index, so each entry corresponds to one slice
-    tile_buffer: VecDeque<(usize, usize, usize)>,
+    // Tile buffer, emulates both the 2 16bit shift registers for the tile data
+    // and the 8bit shift register for the attribute data.
+    // First entry is the tile data (index of the pixel in the palette), second is the palette index
+    tile_buffer: VecDeque<(usize, usize)>,
 }
 
 impl Ppu {
@@ -88,7 +89,7 @@ impl Ppu {
             open_bus: 0,
             open_bus_dots: 0,
             status_dots: 0,
-            tile_buffer: VecDeque::from([(0, 0, 0); 2]),
+            tile_buffer: VecDeque::from([(0, 0); 16]),
         }
     }
 
@@ -328,9 +329,6 @@ impl Ppu {
                     if self.dot.0 < 256 && self.dot.0 % 8 == 7 {
                         self.read_tile_to_buffer(cartridge);
                         self.coarse_x_inc();
-                    } else if self.dot.0 == 300 {
-                        // Empty buffer
-                        self.tile_buffer.clear();
                     } else if [328, 336].contains(&self.dot.0) {
                         // Fetch tiles for next line
                         self.read_tile_to_buffer(cartridge);
@@ -344,84 +342,7 @@ impl Ppu {
                 }
             }
             // Set output if we are in the visible picture
-            if self.dot.0 < RENDER_DOTS + 8 && self.dot.1 < RENDER_SCANLINES {
-                if self.is_background_rendering_enabled() || self.is_sprite_rendering_enabled() {
-                    if self.dot.0 % 8 == 7 {
-                        let (mut tile_low, mut tile_high, palette_index) =
-                            match self.tile_buffer.pop_front() {
-                                Some(v) => v,
-                                None => {
-                                    error!("Tile buffer is empty (this should never happen)");
-                                    (0, 0, 0)
-                                }
-                            };
-                        // Add tile data to output
-                        tile_high <<= 1;
-                        (0..8).for_each(|i| {
-                            let palette = if settings.use_debug_palette {
-                                &DEBUG_PALETTE
-                            } else {
-                                &self.palette_ram
-                            };
-                            let x: isize = self.dot.0 as isize - i as isize - self.x as isize;
-                            if x >= 0 && x < 256 {
-                                // Initially set output to background
-                                let mut output = if self.is_background_rendering_enabled() {
-                                    let index = (tile_low & 0x01) + (tile_high & 0x02);
-                                    if index == 0 {
-                                        None
-                                    } else {
-                                        Some(palette[4 * palette_index + index] as usize)
-                                    }
-                                } else {
-                                    None
-                                };
-                                // Check for sprite
-                                if self.dot.1 < RENDER_SCANLINES {
-                                    if let Some((j, p)) = self.scanline_sprites[x as usize] {
-                                        if self.is_sprite_rendering_enabled() {
-                                            // Check for sprite 0 hit
-                                            if !self.sprite_zero_hit()
-                                                && j == 0
-                                                && output.is_some()
-                                                && self.dot.1 > 0
-                                                && x < 255
-                                                && (x > 7
-                                                    || (!self.sprite_left_clipping()
-                                                        && !self.background_left_clipping()))
-                                            {
-                                                self.status |= 0x40;
-                                            }
-                                            if self.oam[4 * j + 2] & 0x20 == 0
-                                                || output == None
-                                                || settings.always_sprites_on_top
-                                            {
-                                                output = Some(p);
-                                            }
-                                        }
-                                    }
-                                    if settings.verbose_logging && x > 248 {
-                                        debug!(
-                                            "Setting output {:?} to {:X}",
-                                            (self.dot.1, x),
-                                            output.unwrap_or(self.palette_ram[0] as usize)
-                                        );
-                                    }
-                                    self.output[self.dot.1 as usize][x as usize] =
-                                        output.unwrap_or(self.palette_ram[0] as usize);
-                                }
-                            }
-                            tile_low >>= 1;
-                            tile_high >>= 1;
-                        });
-                    }
-                } else {
-                    // Set to black
-                    if self.dot.0 < 256 && self.dot.1 < RENDER_SCANLINES {
-                        self.output[self.dot.1 as usize][self.dot.0 as usize] = 0x0F;
-                    }
-                }
-            }
+            self.set_output(settings);
 
             if self.dot == (1, 241) {
                 // Set vblank
@@ -436,6 +357,71 @@ impl Ppu {
             }
         });
         to_return
+    }
+    fn set_output(&mut self, settings: &Settings) {
+        if self.dot.0 < RENDER_DOTS && self.dot.1 < RENDER_SCANLINES {
+            if self.is_background_rendering_enabled() || self.is_sprite_rendering_enabled() {
+                let palette = if settings.use_debug_palette {
+                    &DEBUG_PALETTE
+                } else {
+                    &self.palette_ram
+                };
+                // Initially set output to background
+                let mut output = if self.is_background_rendering_enabled() {
+                    let (index, palette_index) = match self.tile_buffer.get(self.x as usize) {
+                        Some(t) => *t,
+                        None => {
+                            error!(
+                                "Ppu::tile_buffer is too small (len={:}, fine x={:}, dot={:?})",
+                                self.tile_buffer.len(),
+                                self.x,
+                                self.dot
+                            );
+                            (0, 0)
+                        }
+                    };
+                    if index == 0 {
+                        None
+                    } else {
+                        Some(palette[4 * palette_index + index] as usize)
+                    }
+                } else {
+                    None
+                };
+                // Check for sprite
+                if let Some((j, p)) = self.scanline_sprites[self.dot.0 as usize] {
+                    if self.is_sprite_rendering_enabled() {
+                        // Check for sprite 0 hit
+                        if !self.sprite_zero_hit()
+                            && j == 0
+                            && output.is_some()
+                            && self.dot.1 > 0
+                            && self.dot.0 < 255
+                            && (self.dot.0 > 7
+                                || (!self.sprite_left_clipping()
+                                    && !self.background_left_clipping()))
+                        {
+                            self.status |= 0x40;
+                        }
+                        if self.oam[4 * j + 2] & 0x20 == 0
+                            || output == None
+                            || settings.always_sprites_on_top
+                        {
+                            output = Some(p);
+                        }
+                    }
+                }
+                self.output[self.dot.1 as usize][self.dot.0 as usize] =
+                    output.unwrap_or(self.palette_ram[0] as usize);
+            } else {
+                // Set to black
+                self.output[self.dot.1 as usize][self.dot.0 as usize] = 0x0F;
+            }
+        }
+        if self.dot.0 < 336 {
+            self.tile_buffer.pop_front();
+            self.tile_buffer.push_back((0, 0));
+        }
     }
 
     fn read_tile_to_buffer(&mut self, cartridge: &mut Cartridge) {
@@ -453,10 +439,19 @@ impl Ppu {
         let fine_y = ((self.v & 0x7000) >> 12) as usize;
         let tile_low =
             cartridge.read_ppu(self.nametable_tile_addr() + 16 * nt_num + fine_y) as usize;
-        let tile_high =
-            cartridge.read_ppu(self.nametable_tile_addr() + 16 * nt_num + 8 + fine_y) as usize;
-        self.tile_buffer
-            .push_back((tile_low, tile_high, palette_index));
+        // This is initially shifted right by 1 so that we can just read the second-last bit when combining it with tile_low
+        let tile_high = (cartridge.read_ppu(self.nametable_tile_addr() + 16 * nt_num + 8 + fine_y)
+            as usize)
+            << 1;
+        // Write to the last 8 entries in the 16 bit shift register
+        // Which for us is the last 8 elements in the queue
+        self.tile_buffer.truncate(8);
+        (0..8).for_each(|i| {
+            self.tile_buffer.push_back((
+                ((tile_low >> (7 - i)) & 0x01) + ((tile_high >> (7 - i)) & 0x02),
+                palette_index,
+            ))
+        });
     }
 
     // Coarse X increment on V
