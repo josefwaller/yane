@@ -314,6 +314,10 @@ impl DebugWindow {
                     settings.speed = 1.0;
                 }
                 ui.checkbox("Verbose Logging", &mut settings.verbose_logging);
+                ui.checkbox(
+                    "Restrict controller input",
+                    &mut settings.restrict_controller_directions,
+                );
                 if let Some(c) = ui.begin_combo(
                     "Screen Size",
                     format!("{}x{}px", settings.screen_size.0, settings.screen_size.1),

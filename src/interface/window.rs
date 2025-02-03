@@ -33,8 +33,12 @@ impl Window {
         let controller = Controller {
             up: pressed_keys.contains(&Keycode::W),
             left: pressed_keys.contains(&Keycode::A),
-            right: pressed_keys.contains(&Keycode::D),
-            down: pressed_keys.contains(&Keycode::S),
+            right: pressed_keys.contains(&Keycode::D)
+                && (!settings.restrict_controller_directions
+                    || !pressed_keys.contains(&Keycode::A)),
+            down: pressed_keys.contains(&Keycode::S)
+                && (!settings.restrict_controller_directions
+                    || !pressed_keys.contains(&Keycode::W)),
             a: pressed_keys.contains(&Keycode::SPACE),
             b: pressed_keys.contains(&Keycode::M),
             start: pressed_keys.contains(&Keycode::R),
@@ -45,8 +49,12 @@ impl Window {
         let controller = Controller {
             up: pressed_keys.contains(&Keycode::I),
             left: pressed_keys.contains(&Keycode::J),
-            right: pressed_keys.contains(&Keycode::L),
-            down: pressed_keys.contains(&Keycode::K),
+            right: pressed_keys.contains(&Keycode::L)
+                && (!settings.restrict_controller_directions
+                    || !pressed_keys.contains(&Keycode::J)),
+            down: pressed_keys.contains(&Keycode::K)
+                && (!settings.restrict_controller_directions
+                    || !pressed_keys.contains(&Keycode::I)),
             a: pressed_keys.contains(&Keycode::U),
             b: pressed_keys.contains(&Keycode::O),
             start: pressed_keys.contains(&Keycode::Y),

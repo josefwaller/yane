@@ -25,6 +25,9 @@ pub struct Settings {
     // Whether to verbosely log a lot of things
     // Mostly just used in development
     pub verbose_logging: bool,
+    // Whether to disallow pressing two opposite directions on the controller at the same time
+    // Can cause glitches in some games (i.e. Zelda II)
+    pub restrict_controller_directions: bool,
 }
 
 impl Default for Settings {
@@ -41,6 +44,7 @@ impl Default for Settings {
             record_audio_filename: "sample".to_string(),
             screen_size: (256, 240),
             verbose_logging: false,
+            restrict_controller_directions: true,
         }
     }
 }
