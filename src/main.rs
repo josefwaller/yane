@@ -1,3 +1,4 @@
+use clap::{Parser, Subcommand};
 use log::*;
 use sdl2::{
     event::{Event, WindowEvent},
@@ -17,6 +18,30 @@ use yane::{
     Cartridge, DebugWindow, Nes, Settings, Window, CPU_CYCLES_PER_SCANLINE, CPU_CYCLES_PER_VBLANK,
 };
 
+#[derive(Parser)]
+#[command(name = "Yane", version = "0.9", about = "An N.E.S. emulator.")]
+struct Cli {
+    #[arg(short, long, value_name = "~/.yane/settings.yml")]
+    config_file: Option<String>,
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+#[derive(Subcommand)]
+enum Command {
+    RunNes {
+        /// The .NES (iNES) file to run
+        nes_file: String,
+        /// The savedata file (.SRM).
+        /// Only used if the NES game supports battery backed static ram.
+        /// Will default to using the NES file name and location.
+        #[arg(short, long)]
+        savedata_file: Option<String>,
+    },
+    RunSaveState {
+        #[arg(short, long)]
+        save_state_file: String,
+    },
+}
 fn main() {
     {
         // Initialize logger
@@ -34,30 +59,66 @@ fn main() {
             ),
         ])
         .expect("Unable to create logger");
-        // Read file and init NES
-        let args: Vec<String> = std::env::args().collect();
-        let file_name = args[1].clone();
-        // Read cartridge data
-        let data = std::fs::read(file_name.clone()).expect("Please provide an iNES (.NES) file");
-        // Read savedata, if there is any
-        let mut savedata_path = PathBuf::from(file_name.clone());
-        savedata_path.set_extension("srm");
-        let savedata = match std::fs::read(savedata_path.clone()) {
-            Ok(d) => Some(d),
-            Err(_) => None,
-        };
-        let mut nes = Nes::from_cartridge(Cartridge::new(data.as_slice(), savedata));
-        let mut settings = Settings::default();
-
-        let sdl = sdl2::init().unwrap();
+        let sdl = sdl2::init().expect("Unable to initialize SDL");
         // Setup video
-        let video = sdl.video().unwrap();
+        let video = sdl.video().expect("Unable to initialize SDL video");
         let gl_attr = video.gl_attr();
         gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
         gl_attr.set_context_version(3, 3);
         // Setup input
         // The two windows need a shared event pump since SDL only allows one at a time
-        let mut event_pump = sdl.event_pump().unwrap();
+        let mut event_pump = sdl
+            .event_pump()
+            .expect("Unable to initialize SDL event pump");
+
+        // Read file and init NES
+        let cli = Cli::parse();
+        let (mut nes, savedata_path) = match &cli.command {
+            Some(Command::RunNes {
+                nes_file,
+                savedata_file,
+            }) => {
+                // Read cartridge data
+                let data: Vec<u8> = match std::fs::read(nes_file.clone()) {
+                    Ok(data) => data,
+                    Err(_) => {
+                        println!("Unable to read the file '{}'", nes_file);
+                        std::process::exit(1);
+                    }
+                };
+                // Read savedata, if there is any
+                let (savedata_path, savedata) = match savedata_file {
+                    Some(f) => match std::fs::read(f) {
+                        Ok(data) => (f.into(), Some(data)),
+                        Err(_) => {
+                            println!("Unable to read the .SRM file at '{}'", f);
+                            std::process::exit(1);
+                        }
+                    },
+                    None => {
+                        let mut savedata_path = PathBuf::from(nes_file.clone());
+                        savedata_path.set_extension("srm");
+                        let savedata = match std::fs::read(savedata_path.clone()) {
+                            Ok(d) => Some(d),
+                            Err(_) => None,
+                        };
+                        (
+                            savedata_path.into_os_string().into_string().unwrap(),
+                            savedata,
+                        )
+                    }
+                };
+                let nes = Nes::from_cartridge(Cartridge::new(data.as_slice(), savedata));
+                (nes, savedata_path)
+            }
+            Some(Command::RunSaveState { save_state_file }) => {
+                todo!()
+            }
+            None => {
+                todo!()
+            }
+        };
+        let mut settings = Settings::default();
 
         let mut debug_window = DebugWindow::new(&nes, &video, &sdl);
         let mut window = Window::new(&video, &sdl);
@@ -170,7 +231,6 @@ fn main() {
             }
         }
         // Save audio recording
-
         let data = window.audio.all_samples.into_boxed_slice();
         let samples = Samples::new(data);
         write(
@@ -183,7 +243,7 @@ fn main() {
         // Save game if we want to
         if nes.cartridge.has_battery_backed_ram() {
             info!("Writing savedata to to {:#?}", savedata_path);
-            std::fs::write(savedata_path, nes.cartridge.memory.prg_ram)
+            std::fs::write(&savedata_path, nes.cartridge.memory.prg_ram)
                 .expect("Unable to save savefile");
         }
     }
