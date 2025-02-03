@@ -5,7 +5,7 @@ use std::{
 
 use crate::Settings;
 
-use super::{cartridge, Cartridge, NametableArrangement, DEBUG_PALETTE};
+use super::{Cartridge, DEBUG_PALETTE};
 use log::*;
 
 /// Number of dots per scanline
@@ -313,6 +313,9 @@ impl Ppu {
             } else {
                 (self.dot.0 + 1, self.dot.1)
             };
+            // Set output if we are in the visible picture
+            self.set_output(settings);
+            // Load tile data
             if self.is_background_rendering_enabled() || self.is_sprite_rendering_enabled() {
                 if self.dot == (0, PRERENDER_SCANLINE) {
                     // Copy vertical component from T to V
@@ -341,9 +344,6 @@ impl Ppu {
                     self.v = (self.v & !0x41F) + (self.t & 0x41F);
                 }
             }
-            // Set output if we are in the visible picture
-            self.set_output(settings);
-
             if self.dot == (1, 241) {
                 // Set vblank
                 self.status |= 0x80;
@@ -359,66 +359,68 @@ impl Ppu {
         to_return
     }
     fn set_output(&mut self, settings: &Settings) {
+        // If we are in the render window
         if self.dot.0 < RENDER_DOTS && self.dot.1 < RENDER_SCANLINES {
-            if self.is_background_rendering_enabled() || self.is_sprite_rendering_enabled() {
-                let palette = if settings.use_debug_palette {
-                    &DEBUG_PALETTE
-                } else {
-                    &self.palette_ram
-                };
-                // Initially set output to background
-                let mut output = if self.is_background_rendering_enabled() {
-                    let (index, palette_index) = match self.tile_buffer.get(self.x as usize) {
-                        Some(t) => *t,
-                        None => {
-                            error!(
-                                "Ppu::tile_buffer is too small (len={:}, fine x={:}, dot={:?})",
-                                self.tile_buffer.len(),
-                                self.x,
-                                self.dot
-                            );
-                            (0, 0)
-                        }
-                    };
-                    if index == 0 {
-                        None
-                    } else {
-                        Some(palette[4 * palette_index + index] as usize)
+            let palette = if settings.use_debug_palette {
+                &DEBUG_PALETTE
+            } else {
+                &self.palette_ram
+            };
+            // Initially set output to background
+            let mut output = if self.is_background_rendering_enabled()
+                && !(self.dot.0 < 8 && self.background_left_clipping())
+            {
+                let (index, palette_index) = match self.tile_buffer.get(self.x as usize) {
+                    Some(t) => *t,
+                    None => {
+                        error!(
+                            "Ppu::tile_buffer is too small (len={:}, fine x={:}, dot={:?})",
+                            self.tile_buffer.len(),
+                            self.x,
+                            self.dot
+                        );
+                        (0, 0)
                     }
-                } else {
-                    None
                 };
-                // Check for sprite
+                if index == 0 {
+                    None
+                } else {
+                    Some(palette[4 * palette_index + index] as usize)
+                }
+            } else {
+                None
+            };
+            // Check for sprite
+            if self.is_sprite_rendering_enabled()
+                && !(self.dot.0 < 8 && self.sprite_left_clipping())
+            {
                 if let Some((j, p)) = self.scanline_sprites[self.dot.0 as usize] {
-                    if self.is_sprite_rendering_enabled() {
-                        // Check for sprite 0 hit
-                        if !self.sprite_zero_hit()
-                            && j == 0
-                            && output.is_some()
-                            && self.dot.1 > 0
-                            && self.dot.0 < 255
-                            && (self.dot.0 > 7
-                                || (!self.sprite_left_clipping()
-                                    && !self.background_left_clipping()))
-                        {
-                            self.status |= 0x40;
-                        }
-                        if self.oam[4 * j + 2] & 0x20 == 0
-                            || output == None
-                            || settings.always_sprites_on_top
-                        {
-                            output = Some(p);
-                        }
+                    // Check for sprite 0 hit
+                    if !self.sprite_zero_hit()
+                        && j == 0
+                        && output.is_some()
+                        && self.dot.1 > 0
+                        && self.dot.0 < 255
+                        && (self.dot.0 > 7
+                            || (!self.sprite_left_clipping() && !self.background_left_clipping()))
+                    {
+                        // debug!("Hit {:?}", self.dot);
+                        self.status |= 0x40;
+                    }
+                    if self.oam[4 * j + 2] & 0x20 == 0
+                        || output == None
+                        || settings.always_sprites_on_top
+                    {
+                        output = Some(p);
                     }
                 }
-                self.output[self.dot.1 as usize][self.dot.0 as usize] =
-                    output.unwrap_or(self.palette_ram[0] as usize);
-            } else {
-                // Set to black
-                self.output[self.dot.1 as usize][self.dot.0 as usize] = 0x0F;
             }
+            // Set output to background/sprite or palette 0
+            self.output[self.dot.1 as usize][self.dot.0 as usize] =
+                output.unwrap_or(self.palette_ram[0] as usize);
         }
-        if self.dot.0 < 336 {
+        // Shift tile and attribute registers
+        if self.dot.0 < 337 {
             self.tile_buffer.pop_front();
             self.tile_buffer.push_back((0, 0));
         }
