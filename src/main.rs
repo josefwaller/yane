@@ -21,25 +21,35 @@ use yane::{
 #[derive(Parser)]
 #[command(name = "Yane", version = "0.9", about = "An N.E.S. emulator.")]
 struct Cli {
-    #[arg(short, long, value_name = "~/.yane/settings.yml")]
-    config_file: Option<String>,
     #[command(subcommand)]
     command: Option<Command>,
 }
+#[derive(Parser)]
+struct CommonArgs {
+    /// The configuration file for the emulator's settings
+    #[arg(short, long, value_name = "~/.yane/settings.yml")]
+    config_file: Option<String>,
+}
 #[derive(Subcommand)]
 enum Command {
-    RunNes {
-        /// The .NES (iNES) file to run
+    /// Load and run an iNES (.nes) file
+    RunInes {
+        /// The iNes file to run
         nes_file: String,
         /// The savedata file (.SRM).
         /// Only used if the NES game supports battery backed static ram.
         /// Will default to using the NES file name and location.
         #[arg(short, long)]
         savedata_file: Option<String>,
+        #[command(flatten)]
+        args: CommonArgs,
     },
-    RunSaveState {
-        #[arg(short, long)]
-        save_state_file: String,
+    /// Load and run a savestate
+    RunSavestate {
+        /// The binary savestate to load
+        savestate_file: String,
+        #[command(flatten)]
+        args: CommonArgs,
     },
 }
 fn main() {
@@ -73,10 +83,11 @@ fn main() {
 
         // Read file and init NES
         let cli = Cli::parse();
-        let (mut nes, savedata_path) = match &cli.command {
-            Some(Command::RunNes {
+        let (mut nes, savedata_path, settings) = match &cli.command {
+            Some(Command::RunInes {
                 nes_file,
                 savedata_file,
+                args,
             }) => {
                 // Read cartridge data
                 let data: Vec<u8> = match std::fs::read(nes_file.clone()) {
@@ -109,7 +120,8 @@ fn main() {
                     }
                 };
                 let nes = Nes::from_cartridge(Cartridge::new(data.as_slice(), savedata));
-                (nes, savedata_path)
+                let settings_path = args.config_file.clone().unwrap_or_default();
+                (nes, savedata_path, load_settings(&settings_path))
             }
             Some(Command::RunSaveState { save_state_file }) => {
                 todo!()
@@ -247,4 +259,9 @@ fn main() {
                 .expect("Unable to save savefile");
         }
     }
+}
+
+fn load_settings(settings_path: &str) -> Settings {
+    // TODO: Read settings
+    Settings::default()
 }
