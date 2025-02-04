@@ -29,6 +29,9 @@ struct CommonArgs {
     /// The configuration file for the emulator's settings
     #[arg(short, long, value_name = "~/.yane/settings.yml")]
     config_file: Option<String>,
+    /// Start in debug mode
+    #[arg(short, long)]
+    debug: bool,
 }
 #[derive(Subcommand)]
 enum Command {
@@ -83,7 +86,7 @@ fn main() {
 
         // Read file and init NES
         let cli = Cli::parse();
-        let (mut nes, savedata_path, settings) = match &cli.command {
+        let (mut nes, savedata_path, args) = match &cli.command {
             Some(Command::RunInes {
                 nes_file,
                 savedata_file,
@@ -121,18 +124,25 @@ fn main() {
                 };
                 let nes = Nes::from_cartridge(Cartridge::new(data.as_slice(), savedata));
                 let settings_path = args.config_file.clone().unwrap_or_default();
-                (nes, savedata_path, load_settings(&settings_path))
+                (nes, savedata_path, args)
             }
-            Some(Command::RunSaveState { save_state_file }) => {
+            Some(Command::RunSavestate {
+                savestate_file,
+                args,
+            }) => {
                 todo!()
             }
             None => {
                 todo!()
             }
         };
-        let mut settings = Settings::default();
+        let mut settings = load_settings(args.config_file.clone());
 
-        let mut debug_window = DebugWindow::new(&nes, &video, &sdl);
+        let mut debug_window = if args.debug {
+            Some(DebugWindow::new(&nes, &video, &sdl))
+        } else {
+            None
+        };
         let mut window = Window::new(&video, &sdl);
 
         let mut last_debug_window_render = Instant::now();
@@ -162,7 +172,10 @@ fn main() {
                         WindowEvent::Close => should_exit = true,
                         _ => {}
                     },
-                    _ => debug_window.handle_event(&event),
+                    _ => match debug_window.as_mut() {
+                        Some(d) => d.handle_event(&event),
+                        None => {}
+                    },
                 }
             }
             if should_exit {
@@ -179,8 +192,13 @@ fn main() {
             if Instant::now().duration_since(last_debug_window_render) >= DEBUG_WINDOW_REFRESH_RATE
             {
                 last_debug_window_render += DEBUG_WINDOW_REFRESH_RATE;
-                if debug_window.render(&mut nes, &event_pump, &mut settings) {
-                    nes.reset();
+                match debug_window.as_mut() {
+                    Some(d) => {
+                        if d.render(&mut nes, &event_pump, &mut settings) {
+                            nes.reset();
+                        }
+                    }
+                    None => {}
                 }
                 window.screen().set_settings(settings.clone());
             }
@@ -261,7 +279,7 @@ fn main() {
     }
 }
 
-fn load_settings(settings_path: &str) -> Settings {
+fn load_settings(settings_path: Option<String>) -> Settings {
     // TODO: Read settings
     Settings::default()
 }
