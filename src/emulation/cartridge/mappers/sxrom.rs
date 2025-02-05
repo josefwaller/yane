@@ -27,6 +27,9 @@ impl Default for SxRom {
 }
 
 impl Mapper for SxRom {
+    fn mapper_num(&self) -> u32 {
+        1
+    }
     fn read_cpu(&self, cpu_addr: usize, mem: &CartridgeMemory) -> u8 {
         if cpu_addr < 0x8000 {
             if cpu_addr < 0x6000 {

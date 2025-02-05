@@ -2,6 +2,7 @@ use std::cmp::max;
 use std::fmt::Debug;
 
 use log::*;
+use serde::{Deserialize, Serialize};
 
 use crate::Cartridge;
 
@@ -18,7 +19,7 @@ const NOISE_TIMER_PERIODS: [u32; 16] = [
 
 const STEPS: [i32; 5] = [7457, 14912, 22371, 29828, 37281];
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Apu {
     pub pulse_registers: [PulseRegister; 2],
     pub triangle_register: TriangleRegister,

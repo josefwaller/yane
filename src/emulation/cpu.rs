@@ -1,10 +1,12 @@
 use std::fmt::Debug;
 
+use serde::{Deserialize, Serialize};
+
 use crate::StatusRegister;
 
 /// The CPU of the NES.
 /// Contains all registers and is responsible for changing the flags when the values are set/unset.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Cpu {
     /// Accumulator
     pub a: u8,

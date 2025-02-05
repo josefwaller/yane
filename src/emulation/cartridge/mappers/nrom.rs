@@ -4,6 +4,9 @@ use log::*;
 #[derive(Default)]
 pub struct NRom {}
 impl Mapper for NRom {
+    fn mapper_num(&self) -> u32 {
+        0
+    }
     fn read_cpu(&self, addr: usize, mem: &CartridgeMemory) -> u8 {
         if addr < 0x6000 {
             return 0;

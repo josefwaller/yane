@@ -1,8 +1,9 @@
 use crate::{emulation::cartridge::mapper::get_mapper, Mapper};
 use log::*;
+use serde::{de::Visitor, Deserialize, Serialize};
 use std::cmp::max;
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum NametableArrangement {
     OneScreen,
     Horizontal,
@@ -11,7 +12,7 @@ pub enum NametableArrangement {
 
 /// Holds all the memory in the cartridge
 // Todo: Maybe rename (get rid of cartridge)
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct CartridgeMemory {
     pub prg_ram: Vec<u8>,
     pub prg_rom: Vec<u8>,
@@ -41,6 +42,7 @@ impl CartridgeMemory {
 
 /// An NES cartridge, or perhaps more accurately, an iNES file.
 /// Contains all the ROM and information encoded in the header.
+#[derive(Serialize, Deserialize)]
 pub struct Cartridge {
     pub memory: CartridgeMemory,
     /// Nametable mirroring arrangement

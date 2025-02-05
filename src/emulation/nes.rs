@@ -1,6 +1,8 @@
-use std::{collections::VecDeque, fmt::Debug};
+use std::{collections::VecDeque, fmt::Debug, ops::Deref};
 
 use log::*;
+use serde::{Deserialize, Serialize};
+use serde_big_array::BigArray;
 
 use crate::{opcodes::*, Apu, Cartridge, Controller, Cpu, Ppu, Settings, CPU_CYCLES_PER_OAM};
 pub struct NesState {
@@ -34,6 +36,7 @@ impl Debug for NesState {
 const NUMBER_STORED_STATES: usize = 200;
 
 /// The NES.
+#[derive(Serialize, Deserialize)]
 pub struct Nes {
     /// CPU of the NES
     pub cpu: Cpu,
@@ -42,6 +45,7 @@ pub struct Nes {
     /// APU of the NES
     pub apu: Apu,
     /// Memory of the NES
+    #[serde(with = "BigArray")]
     pub mem: [u8; 0x800],
     // Cartridge inserted in the NES
     pub cartridge: Cartridge,
@@ -52,6 +56,7 @@ pub struct Nes {
     // Current bit being read from the controller
     controller_bits: [usize; 2],
     // Last 200 instructions executed, stored for debugging purposes
+    #[serde(skip)]
     pub previous_states: VecDeque<NesState>,
 }
 
@@ -90,6 +95,16 @@ impl Nes {
             + (nes.cartridge.read_cpu(0xFFFC) as u16);
         info!("Initialized PC to {:#X}", nes.cpu.p_c);
         nes
+    }
+    /// Create a new NES from a savestate.
+    /// The savestate must have come from the exact same version of YANE.
+    pub fn from_savestate(savestate: Vec<u8>) -> Result<Nes, postcard::Error> {
+        postcard::from_bytes(savestate.deref())
+    }
+    /// Get a serialized copy of this NES that can be written to a binary file
+    /// Used for savestates.
+    pub fn to_savestate(&self) -> Result<Vec<u8>, postcard::Error> {
+        postcard::to_allocvec(self)
     }
 
     fn read_controller_bit(&mut self, num: usize) -> u8 {

@@ -1,7 +1,9 @@
+use serde::{Deserialize, Serialize};
+
 use super::{envelope::Envelope, length_counter::LengthCounter};
 use std::fmt::Debug;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 pub struct NoiseRegister {
     pub length_counter: LengthCounter,
     pub enabled: bool,

@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 use log::*;
+use postcard::from_bytes;
 use sdl2::{
     event::{Event, WindowEvent},
     keyboard::Keycode,
@@ -7,8 +8,8 @@ use sdl2::{
 use simplelog::{
     ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger,
 };
-use std::thread::sleep;
 use std::{fs::File, path::PathBuf};
+use std::{ops::Deref, thread::sleep};
 use std::{
     path::Path,
     time::{Duration, Instant},
@@ -129,9 +130,19 @@ fn main() {
             Some(Command::RunSavestate {
                 savestate_file,
                 args,
-            }) => {
-                todo!()
-            }
+            }) => match std::fs::read(savestate_file) {
+                Err(e) => {
+                    error!("Unable to read {}: {}", savestate_file, e);
+                    std::process::exit(1);
+                }
+                Ok(data) => match Nes::from_savestate(data) {
+                    Err(e) => {
+                        error!("Unable to deserialize NES: {}", e);
+                        std::process::exit(1);
+                    }
+                    Ok(nes) => (nes, "".to_string(), args),
+                },
+            },
             None => {
                 todo!()
             }

@@ -1,4 +1,6 @@
-#[derive(Clone, Copy, Default, Debug)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Copy, Default, Debug, Serialize, Deserialize)]
 pub struct Envelope {
     /// Constant volume flag
     pub constant: bool,

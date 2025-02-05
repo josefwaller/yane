@@ -1,5 +1,7 @@
 use std::fmt::Debug;
-#[derive(Clone, Copy, Default)]
+
+use serde::{Deserialize, Serialize};
+#[derive(Clone, Copy, Default, Serialize, Deserialize)]
 pub struct LengthCounter {
     pub halt: bool,
     pub load: usize,

@@ -4,3 +4,4 @@
 *.log
 *.wav
 **/**.srm
+savestate-*.bin

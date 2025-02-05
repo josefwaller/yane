@@ -24,6 +24,9 @@ impl Default for PxRom {
     }
 }
 impl Mapper for PxRom {
+    fn mapper_num(&self) -> u32 {
+        9
+    }
     fn read_cpu(&self, cpu_addr: usize, mem: &crate::CartridgeMemory) -> u8 {
         if cpu_addr < 0x6000 {
             warn!("Invalid CPU addr {:X}", cpu_addr);

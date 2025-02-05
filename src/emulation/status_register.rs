@@ -1,8 +1,10 @@
 use std::fmt::Debug;
 
+use serde::{Deserialize, Serialize};
+
 /// The status register of the NES.
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct StatusRegister {
     /// The carry flag, also known as the unsigned overflow flag
     pub c: bool,

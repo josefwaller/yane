@@ -1,16 +1,12 @@
-use std::{cmp::min, time::Duration};
-
 use clipboard::{ClipboardContext, ClipboardProvider};
 use log::*;
 
-use crate::{
-    check_error, utils::*, Cartridge, NametableArrangement, Nes, Ppu, Settings, DEBUG_PALETTE,
-};
-use glow::{HasContext, NativeProgram, NativeTexture, VertexArray};
-use imgui::{Condition::FirstUseEver, FontId, TextureId, TreeNodeFlags};
+use crate::{check_error, utils::*, Cartridge, Nes, Ppu, Settings, DEBUG_PALETTE};
+use glow::{HasContext, NativeTexture};
+use imgui::{FontId, TextureId, TreeNodeFlags};
 use imgui_glow_renderer::AutoRenderer;
 use imgui_sdl2_support::SdlPlatform;
-use sdl2::{event::Event, sys::Always, EventPump, Sdl, VideoSubsystem};
+use sdl2::{event::Event, EventPump, Sdl, VideoSubsystem};
 // Renders all the CHR ROM (and CHR RAM TBD) in the cartridge for debug purposes
 pub struct DebugWindow {
     window: sdl2::video::Window,
@@ -318,6 +314,21 @@ impl DebugWindow {
                     "Restrict controller input",
                     &mut settings.restrict_controller_directions,
                 );
+                if ui.button("Quick save (savestate)") {
+                    let filename = chrono::Local::now()
+                        .format("./savestate-%Y-%m-%d-%H-%M-%S.bin")
+                        .to_string();
+                    match postcard::to_allocvec(nes) {
+                        Err(e) => error!("Unable to serialize NES: {}", e),
+                        Ok(bytes) => {
+                            // Write bytes to file
+                            match std::fs::write(&filename, bytes) {
+                                Ok(()) => info!("Wrote savestate to {}", &filename),
+                                Err(e) => error!("Unable to write to file {}: {}", &filename, e),
+                            }
+                        }
+                    }
+                }
                 if let Some(c) = ui.begin_combo(
                     "Screen Size",
                     format!("{}x{}px", settings.screen_size.0, settings.screen_size.1),

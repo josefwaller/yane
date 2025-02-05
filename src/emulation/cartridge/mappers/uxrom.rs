@@ -8,6 +8,9 @@ pub struct UxRom {
 
 const BANK_SIZE: usize = 0x4000;
 impl Mapper for UxRom {
+    fn mapper_num(&self) -> u32 {
+        2
+    }
     fn read_cpu(&self, cpu_addr: usize, mem: &CartridgeMemory) -> u8 {
         if cpu_addr < 0x8000 {
             warn!("Reading PRG RAM when there is none (ADDR = {:X})", cpu_addr);

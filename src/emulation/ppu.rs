@@ -7,6 +7,8 @@ use crate::Settings;
 
 use super::{Cartridge, DEBUG_PALETTE};
 use log::*;
+use serde::{Deserialize, Serialize};
+use serde_big_array::BigArray;
 
 /// Number of dots per scanline
 const DOTS_PER_SCANLINE: u32 = 341;
@@ -20,9 +22,14 @@ const RENDER_SCANLINES: u32 = 240;
 const RENDER_DOTS: u32 = 256;
 const DOTS_PER_OPEN_BUS_DECAY: u32 = 1_789_000 / 3;
 
-#[derive(Debug)]
+fn zeros() -> [[usize; 256]; 240] {
+    [[0; 256]; 240]
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Ppu {
     /// The Object Access Memory, or OAM
+    #[serde(with = "BigArray")]
     pub oam: [u8; 0x100],
     /// The PPUCTRL register
     pub ctrl: u8,
@@ -40,6 +47,7 @@ pub struct Ppu {
     pub oam_dma: Option<u8>,
     /// VRAM
     pub palette_ram: [u8; 0x20],
+    #[serde(with = "BigArray")]
     pub nametable_ram: [u8; 0x800],
     // W register, false = 0
     w: bool,
@@ -52,8 +60,10 @@ pub struct Ppu {
     x: u32,
     // Indices of sprites on the scanline it is currently drawing
     // None means no sprite on that pixel
+    #[serde(with = "BigArray")]
     scanline_sprites: [Option<(usize, usize)>; 256],
     // Internal screen buffer, olding indices of colours in TV palette
+    #[serde(skip, default = "zeros")]
     pub output: [[usize; 256]; 240],
     // Open bus output
     open_bus: u8,

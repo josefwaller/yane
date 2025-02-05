@@ -1,5 +1,6 @@
 use crate::{emulation::cartridge::mapper::bank_addr, Mapper};
 use log::*;
+use std::fmt::Display;
 
 #[derive(Default)]
 pub struct CnRom {
@@ -7,6 +8,9 @@ pub struct CnRom {
 }
 
 impl Mapper for CnRom {
+    fn mapper_num(&self) -> u32 {
+        3
+    }
     fn read_cpu(&self, cpu_addr: usize, mem: &crate::CartridgeMemory) -> u8 {
         let max = mem.prg_rom.len();
         if cpu_addr < 0x8000 {
