@@ -1,8 +1,10 @@
 use crate::{emulation::cartridge::CartridgeMemory, Mapper};
 use log::*;
+use serde::{Deserialize, Serialize};
 
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct NRom {}
+#[typetag::serde]
 impl Mapper for NRom {
     fn mapper_num(&self) -> u32 {
         0

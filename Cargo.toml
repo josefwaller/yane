@@ -22,6 +22,7 @@ serde = "1.0.217"
 serde-big-array = "0.5.1"
 simplelog = "0.12.2"
 test-case = "3.3.1"
+typetag = "0.2.19"
 wavers = "1.5.1"
 
 [features]

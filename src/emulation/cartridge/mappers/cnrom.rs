@@ -1,12 +1,14 @@
 use crate::{emulation::cartridge::mapper::bank_addr, Mapper};
 use log::*;
+use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct CnRom {
     chr_bank_select: usize,
 }
 
+#[typetag::serde]
 impl Mapper for CnRom {
     fn mapper_num(&self) -> u32 {
         3

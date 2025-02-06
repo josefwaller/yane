@@ -3,7 +3,9 @@ use crate::{
     Mapper, NametableArrangement,
 };
 use log::*;
+use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize)]
 pub struct PxRom {
     prg_bank: usize,
     // The CHR banks, indexed first by address (0 = 0x0000-0x0FFF, 1 = 0x1000-0x1FFF)
@@ -23,6 +25,7 @@ impl Default for PxRom {
         }
     }
 }
+#[typetag::serde]
 impl Mapper for PxRom {
     fn mapper_num(&self) -> u32 {
         9

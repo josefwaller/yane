@@ -3,7 +3,9 @@ use crate::{
     Mapper, NametableArrangement,
 };
 use log::*;
+use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize)]
 pub struct TxRom {
     prg_banks: [u32; 2],
     chr_banks: [u32; 6],
@@ -42,6 +44,7 @@ impl Default for TxRom {
     }
 }
 
+#[typetag::serde]
 impl Mapper for TxRom {
     fn mapper_num(&self) -> u32 {
         4

@@ -4,6 +4,7 @@ use super::{
     mappers::{CnRom, NRom, PxRom, SxRom, TxRom, UxRom},
     CartridgeMemory, NametableArrangement,
 };
+#[typetag::serde(tag = "mapper")]
 pub trait Mapper {
     // Read/write a byte using various memory spaces
     // Used by games, for debug reading use read_ppu_debug
@@ -28,37 +29,6 @@ pub trait Mapper {
         None
     }
     fn mapper_num(&self) -> u32;
-}
-// Serde Serialization/deserialization stuff
-struct MapperVisitor {}
-impl<'de> Visitor<'de> for MapperVisitor {
-    type Value = Box<dyn Mapper>;
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("A u32")
-    }
-    fn visit_u32<E>(self, v: u32) -> Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
-        Ok(get_mapper(v as usize))
-    }
-}
-impl Serialize for Box<dyn Mapper> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_u32(self.mapper_num())
-    }
-}
-
-impl<'de> Deserialize<'de> for Box<dyn Mapper> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        deserializer.deserialize_u32(MapperVisitor {})
-    }
 }
 pub fn get_mapper(mapper_id: usize) -> Box<dyn Mapper> {
     match mapper_id {

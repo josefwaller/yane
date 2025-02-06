@@ -1,12 +1,14 @@
 use crate::{emulation::cartridge::CartridgeMemory, Mapper};
 use log::*;
+use serde::{Deserialize, Serialize};
 
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct UxRom {
     bank: usize,
 }
 
 const BANK_SIZE: usize = 0x4000;
+#[typetag::serde]
 impl Mapper for UxRom {
     fn mapper_num(&self) -> u32 {
         2

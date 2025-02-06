@@ -2,7 +2,9 @@ use crate::{
     emulation::cartridge::mapper::bank_addr, CartridgeMemory, Mapper, NametableArrangement,
 };
 use log::*;
+use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize)]
 pub struct SxRom {
     shift: usize,
     chr_bank_0: usize,
@@ -25,7 +27,7 @@ impl Default for SxRom {
         }
     }
 }
-
+#[typetag::serde]
 impl Mapper for SxRom {
     fn mapper_num(&self) -> u32 {
         1
