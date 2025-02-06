@@ -86,18 +86,18 @@ impl Mapper for SxRom {
         mem.read_chr(addr)
     }
     fn write_cpu(&mut self, cpu_addr: usize, mem: &mut CartridgeMemory, value: u8) {
-        if !self.has_written {
-            self.has_written = true;
-            if cpu_addr < 0x8000 {
-                if cpu_addr < 0x6000 {
-                    warn!("Writing to {:X}", cpu_addr);
-                } else {
-                    let max = mem.prg_ram.len();
-                    mem.prg_ram[(cpu_addr - 0x6000) % max] = value;
-                }
+        if cpu_addr < 0x8000 {
+            if cpu_addr < 0x6000 {
+                warn!("Writing to {:X}", cpu_addr);
             } else {
-                // If value high bit is not set
-                if value & 0x80 == 0 {
+                let max = mem.prg_ram.len();
+                mem.prg_ram[(cpu_addr - 0x6000) % max] = value;
+            }
+        } else {
+            // If value high bit is not set
+            if value & 0x80 == 0 {
+                if !self.has_written {
+                    self.has_written = true;
                     // Check if shift register is full
                     let new_shift = (self.shift >> 1) | ((value as usize & 0x01) << 4);
                     if (self.shift & 0x01) != 0 {
@@ -120,11 +120,11 @@ impl Mapper for SxRom {
                         // Add bit to shift register
                         self.shift = new_shift;
                     }
-                } else {
-                    // Reset shift and set control
-                    self.shift = 0x10;
-                    self.control = self.control | 0x0C;
                 }
+            } else {
+                // Reset shift and set control
+                self.shift = 0x10;
+                self.control = self.control | 0x0C;
             }
         }
     }
