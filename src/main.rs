@@ -37,7 +37,7 @@ struct CommonArgs {
 #[derive(Subcommand)]
 enum Command {
     /// Load and run an iNES (.nes) file
-    RunInes {
+    Ines {
         /// The iNes file to run
         nes_file: String,
         /// The savedata file (.SRM).
@@ -49,7 +49,7 @@ enum Command {
         args: CommonArgs,
     },
     /// Load and run a savestate
-    RunSavestate {
+    Savestate {
         /// The binary savestate to load
         savestate_file: String,
         #[command(flatten)]
@@ -88,7 +88,7 @@ fn main() {
         // Read file and init NES
         let cli = Cli::parse();
         let (mut nes, savedata_path, args) = match &cli.command {
-            Some(Command::RunInes {
+            Some(Command::Ines {
                 nes_file,
                 savedata_file,
                 args,
@@ -127,7 +127,7 @@ fn main() {
                 let settings_path = args.config_file.clone().unwrap_or_default();
                 (nes, savedata_path, args)
             }
-            Some(Command::RunSavestate {
+            Some(Command::Savestate {
                 savestate_file,
                 args,
             }) => match std::fs::read(savestate_file) {
