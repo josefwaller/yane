@@ -659,8 +659,7 @@ impl Nes {
     /// Advance the NES by 1 frame, approx 29780 cycles.
     /// Technically will just advance the NES to the next VBlank.
     /// Returns the total number of cycles ran.
-    pub fn advance_frame(&mut self, settings: Option<Settings>) -> Result<u32, String> {
-        let settings = settings.unwrap_or_default();
+    pub fn advance_frame(&mut self, settings: &Settings) -> Result<u32, String> {
         let mut cycles = 0;
         let mut has_been_out_of_vblank = !self.ppu.in_vblank();
         loop {

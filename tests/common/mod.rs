@@ -10,9 +10,11 @@ macro_rules! nes_with_rom {
 #[macro_export]
 macro_rules! advance_nes_frames {
     ($nes: ident, $frames: literal) => {{
+        use yane::Settings;
+        let s = Settings::default();
         // Run the emulator a bit
         (0..($frames)).for_each(|_| {
-            $nes.advance_frame(None)
+            $nes.advance_frame(&s)
                 .expect("Error when advancing NES by a frame");
         });
     }};

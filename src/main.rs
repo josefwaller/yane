@@ -1,6 +1,5 @@
 use clap::{Parser, Subcommand};
 use log::*;
-use postcard::from_bytes;
 use sdl2::{
     event::{Event, WindowEvent},
     keyboard::Keycode,
@@ -8,8 +7,8 @@ use sdl2::{
 use simplelog::{
     ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger,
 };
+use std::thread::sleep;
 use std::{fs::File, path::PathBuf};
-use std::{ops::Deref, thread::sleep};
 use std::{
     path::Path,
     time::{Duration, Instant},
@@ -33,6 +32,9 @@ struct CommonArgs {
     /// Start in debug mode
     #[arg(short, long)]
     debug: bool,
+    /// Start paused, after advancing one frame in order to render one frame
+    #[arg(short, long)]
+    paused: bool,
 }
 #[derive(Subcommand)]
 enum Command {
@@ -124,7 +126,6 @@ fn main() {
                     }
                 };
                 let nes = Nes::from_cartridge(Cartridge::new(data.as_slice(), savedata));
-                let settings_path = args.config_file.clone().unwrap_or_default();
                 (nes, savedata_path, args)
             }
             Some(Command::Savestate {
@@ -155,6 +156,14 @@ fn main() {
             None
         };
         let mut window = Window::new(&video, &sdl);
+        if args.paused {
+            settings.paused = true;
+            match nes.advance_frame(&settings) {
+                Err(e) => error!("Error when advancing NES first frame: {}", e),
+                Ok(_) => {}
+            }
+            window.render(&nes, &settings);
+        }
 
         let mut last_debug_window_render = Instant::now();
         // Various constants for keeping emulator time in check with real time
@@ -221,7 +230,7 @@ fn main() {
             } else {
                 // Advance 1 frame
                 window.make_gl_current();
-                let cycles_to_wait = match nes.advance_frame(Some(settings.clone())) {
+                let cycles_to_wait = match nes.advance_frame(&settings) {
                     Ok(c) => c,
                     Err(e) => {
                         error!("Error encountered while advancing emulator: {:X?}", e);
