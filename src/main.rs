@@ -35,6 +35,9 @@ struct CommonArgs {
     /// Start paused, after advancing one frame in order to render one frame
     #[arg(short, long)]
     paused: bool,
+    /// Start the emulator muted
+    #[arg(short, long)]
+    muted: bool,
 }
 #[derive(Subcommand)]
 enum Command {
@@ -162,7 +165,9 @@ fn main() {
                 Err(e) => error!("Error when advancing NES first frame: {}", e),
                 Ok(_) => {}
             }
-            window.render(&nes, &settings);
+        }
+        if args.muted {
+            settings.volume = 0.0;
         }
 
         let mut last_debug_window_render = Instant::now();
@@ -224,6 +229,8 @@ fn main() {
             }
             // Update window
             window.update(&mut nes, keys, &settings);
+            // Render window
+            window.render(&nes, &settings);
             // Update CPU
             if settings.paused {
                 delta = Instant::now();
@@ -256,8 +263,6 @@ fn main() {
                     frame_wait_time = Duration::ZERO;
                     last_hundred_frames = now;
                 }
-                // Render window
-                window.render(&nes, &settings);
                 // Calculate how much time has passed in the emulation
                 let emu_elapsed = wait_time_per_cycle
                     .saturating_mul(cycles_to_wait as u32)
