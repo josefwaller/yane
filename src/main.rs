@@ -19,6 +19,13 @@ use yane::{
     CPU_CYCLES_PER_VBLANK,
 };
 
+fn get_in_config_dir(path: &str) -> PathBuf {
+    let mut buf = dirs::home_dir().unwrap_or(PathBuf::new());
+    buf.push(".yane");
+    buf.push(path);
+    buf
+}
+
 #[derive(Parser)]
 #[command(name = "Yane", version = "0.9", about = "An N.E.S. emulator.")]
 struct Cli {
@@ -40,8 +47,8 @@ struct CommonArgs {
     #[arg(short, long)]
     muted: bool,
     /// The .YAML file defining the key mappings for the NES
-    #[arg(long, default_value_t = String::from("$HOME/.yane/keymap.yaml"), value_name = "FILE")]
-    keymap_file: String,
+    #[arg(long, default_value = get_in_config_dir("key_map.yaml").into_os_string(), value_name = "FILE")]
+    keymap_file: PathBuf,
 }
 #[derive(Subcommand)]
 enum Command {
@@ -73,7 +80,6 @@ fn setup_config_directory() -> Result<(), Box<dyn std::error::Error>> {
     let mut config_dir = match h {
         None => Err("Unable to get home directory!"),
         Some(mut path) => {
-            debug!("Path is {:?}", &path);
             path.push(".yane");
             Ok(path)
         }
@@ -189,16 +195,20 @@ fn main() {
         };
         let mut settings = load_settings(args.config_file.clone());
         let path = &args.keymap_file;
+        debug!("Loading key map from {:?}", &path);
         let key_map = match std::fs::read_to_string(path) {
             Err(e) => {
                 info!("No custom key mapping file found, using defaults");
                 KeyMap::default()
             }
             Ok(contents) => match serde_yaml::from_str(contents.as_str()) {
-                Ok(km) => km,
+                Ok(km) => {
+                    debug!("Successfully read keymappings");
+                    km
+                }
                 Err(e) => {
                     error!(
-                        "Unable to parse the file {}: {}. Using default key mappings",
+                        "Unable to parse the file {:?}: {}. Using default key mappings",
                         path, e
                     );
                     KeyMap::default()
