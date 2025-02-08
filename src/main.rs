@@ -8,7 +8,7 @@ use simplelog::{
     ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger,
 };
 use std::thread::sleep;
-use std::{fs::File, path::PathBuf};
+use std::{fs::File, io::Write, path::PathBuf};
 use std::{
     path::Path,
     time::{Duration, Instant},
@@ -75,22 +75,39 @@ enum Command {
     },
 }
 
-fn setup_config_directory() -> Result<(), Box<dyn std::error::Error>> {
-    let h = dirs::home_dir();
-    let mut config_dir = match h {
-        None => Err("Unable to get home directory!"),
+fn get_config_dir_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    match dirs::home_dir() {
+        None => Err(Box::from("Unable to get home directory!")),
         Some(mut path) => {
             path.push(".yane");
             Ok(path)
         }
-    }?;
+    }
+}
+
+fn add_config_file(file_name: &str, contents: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let mut buf = get_config_dir_path()?;
+    buf.push(file_name);
+    debug!("Creating file {:?}", buf);
+    let mut f = std::fs::File::create(&buf)?;
+    debug!("Created file {}", file_name);
+    let mut p = f.metadata()?.permissions();
+    p.set_readonly(false);
+    f.set_permissions(p)?;
+    // Write contents
+    f.write_all(contents.as_bytes())?;
+    debug!("Wrote contents to {:?}", file_name);
+    Ok(())
+}
+
+fn setup_config_directory() -> Result<(), Box<dyn std::error::Error>> {
+    let config_dir = get_config_dir_path()?;
     debug!("Creating directory at {:?}", &config_dir);
     let _ = std::fs::create_dir(&config_dir);
+    debug!("Created directory at {:?}", &config_dir);
     let k = KeyMap::default();
     let contents = serde_yaml::to_string(&k)?;
-    config_dir.push("key_map.yaml");
-    debug!("Creating config file at {:?}", config_dir);
-    std::fs::write(config_dir, contents)?;
+    add_config_file("key_map.yaml", &contents)?;
     Ok(())
 }
 fn main() {
