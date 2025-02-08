@@ -22,7 +22,6 @@ use yane::{
 // Used for argument default values
 fn get_file_in_config_dir(path: &str) -> PathBuf {
     let mut buf = get_config_dir_path().unwrap_or(PathBuf::new());
-    buf.push(".yane");
     buf.push(path);
     buf
 }

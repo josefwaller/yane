@@ -78,6 +78,8 @@ pub struct KeyMap {
     pub pause: Key,
     pub volume_up: Key,
     pub volume_down: Key,
+    pub quicksave: Key,
+    pub quickload: Key,
 }
 
 impl Default for KeyMap {
@@ -113,6 +115,8 @@ impl Default for KeyMap {
             pause: sdl_key!(P),
             volume_up: sdl_key!(UP),
             volume_down: sdl_key!(DOWN),
+            quicksave: sdl_key!(F1),
+            quickload: sdl_key!(F2),
         }
     }
 }

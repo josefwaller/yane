@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::{utils, Audio, Controller, Nes, Screen, Settings};
 use log::*;
 use sdl2::{keyboard::Keycode, video::GLContext, Sdl, VideoSubsystem};
@@ -75,6 +77,42 @@ impl Window {
         settings.volume = (settings.volume + diff).clamp(0.0, 3.0) as f32;
         // Update audio
         self.audio.update_audio(nes, settings);
+
+        // Check for quickload
+        if self.key_pressed(&km.quicksave, keys) {
+            match nes.to_savestate() {
+                Err(e) => error!("Unable to create quicksave: {}", e),
+                Ok(data) => {
+                    let mut path = std::env::current_dir().unwrap_or_else(|e| {
+                        warn!("Unable to read current directory, defaulting to '.'. {}", e);
+                        PathBuf::from(".")
+                    });
+                    let filename = chrono::Local::now().format("savestate-%Y-%m-%d-%H-%M-%S.bin");
+                    path.push(filename.to_string());
+                    match std::fs::write(&path, data) {
+                        Ok(_) => {
+                            debug!("Wrote savestate to {:?}", path);
+                            settings.quickload_file = Some(path);
+                        }
+                        Err(e) => error!("Unable to save savestate: {}", e),
+                    }
+                }
+            }
+        } else if self.key_pressed(&km.quickload, keys) {
+            match &settings.quickload_file {
+                Some(f) => match std::fs::read(&f) {
+                    Ok(data) => match postcard::from_bytes(&data) {
+                        Ok(n) => {
+                            debug!("Loaded quicksave at {:?}", f);
+                            *nes = n;
+                        }
+                        Err(e) => error!("Unable to deserialize save state {:?}: {}", &f, e),
+                    },
+                    Err(e) => error!("Unable to read save state {:?}: {}", &f, e),
+                },
+                None => info!("No save state to quickload from"),
+            }
+        }
 
         self.last_keys = keys.clone();
     }
