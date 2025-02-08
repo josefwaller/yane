@@ -45,6 +45,8 @@ struct CommonArgs {
 }
 #[derive(Subcommand)]
 enum Command {
+    /// Initialize the configuration files at $HOME/.yane/
+    Setup,
     /// Load and run an iNES (.nes) file
     Ines {
         /// The iNes file to run
@@ -64,6 +66,26 @@ enum Command {
         #[command(flatten)]
         args: CommonArgs,
     },
+}
+
+fn setup_config_directory() -> Result<(), Box<dyn std::error::Error>> {
+    let h = dirs::home_dir();
+    let mut config_dir = match h {
+        None => Err("Unable to get home directory!"),
+        Some(mut path) => {
+            debug!("Path is {:?}", &path);
+            path.push(".yane");
+            Ok(path)
+        }
+    }?;
+    debug!("Creating directory at {:?}", &config_dir);
+    let _ = std::fs::create_dir(&config_dir);
+    let k = KeyMap::default();
+    let contents = serde_yaml::to_string(&k)?;
+    config_dir.push("key_map.yaml");
+    debug!("Creating config file at {:?}", config_dir);
+    std::fs::write(config_dir, contents)?;
+    Ok(())
 }
 fn main() {
     {
@@ -97,6 +119,16 @@ fn main() {
         // Read file and init NES
         let cli = Cli::parse();
         let (mut nes, savedata_path, args) = match &cli.command {
+            Some(Command::Setup) => match setup_config_directory() {
+                Ok(()) => {
+                    info!("Successfully created configuration files");
+                    std::process::exit(0)
+                }
+                Err(e) => {
+                    error!("Unable to create configuration files: {}", e);
+                    std::process::exit(1)
+                }
+            },
             Some(Command::Ines {
                 nes_file,
                 savedata_file,
