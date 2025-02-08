@@ -19,8 +19,9 @@ use yane::{
     CPU_CYCLES_PER_VBLANK,
 };
 
-fn get_in_config_dir(path: &str) -> PathBuf {
-    let mut buf = dirs::home_dir().unwrap_or(PathBuf::new());
+// Used for argument default values
+fn get_file_in_config_dir(path: &str) -> PathBuf {
+    let mut buf = get_config_dir_path().unwrap_or(PathBuf::new());
     buf.push(".yane");
     buf.push(path);
     buf
@@ -47,7 +48,7 @@ struct CommonArgs {
     #[arg(short, long)]
     muted: bool,
     /// The .YAML file defining the key mappings for the NES
-    #[arg(long, default_value = get_in_config_dir("key_map.yaml").into_os_string(), value_name = "FILE")]
+    #[arg(long, default_value = get_file_in_config_dir("key_map.yaml").into_os_string(), value_name = "FILE")]
     keymap_file: PathBuf,
 }
 #[derive(Subcommand)]
