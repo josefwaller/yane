@@ -46,8 +46,22 @@ impl<'de> Deserialize<'de> for Key {
         deserializer.deserialize_str(KeyVisitor {})
     }
 }
+impl Serialize for Key {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match sdl2::keyboard::Scancode::from_keycode(self.code) {
+            Some(s) => serializer.serialize_str(s.name()),
+            None => Err(serde::ser::Error::custom(format!(
+                "Unable to serialize key {:?}",
+                self.code
+            ))),
+        }
+    }
+}
 
-#[derive(Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Controller {
     pub a: Key,
     pub b: Key,
@@ -58,7 +72,7 @@ pub struct Controller {
     pub start: Key,
     pub select: Key,
 }
-#[derive(Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct KeyMap {
     pub controllers: [Controller; 2],
     pub pause: Key,

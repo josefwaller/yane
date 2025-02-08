@@ -15,7 +15,8 @@ use std::{
 };
 use wavers::{write, Samples};
 use yane::{
-    Cartridge, DebugWindow, Nes, Settings, Window, CPU_CYCLES_PER_SCANLINE, CPU_CYCLES_PER_VBLANK,
+    Cartridge, DebugWindow, KeyMap, Nes, Settings, Window, CPU_CYCLES_PER_SCANLINE,
+    CPU_CYCLES_PER_VBLANK,
 };
 
 #[derive(Parser)]
@@ -38,6 +39,9 @@ struct CommonArgs {
     /// Start the emulator muted
     #[arg(short, long)]
     muted: bool,
+    /// The .YAML file defining the key mappings for the NES
+    #[arg(long, default_value_t = String::from("$HOME/.yane/keymap.yaml"), value_name = "FILE")]
+    keymap_file: String,
 }
 #[derive(Subcommand)]
 enum Command {
@@ -152,6 +156,24 @@ fn main() {
             }
         };
         let mut settings = load_settings(args.config_file.clone());
+        let path = &args.keymap_file;
+        let key_map = match std::fs::read_to_string(path) {
+            Err(e) => {
+                info!("No custom key mapping file found, using defaults");
+                KeyMap::default()
+            }
+            Ok(contents) => match serde_yaml::from_str(contents.as_str()) {
+                Ok(km) => km,
+                Err(e) => {
+                    error!(
+                        "Unable to parse the file {}: {}. Using default key mappings",
+                        path, e
+                    );
+                    KeyMap::default()
+                }
+            },
+        };
+        settings.key_map = key_map;
 
         let mut debug_window = if args.debug {
             Some(DebugWindow::new(&nes, &video, &sdl))
