@@ -1,4 +1,4 @@
-use crate::{AppSettings, Nes, Settings};
+use crate::{AppSettings, Nes, CPU_CLOCK_SPEED};
 use log::*;
 use rubato::{
     Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
@@ -80,7 +80,7 @@ impl Audio {
         let mut out = vec![vec![0.0; self.resampler.output_frames_max()]; 1];
         if settings.speed != self.last_speed {
             self.last_speed = settings.speed;
-            let ratio = (self.queue.spec().freq as f64 / 1_789_000 as f64)
+            let ratio = (self.queue.spec().freq as f64 / CPU_CLOCK_SPEED as f64)
                 / settings.speed.min(9.9999) as f64;
             self.resampler.reset();
             self.resampler

@@ -15,7 +15,7 @@ use std::{
     time::{Duration, Instant},
 };
 use wavers::{write, Samples};
-use yane::{AppSettings, Cartridge, DebugWindow, KeyMap, Nes, Window};
+use yane::{AppSettings, Cartridge, DebugWindow, KeyMap, Nes, Window, CPU_CLOCK_SPEED};
 
 const SETTINGS_FILENAME: &str = "settings.yaml";
 const KEYMAP_FILENAME: &str = "key_map.yaml";
@@ -354,10 +354,12 @@ fn main() {
                     last_hundred_frames = now;
                 }
                 // Calculate how much time has passed in the emulation
-                // let emu_elapsed = wait_time_per_cycle
-                //     .saturating_mul(cycles_to_wait as u32)
-                //     .div_f32(settings.speed);
-                let emu_elapsed = Duration::from_millis(1000 / 60).div_f32(settings.speed);
+                const WAIT_DUR_PER_CYCLE: Duration =
+                    Duration::from_nanos(1_000_000_000 / CPU_CLOCK_SPEED as u64);
+                let emu_elapsed = WAIT_DUR_PER_CYCLE
+                    .saturating_mul(cycles_to_wait as u32)
+                    .div_f32(settings.speed);
+                // let emu_elapsed = Duration::from_millis(1000 / 60).div_f32(settings.speed);
                 // Calculate how much time has actually passed
                 let actual_elapsed = Instant::now().duration_since(delta);
                 // Wait for the difference
