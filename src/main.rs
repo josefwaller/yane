@@ -4,6 +4,7 @@ use sdl2::{
     event::{Event, WindowEvent},
     keyboard::Keycode,
 };
+use serde::{de::DeserializeOwned, Deserialize};
 use simplelog::{
     ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger,
 };
@@ -35,8 +36,8 @@ struct Cli {
 #[derive(Parser)]
 struct CommonArgs {
     /// The configuration file for the emulator's settings
-    #[arg(short, long, value_name = "~/.yane/settings.yml")]
-    config_file: Option<String>,
+    #[arg(long, default_value = get_file_in_config_dir("settings.yaml").into_os_string(), value_name = "FILE")]
+    config_file: PathBuf,
     /// Start in debug mode
     #[arg(short, long)]
     debug: bool,
@@ -95,6 +96,7 @@ fn add_config_file(file_name: &str, contents: &str) -> Result<(), Box<dyn std::e
     p.set_readonly(false);
     f.set_permissions(p)?;
     // Write contents
+    debug!("Writing contents to {:?}", file_name);
     f.write_all(contents.as_bytes())?;
     debug!("Wrote contents to {:?}", file_name);
     Ok(())
@@ -105,10 +107,40 @@ fn setup_config_directory() -> Result<(), Box<dyn std::error::Error>> {
     debug!("Creating directory at {:?}", &config_dir);
     let _ = std::fs::create_dir(&config_dir);
     debug!("Created directory at {:?}", &config_dir);
-    let k = KeyMap::default();
-    let contents = serde_yaml::to_string(&k)?;
+    let contents = serde_yaml::to_string(&KeyMap::default())?;
     add_config_file("key_map.yaml", &contents)?;
+    let contents = serde_yaml::to_string(&AppSettings::default())?;
+    add_config_file("settings.yaml", &contents)?;
     Ok(())
+}
+fn read_config_file<T>(path: &PathBuf, fallback: T) -> T
+where
+    T: DeserializeOwned + Clone,
+{
+    debug!("Reading config file {:?}", path);
+    let val = match std::fs::read_to_string(path) {
+        Err(e) => {
+            debug!(
+                "Unable to read file {:?}: {}, using fallback value",
+                path, e
+            );
+            fallback
+        }
+        Ok(contents) => match serde_yaml::from_str(&contents) {
+            Ok(value) => {
+                debug!("Successfully deserialized file {:?}", path);
+                value
+            }
+            Err(e) => {
+                error!(
+                    "Unable to parse the file {:?}: {}, using fallback value",
+                    path, e
+                );
+                fallback
+            }
+        },
+    };
+    val
 }
 fn main() {
     {
@@ -210,36 +242,20 @@ fn main() {
                 todo!()
             }
         };
-        let mut settings = load_settings(args.config_file.clone());
-        let path = &args.keymap_file;
-        debug!("Loading key map from {:?}", &path);
-        let key_map = match std::fs::read_to_string(path) {
-            Err(e) => {
-                info!("No custom key mapping file found, using defaults");
-                KeyMap::default()
-            }
-            Ok(contents) => match serde_yaml::from_str(contents.as_str()) {
-                Ok(km) => {
-                    debug!("Successfully read keymappings");
-                    km
-                }
-                Err(e) => {
-                    error!(
-                        "Unable to parse the file {:?}: {}. Using default key mappings",
-                        path, e
-                    );
-                    KeyMap::default()
-                }
-            },
-        };
+        // Load settings
+        let mut settings = read_config_file(&args.config_file, AppSettings::default());
+        // Load key map
+        let key_map = read_config_file(&args.keymap_file, KeyMap::default());
         settings.key_map = key_map;
-
+        // Create debug window if debug argument was passed
         let mut debug_window = if args.debug {
             Some(DebugWindow::new(&nes, &video, &sdl))
         } else {
             None
         };
+        // Create window
         let mut window = Window::new(&video, &sdl);
+        // Set argument settings
         if args.paused {
             settings.paused = true;
             match nes.advance_frame(&settings.emu_settings) {
@@ -257,12 +273,6 @@ fn main() {
         const CPU_CYCLES_PER_FRAME: f32 = 262.0 * CPU_CYCLES_PER_SCANLINE;
         let wait_time_per_cycle =
             Duration::from_nanos(1_000_000_000 / 60 / CPU_CYCLES_PER_FRAME as u64);
-        info!(
-            "FPS = 60, cycles/scanline={CPU_CYCLES_PER_SCANLINE}, cycles/vblank={CPU_CYCLES_PER_VBLANK}, cycles/frame={CPU_CYCLES_PER_FRAME}, wait time={wait_time_per_cycle:?}",
-        );
-        let fps =
-            1_000_000_000.0 / (CPU_CYCLES_PER_FRAME as f64 * wait_time_per_cycle.as_nanos() as f64);
-        info!("Calculated FPS: {fps}");
         // Used for logging information every 100 frames
         let mut last_hundred_frames = Instant::now();
         let mut frame_cycles = 0;
@@ -330,7 +340,7 @@ fn main() {
                 if frame_count == 600 {
                     frame_count = 0;
                     let now = Instant::now();
-                    info!(
+                    debug!(
                         "Over last 600 frames: Avg FPS: {}, duration: {:?}, avg cycles: {}, avg wait time {:#?}",
                         600.0
                             / (now.duration_since(last_hundred_frames).as_millis() as f32 / 1000.0),
@@ -382,9 +392,4 @@ fn main() {
                 .expect("Unable to save savefile");
         }
     }
-}
-
-fn load_settings(settings_path: Option<String>) -> AppSettings {
-    // TODO: Read settings
-    AppSettings::default()
 }
