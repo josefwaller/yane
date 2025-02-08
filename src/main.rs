@@ -228,7 +228,7 @@ fn main() {
                 window.screen().set_settings(settings.clone());
             }
             // Update window
-            window.update(&mut nes, keys, &settings);
+            window.update(&mut nes, &keys, &mut settings);
             // Render window
             window.render(&nes, &settings);
             // Update CPU

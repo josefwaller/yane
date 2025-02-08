@@ -6,3 +6,5 @@ mod window;
 pub use window::Window;
 mod debug_window;
 pub use debug_window::DebugWindow;
+mod key_map;
+pub use key_map::KeyMap;

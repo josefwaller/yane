@@ -1,3 +1,5 @@
+use crate::KeyMap;
+
 /// Various settings for rendering the emulator's output
 #[derive(Clone)]
 pub struct Settings {
@@ -28,6 +30,8 @@ pub struct Settings {
     // Whether to disallow pressing two opposite directions on the controller at the same time
     // Can cause glitches in some games (i.e. Zelda II)
     pub restrict_controller_directions: bool,
+    /// Game and setting controls
+    pub key_map: KeyMap,
 }
 
 impl Default for Settings {
@@ -45,6 +49,7 @@ impl Default for Settings {
             screen_size: (256, 240),
             verbose_logging: false,
             restrict_controller_directions: true,
+            key_map: KeyMap::default(),
         }
     }
 }
