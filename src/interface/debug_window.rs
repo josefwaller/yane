@@ -1,12 +1,13 @@
 use clipboard::{ClipboardContext, ClipboardProvider};
 use log::*;
 
-use crate::{check_error, utils::*, AppSettings, Cartridge, Nes, Ppu, Settings, DEBUG_PALETTE};
+use crate::{check_error, utils::*, AppSettings, Cartridge, Nes, Ppu, DEBUG_PALETTE};
 use glow::{HasContext, NativeTexture};
 use imgui::{FontId, TextureId, TreeNodeFlags};
 use imgui_glow_renderer::AutoRenderer;
 use imgui_sdl2_support::SdlPlatform;
 use sdl2::{event::Event, EventPump, Sdl, VideoSubsystem};
+
 // Renders all the CHR ROM (and CHR RAM TBD) in the cartridge for debug purposes
 pub struct DebugWindow {
     window: sdl2::video::Window,
@@ -28,7 +29,6 @@ pub struct DebugWindow {
     // Update nametable every 6 "ticks" (should be around 10 Hz)
     nametable_timer: u32,
     // Fonts
-    default_font: FontId,
     small_font: FontId,
 
     chr_tex: NativeTexture,
@@ -51,7 +51,7 @@ impl DebugWindow {
         let mut imgui = imgui::Context::create();
         imgui.set_ini_filename(None);
         imgui.set_log_filename(None);
-        let default_font = imgui
+        imgui
             .fonts()
             .add_font(&[imgui::FontSource::DefaultFontData { config: None }]);
         let mut small_config = imgui::FontConfig::default();
@@ -88,7 +88,6 @@ impl DebugWindow {
                 chr_tex,
                 nametable_tex,
                 nametable_timer: 0,
-                default_font,
                 small_font,
             }
         }

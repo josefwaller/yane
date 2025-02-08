@@ -326,27 +326,24 @@ impl Apu {
         }
     }
     pub fn on_half_frame(&mut self) {
-        self.pulse_registers
-            .iter_mut()
-            .enumerate()
-            .for_each(|(i, reg)| {
-                // Clock length halt counter
-                reg.length_counter.clock();
-                // Clock sweep divider
-                if reg.sweep_divider == 0 {
-                    // Reset divider
-                    reg.sweep_divider = reg.sweep_period;
-                    if reg.sweep_enabled
-                        && reg.timer_reload >= 8
-                        && reg.sweep_shift > 0
-                        && reg.sweep_target_period < 0x7FF
-                    {
-                        reg.timer_reload = reg.sweep_target_period;
-                    }
-                } else {
-                    reg.sweep_divider -= 1;
+        self.pulse_registers.iter_mut().for_each(|reg| {
+            // Clock length halt counter
+            reg.length_counter.clock();
+            // Clock sweep divider
+            if reg.sweep_divider == 0 {
+                // Reset divider
+                reg.sweep_divider = reg.sweep_period;
+                if reg.sweep_enabled
+                    && reg.timer_reload >= 8
+                    && reg.sweep_shift > 0
+                    && reg.sweep_target_period < 0x7FF
+                {
+                    reg.timer_reload = reg.sweep_target_period;
                 }
-            });
+            } else {
+                reg.sweep_divider -= 1;
+            }
+        });
         self.triangle_register.length_counter.clock();
         self.noise_register.length_counter.clock();
     }

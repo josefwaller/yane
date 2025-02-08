@@ -59,7 +59,7 @@ impl Audio {
     pub fn update_audio(&mut self, nes: &mut Nes, settings: &AppSettings) {
         // Clear queue if it's too big
         if self.queue.size() > 16 * 2000 {
-            info!("Queue is too big, clearing (was {})", self.queue.size());
+            debug!("Queue is too big, clearing (was {})", self.queue.size());
             self.queue.clear();
         } else if self.queue.size() == 0 && !settings.paused {
             warn!("Queue is empty!");

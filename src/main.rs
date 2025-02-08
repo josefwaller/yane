@@ -4,7 +4,7 @@ use sdl2::{
     event::{Event, WindowEvent},
     keyboard::Keycode,
 };
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::de::DeserializeOwned;
 use simplelog::{
     ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger,
 };
@@ -15,10 +15,10 @@ use std::{
     time::{Duration, Instant},
 };
 use wavers::{write, Samples};
-use yane::{
-    AppSettings, Cartridge, DebugWindow, KeyMap, Nes, Settings, Window, CPU_CYCLES_PER_SCANLINE,
-    CPU_CYCLES_PER_VBLANK,
-};
+use yane::{AppSettings, Cartridge, DebugWindow, KeyMap, Nes, Window};
+
+const SETTINGS_FILENAME: &str = "settings.yaml";
+const KEYMAP_FILENAME: &str = "key_map.yaml";
 
 // Used for argument default values
 fn get_file_in_config_dir(path: &str) -> PathBuf {
@@ -36,7 +36,7 @@ struct Cli {
 #[derive(Parser)]
 struct CommonArgs {
     /// The configuration file for the emulator's settings
-    #[arg(long, default_value = get_file_in_config_dir("settings.yaml").into_os_string(), value_name = "FILE")]
+    #[arg(long, default_value = get_file_in_config_dir(SETTINGS_FILENAME).into_os_string(), value_name = "FILE")]
     config_file: PathBuf,
     /// Start in debug mode
     #[arg(short, long)]
@@ -48,7 +48,7 @@ struct CommonArgs {
     #[arg(short, long)]
     muted: bool,
     /// The .YAML file defining the key mappings for the NES
-    #[arg(long, default_value = get_file_in_config_dir("key_map.yaml").into_os_string(), value_name = "FILE")]
+    #[arg(long, default_value = get_file_in_config_dir(KEYMAP_FILENAME).into_os_string(), value_name = "FILE")]
     keymap_file: PathBuf,
 }
 #[derive(Subcommand)]
@@ -67,7 +67,7 @@ enum Command {
         #[command(flatten)]
         args: CommonArgs,
     },
-    /// Load and run a savestate
+    /// Load and run a savestate (.bin) file. Savestate must have been created by Yane
     Savestate {
         /// The binary savestate to load
         savestate_file: String,
@@ -108,9 +108,9 @@ fn setup_config_directory() -> Result<(), Box<dyn std::error::Error>> {
     let _ = std::fs::create_dir(&config_dir);
     debug!("Created directory at {:?}", &config_dir);
     let contents = serde_yaml::to_string(&KeyMap::default())?;
-    add_config_file("key_map.yaml", &contents)?;
+    add_config_file(KEYMAP_FILENAME, &contents)?;
     let contents = serde_yaml::to_string(&AppSettings::default())?;
-    add_config_file("settings.yaml", &contents)?;
+    add_config_file(SETTINGS_FILENAME, &contents)?;
     Ok(())
 }
 fn read_config_file<T>(path: &PathBuf, fallback: T) -> T
@@ -270,9 +270,9 @@ fn main() {
         let mut last_debug_window_render = Instant::now();
         // Various constants for keeping emulator time in check with real time
         const DEBUG_WINDOW_REFRESH_RATE: Duration = Duration::from_millis(1000 / 60);
-        const CPU_CYCLES_PER_FRAME: f32 = 262.0 * CPU_CYCLES_PER_SCANLINE;
-        let wait_time_per_cycle =
-            Duration::from_nanos(1_000_000_000 / 60 / CPU_CYCLES_PER_FRAME as u64);
+        // const CPU_CYCLES_PER_FRAME: f32 = 262.0 * CPU_CYCLES_PER_SCANLINE;
+        // let wait_time_per_cycle =
+        //     Duration::from_nanos(1_000_000_000 / 60 / CPU_CYCLES_PER_FRAME as u64);
         // Used for logging information every 100 frames
         let mut last_hundred_frames = Instant::now();
         let mut frame_cycles = 0;
@@ -354,9 +354,10 @@ fn main() {
                     last_hundred_frames = now;
                 }
                 // Calculate how much time has passed in the emulation
-                let emu_elapsed = wait_time_per_cycle
-                    .saturating_mul(cycles_to_wait as u32)
-                    .div_f32(settings.speed);
+                // let emu_elapsed = wait_time_per_cycle
+                //     .saturating_mul(cycles_to_wait as u32)
+                //     .div_f32(settings.speed);
+                let emu_elapsed = Duration::from_millis(1000 / 60).div_f32(settings.speed);
                 // Calculate how much time has actually passed
                 let actual_elapsed = Instant::now().duration_since(delta);
                 // Wait for the difference

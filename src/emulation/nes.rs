@@ -4,12 +4,14 @@ use log::*;
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
-use crate::{opcodes::*, Apu, Cartridge, Controller, Cpu, Ppu, Settings, CPU_CYCLES_PER_OAM};
+use crate::{opcodes::*, Apu, Cartridge, Controller, Cpu, Ppu, Settings};
 pub struct NesState {
     cpu: Cpu,
     opcode: u8,
     operands: Vec<u8>,
 }
+
+pub const CPU_CYCLES_PER_OAM: u32 = 513;
 
 impl NesState {
     pub fn new(nes: &Nes, instruction: &[u8]) -> NesState {
