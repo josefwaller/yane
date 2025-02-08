@@ -1,7 +1,7 @@
 use clipboard::{ClipboardContext, ClipboardProvider};
 use log::*;
 
-use crate::{check_error, utils::*, Cartridge, Nes, Ppu, Settings, DEBUG_PALETTE};
+use crate::{check_error, utils::*, AppSettings, Cartridge, Nes, Ppu, Settings, DEBUG_PALETTE};
 use glow::{HasContext, NativeTexture};
 use imgui::{FontId, TextureId, TreeNodeFlags};
 use imgui_glow_renderer::AutoRenderer;
@@ -138,7 +138,12 @@ impl DebugWindow {
             .collect()
     }
     // Returns true if the NES should reset
-    pub fn render(&mut self, nes: &Nes, event_pump: &EventPump, settings: &mut Settings) -> bool {
+    pub fn render(
+        &mut self,
+        nes: &Nes,
+        event_pump: &EventPump,
+        settings: &mut AppSettings,
+    ) -> bool {
         let chr_tex_num: i32 = 1;
         unsafe {
             self.window.gl_make_current(&self.gl_context).unwrap();
@@ -152,7 +157,7 @@ impl DebugWindow {
                 data,
                 self.num_columns,
                 self.num_rows,
-                if settings.use_debug_palette {
+                if settings.emu_settings.use_debug_palette {
                     &DEBUG_PALETTE
                 } else {
                     &nes.ppu.palette_ram
@@ -244,7 +249,7 @@ impl DebugWindow {
                     nt_tiles.as_slice(),
                     64,
                     60,
-                    if settings.use_debug_palette {
+                    if settings.emu_settings.use_debug_palette {
                         &DEBUG_PALETTE
                     } else {
                         &nes.ppu.palette_ram
@@ -298,10 +303,13 @@ impl DebugWindow {
                         }
                     );
                 }
-                ui.checkbox("Scanline sprite limit", &mut settings.scanline_sprite_limit);
+                ui.checkbox(
+                    "Scanline sprite limit",
+                    &mut settings.emu_settings.scanline_sprite_limit,
+                );
                 ui.checkbox(
                     "Always draw sprites on top of background",
-                    &mut settings.always_sprites_on_top,
+                    &mut settings.emu_settings.always_sprites_on_top,
                 );
                 ui.slider("Volume", 0.0, 10.0, &mut settings.volume);
                 ui.slider("Speed", 0.1, 3.0, &mut settings.speed);
@@ -352,7 +360,10 @@ impl DebugWindow {
                     });
                 }
                 if ui.collapsing_header("Graphics Debug", TreeNodeFlags::empty()) {
-                    ui.checkbox("Debug palette", &mut settings.use_debug_palette);
+                    ui.checkbox(
+                        "Debug palette",
+                        &mut settings.emu_settings.use_debug_palette,
+                    );
                     if ui.collapsing_header("CHR ROM/RAM", TreeNodeFlags::empty()) {
                         if let Some(c) =
                             ui.begin_combo("Palette", format!("Palette {}", self.palette_index))

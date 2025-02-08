@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::{utils, Audio, Controller, Nes, Screen, Settings};
+use crate::{utils, AppSettings, Audio, Controller, Nes, Screen, Settings};
 use log::*;
 use sdl2::{keyboard::Keycode, video::GLContext, Sdl, VideoSubsystem};
 
@@ -43,7 +43,7 @@ impl Window {
         nes: &mut Nes,
         index: usize,
         keys: &Vec<Keycode>,
-        settings: &Settings,
+        settings: &AppSettings,
     ) {
         let c = &settings.key_map.controllers;
         // P1
@@ -59,7 +59,7 @@ impl Window {
         };
         nes.set_input(index, controller);
     }
-    pub fn update(&mut self, nes: &mut Nes, keys: &Vec<Keycode>, settings: &mut Settings) {
+    pub fn update(&mut self, nes: &mut Nes, keys: &Vec<Keycode>, settings: &mut AppSettings) {
         // Update inputs
         self.update_controller(nes, 0, &keys, settings);
         self.update_controller(nes, 1, &keys, settings);
@@ -116,7 +116,7 @@ impl Window {
 
         self.last_keys = keys.clone();
     }
-    pub fn render(&mut self, nes: &Nes, settings: &Settings) {
+    pub fn render(&mut self, nes: &Nes, settings: &AppSettings) {
         self.window.gl_make_current(&self.gl_context).unwrap();
         self.screen.render(nes, self.window.size(), settings);
         self.window.gl_swap_window();

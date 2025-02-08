@@ -1,4 +1,4 @@
-use crate::{check_error, set_uniform, utils::*, Nes, Settings};
+use crate::{check_error, set_uniform, utils::*, AppSettings, Nes, Settings};
 use glow::*;
 use log::*;
 
@@ -16,8 +16,6 @@ pub struct Screen {
     // Program for rendering a primitve using wireframe
     wireframe_program: NativeProgram,
     wireframe_vao: NativeVertexArray,
-    // Render/misc settings
-    settings: Settings,
 }
 impl Screen {
     // TODO: Rename
@@ -48,11 +46,10 @@ impl Screen {
                 palette,
                 wireframe_program,
                 wireframe_vao,
-                settings: Settings::default(),
             }
         }
     }
-    pub fn render(&mut self, nes: &Nes, window_size: (u32, u32), settings: &Settings) {
+    pub fn render(&mut self, nes: &Nes, window_size: (u32, u32), settings: &AppSettings) {
         unsafe {
             self.gl.disable(glow::STENCIL_TEST);
             self.gl.disable(glow::DEPTH_TEST);
@@ -156,8 +153,5 @@ impl Screen {
                 });
             }
         }
-    }
-    pub fn set_settings(&mut self, settings: Settings) {
-        self.settings = settings;
     }
 }

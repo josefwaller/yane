@@ -15,7 +15,7 @@ use std::{
 };
 use wavers::{write, Samples};
 use yane::{
-    Cartridge, DebugWindow, KeyMap, Nes, Settings, Window, CPU_CYCLES_PER_SCANLINE,
+    AppSettings, Cartridge, DebugWindow, KeyMap, Nes, Settings, Window, CPU_CYCLES_PER_SCANLINE,
     CPU_CYCLES_PER_VBLANK,
 };
 
@@ -242,7 +242,7 @@ fn main() {
         let mut window = Window::new(&video, &sdl);
         if args.paused {
             settings.paused = true;
-            match nes.advance_frame(&settings) {
+            match nes.advance_frame(&settings.emu_settings) {
                 Err(e) => error!("Error when advancing NES first frame: {}", e),
                 Ok(_) => {}
             }
@@ -306,7 +306,6 @@ fn main() {
                     }
                     None => {}
                 }
-                window.screen().set_settings(settings.clone());
             }
             // Update window
             window.update(&mut nes, &keys, &mut settings);
@@ -318,7 +317,7 @@ fn main() {
             } else {
                 // Advance 1 frame
                 window.make_gl_current();
-                let cycles_to_wait = match nes.advance_frame(&settings) {
+                let cycles_to_wait = match nes.advance_frame(&settings.emu_settings) {
                     Ok(c) => c,
                     Err(e) => {
                         error!("Error encountered while advancing emulator: {:X?}", e);
@@ -385,7 +384,7 @@ fn main() {
     }
 }
 
-fn load_settings(settings_path: Option<String>) -> Settings {
+fn load_settings(settings_path: Option<String>) -> AppSettings {
     // TODO: Read settings
-    Settings::default()
+    AppSettings::default()
 }

@@ -1,4 +1,4 @@
-use crate::{Nes, Settings};
+use crate::{AppSettings, Nes, Settings};
 use log::*;
 use rubato::{
     Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
@@ -7,7 +7,6 @@ use sdl2::{
     audio::{AudioQueue, AudioSpecDesired},
     Sdl,
 };
-use wavers::Samples;
 
 pub struct Audio {
     queue: AudioQueue<f32>,
@@ -57,7 +56,7 @@ impl Audio {
             all_samples: Vec::new(),
         }
     }
-    pub fn update_audio(&mut self, nes: &mut Nes, settings: &Settings) {
+    pub fn update_audio(&mut self, nes: &mut Nes, settings: &AppSettings) {
         // Clear queue if it's too big
         if self.queue.size() > 16 * 2000 {
             info!("Queue is too big, clearing (was {})", self.queue.size());
