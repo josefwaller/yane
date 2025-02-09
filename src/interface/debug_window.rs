@@ -322,19 +322,7 @@ impl DebugWindow {
                     &mut settings.restrict_controller_directions,
                 );
                 if ui.button("Quick save (savestate)") {
-                    let filename = chrono::Local::now()
-                        .format("./savestate-%Y-%m-%d-%H-%M-%S.bin")
-                        .to_string();
-                    match postcard::to_allocvec(nes) {
-                        Err(e) => error!("Unable to serialize NES: {}", e),
-                        Ok(bytes) => {
-                            // Write bytes to file
-                            match std::fs::write(&filename, bytes) {
-                                Ok(()) => info!("Wrote savestate to {}", &filename),
-                                Err(e) => error!("Unable to write to file {}: {}", &filename, e),
-                            }
-                        }
-                    }
+                    super::utils::save_new_savestate(nes, settings);
                 }
                 if let Some(c) = ui.begin_combo(
                     "Screen Size",

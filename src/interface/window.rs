@@ -4,7 +4,7 @@ use crate::{utils, AppSettings, Audio, Controller, Nes, Screen, Settings};
 use log::*;
 use sdl2::{keyboard::Keycode, video::GLContext, Sdl, VideoSubsystem};
 
-use super::key_map::Key;
+use super::{key_map::Key, utils::save_new_savestate};
 
 /// A wrapper around `Screen` that provides an SDL2 GL context, and handles input through SDL2.
 pub struct Window {
@@ -80,24 +80,7 @@ impl Window {
 
         // Check for quickload
         if self.key_pressed(&km.quicksave, keys) {
-            match nes.to_savestate() {
-                Err(e) => error!("Unable to create quicksave: {}", e),
-                Ok(data) => {
-                    let mut path = std::env::current_dir().unwrap_or_else(|e| {
-                        warn!("Unable to read current directory, defaulting to '.'. {}", e);
-                        PathBuf::from(".")
-                    });
-                    let filename = chrono::Local::now().format("savestate-%Y-%m-%d-%H-%M-%S.bin");
-                    path.push(filename.to_string());
-                    match std::fs::write(&path, data) {
-                        Ok(_) => {
-                            debug!("Wrote savestate to {:?}", path);
-                            settings.quickload_file = Some(path);
-                        }
-                        Err(e) => error!("Unable to save savestate: {}", e),
-                    }
-                }
-            }
+            save_new_savestate(nes, settings);
         } else if self.key_pressed(&km.quickload, keys) {
             match &settings.quickload_file {
                 Some(f) => match std::fs::read(&f) {

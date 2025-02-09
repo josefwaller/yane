@@ -113,6 +113,24 @@ fn setup_config_directory() -> Result<(), Box<dyn std::error::Error>> {
     add_config_file(SETTINGS_FILENAME, &contents)?;
     Ok(())
 }
+// Try to create a directory, falling back on the current directory (".") if it fails
+// Retuns a PathBuf to the directory created
+fn try_create_dir(path: &PathBuf) -> PathBuf {
+    if Path::exists(path) {
+        path.clone()
+    } else {
+        match std::fs::create_dir_all(path) {
+            Ok(()) => {
+                debug!("Created {:?}", path);
+                path.clone()
+            }
+            Err(e) => {
+                error!("Unable to create {:?}: {}", path, e);
+                PathBuf::from(".")
+            }
+        }
+    }
+}
 fn read_config_file<T>(path: &PathBuf, fallback: T) -> T
 where
     T: DeserializeOwned + Clone,
@@ -242,6 +260,7 @@ fn main() {
                 todo!()
             }
         };
+        debug!("Savedata will be saved at {:?}", savedata_path);
         // Load settings
         let mut settings = read_config_file(&args.config_file, AppSettings::default());
         // Load key map
@@ -266,6 +285,9 @@ fn main() {
         if args.muted {
             settings.volume = 0.0;
         }
+        // Setup savestate and savedata repositories
+        settings.savestate_dir = try_create_dir(&settings.savestate_dir);
+        debug!("Savestates will be saved in {:?}", settings.savestate_dir);
 
         let mut last_debug_window_render = Instant::now();
         // Various constants for keeping emulator time in check with real time

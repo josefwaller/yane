@@ -41,6 +41,8 @@ pub struct AppSettings {
     /// The emulator settings
     #[serde(skip)]
     pub emu_settings: EmuSettings,
+    /// Folder to save/load savestates from
+    pub savestate_dir: PathBuf,
 }
 
 impl Default for AppSettings {
@@ -58,6 +60,7 @@ impl Default for AppSettings {
             key_map: KeyMap::default(),
             quickload_file: None,
             emu_settings: EmuSettings::default(),
+            savestate_dir: PathBuf::from("./savestates"),
         }
     }
 }
