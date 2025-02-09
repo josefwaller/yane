@@ -341,11 +341,11 @@ fn main() {
                     frame_count = 0;
                     let now = Instant::now();
                     debug!(
-                        "Over last 600 frames: Avg FPS: {}, duration: {:?}, avg cycles: {}, avg wait time {:#?}",
+                        "Over last 600 frames: Avg FPS: {}, duration: {:?}, total cycles: {}, avg wait time {:#?}",
                         600.0
                             / (now.duration_since(last_hundred_frames).as_millis() as f32 / 1000.0),
                         now.duration_since(last_hundred_frames),
-                        frame_cycles as f64 / 600.0,
+                        frame_cycles,
                         frame_wait_time.div_f64(600.0)
                     );
 
@@ -354,12 +354,10 @@ fn main() {
                     last_hundred_frames = now;
                 }
                 // Calculate how much time has passed in the emulation
-                const WAIT_DUR_PER_CYCLE: Duration =
-                    Duration::from_nanos(1_000_000_000 / CPU_CLOCK_SPEED as u64);
-                let emu_elapsed = WAIT_DUR_PER_CYCLE
-                    .saturating_mul(cycles_to_wait as u32)
-                    .div_f32(settings.speed);
-                // let emu_elapsed = Duration::from_millis(1000 / 60).div_f32(settings.speed);
+                let emu_elapsed = Duration::from_nanos(
+                    cycles_to_wait as u64 * 1_000_000_000 / CPU_CLOCK_SPEED as u64,
+                )
+                .div_f64(settings.speed as f64);
                 // Calculate how much time has actually passed
                 let actual_elapsed = Instant::now().duration_since(delta);
                 // Wait for the difference

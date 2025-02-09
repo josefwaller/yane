@@ -197,6 +197,8 @@ impl Apu {
         (0..cpu_cycles).for_each(|_| {
             if self.queue.len() < MAX_QUEUE_LEN {
                 self.queue.push(self.mixer_output());
+            } else {
+                warn!("Max queue size hit");
             }
             self.cycles += 1;
             if self.mode == 0 {

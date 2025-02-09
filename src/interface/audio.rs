@@ -1,8 +1,6 @@
 use crate::{AppSettings, Nes, CPU_CLOCK_SPEED};
 use log::*;
-use rubato::{
-    Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
-};
+use rubato::{FftFixedIn, Resampler};
 use sdl2::{
     audio::{AudioQueue, AudioSpecDesired},
     Sdl,
@@ -10,7 +8,7 @@ use sdl2::{
 
 pub struct Audio {
     queue: AudioQueue<f32>,
-    resampler: SincFixedIn<f32>,
+    resampler: FftFixedIn<f32>,
     data_queue: Vec<f32>,
     last_speed: f32,
     pub all_samples: Vec<f32>,
@@ -33,18 +31,11 @@ impl Audio {
             queue.spec().freq
         );
 
-        let params = SincInterpolationParameters {
-            sinc_len: 256,
-            f_cutoff: 0.9,
-            oversampling_factor: 128,
-            interpolation: SincInterpolationType::Nearest,
-            window: WindowFunction::BlackmanHarris2,
-        };
-        let resampler = SincFixedIn::<f32>::new(
-            spec.freq.unwrap() as f64 / 1_789_000 as f64,
-            10.0,
-            params,
-            1_789_000 / 60,
+        let resampler = FftFixedIn::<f32>::new(
+            CPU_CLOCK_SPEED as usize,
+            spec.freq.unwrap() as usize,
+            CPU_CLOCK_SPEED as usize / 60,
+            60,
             1,
         )
         .expect("Unable to create resampler");
@@ -58,7 +49,8 @@ impl Audio {
     }
     pub fn update_audio(&mut self, nes: &mut Nes, settings: &AppSettings) {
         // Clear queue if it's too big
-        if self.queue.size() > 16 * 2000 {
+        // Should only happen on startup when SDL is booting up
+        if self.queue.size() > CPU_CLOCK_SPEED / 60 {
             debug!("Queue is too big, clearing (was {})", self.queue.size());
             self.queue.clear();
         } else if self.queue.size() == 0 && !settings.paused {
