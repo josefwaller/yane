@@ -27,6 +27,17 @@ fn get_file_in_config_dir(path: &str) -> PathBuf {
     buf
 }
 
+fn get_cli_styles() -> clap::builder::Styles {
+    use anstyle::{AnsiColor::*, Color::Ansi, Style};
+    use clap::builder::Styles;
+    Styles::styled()
+        .header(Style::new().fg_color(Some(Ansi(Red))))
+        .usage(Style::new().fg_color(Some(Ansi(Red))))
+        .placeholder(Style::new().fg_color(Some(Ansi(BrightBlack))))
+        .valid(Style::new().fg_color(Some(Ansi(BrightRed))))
+        .literal(Style::new().fg_color(Some(Ansi(BrightWhite))))
+}
+
 #[derive(Parser)]
 #[command(name = "Yane", version = "0.9", about = "An N.E.S. emulator.")]
 struct Cli {
@@ -52,6 +63,7 @@ struct CommonArgs {
     keymap_file: PathBuf,
 }
 #[derive(Subcommand)]
+#[command(styles=get_cli_styles())]
 enum Command {
     /// Initialize the configuration files at $HOME/.yane/
     Setup,

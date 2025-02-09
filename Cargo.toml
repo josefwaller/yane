@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anstyle = "1.0.10"
 assert_hex = "0.4.1"
 cargo-insta = "1.41.1"
 chrono = "0.4.39"
