@@ -31,11 +31,11 @@ fn get_cli_styles() -> clap::builder::Styles {
     use anstyle::{AnsiColor::*, Color::Ansi, Style};
     use clap::builder::Styles;
     Styles::styled()
-        .header(Style::new().fg_color(Some(Ansi(Red))))
-        .usage(Style::new().fg_color(Some(Ansi(Red))))
+        .header(Style::new().fg_color(Some(Ansi(Red))).underline())
+        .usage(Style::new().fg_color(Some(Ansi(Red))).underline())
         .placeholder(Style::new().fg_color(Some(Ansi(BrightBlack))))
         .valid(Style::new().fg_color(Some(Ansi(BrightRed))))
-        .literal(Style::new().fg_color(Some(Ansi(BrightWhite))))
+        .literal(Style::new().fg_color(Some(Ansi(BrightWhite))).bold())
 }
 
 #[derive(Parser)]
