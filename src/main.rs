@@ -182,18 +182,37 @@ fn get_filename(path: &str) -> Result<String, String> {
         .ok_or("Cannot convert to str")?
         .to_string())
 }
-fn game_name_from_savedata(savedata_path: &str) -> Result<String, String> {
+fn game_name_from_savestate(savestate_path: &str) -> Result<String, String> {
     let game_name_regex = Regex::new(
         "savestate_(.+)__[0-9]{4}_[0-9]{2}_[0-9]{2}__[0-9]{2}_[0-9]{2}_[0-9]{2}.yane.bin",
     )
     .or_else(|e| Err(e.to_string()))?;
     Ok(game_name_regex
-        .captures(savedata_path)
+        .captures(savestate_path)
         .ok_or("Does not match Regex")?
         .get(1)
         .ok_or("No matches")?
         .as_str()
         .to_string())
+}
+fn savedata_path_and_data(savedata_path: &str) -> (Option<String>, Option<Vec<u8>>) {
+    // If the file exists
+    if std::fs::exists(savedata_path).is_ok_and(|v| v == true) {
+        match std::fs::read(savedata_path) {
+            // Happy path, savedata arg is present and the file can be read
+            Ok(data) => (Some(savedata_path.to_string()), Some(data)),
+            // Can't read from file and file already exists, log error and save to nothing
+            // Don't want to overwrite save data
+            Err(e) => {
+                error!("Unable to read the .SRM file at '{}': {}", savedata_path, e);
+                (None, None)
+            }
+        }
+    } else {
+        // File doesn't exist and arg was provided
+        // Save to savedata file
+        (Some(savedata_path.to_string()), None)
+    }
 }
 fn main() {
     {
@@ -262,24 +281,14 @@ fn main() {
                 };
                 // Read savedata, if there is any
                 let (savedata_path, savedata) = match savedata_file {
-                    Some(f) => match std::fs::read(f) {
-                        Ok(data) => (f.into(), Some(data)),
-                        Err(_) => {
-                            println!("Unable to read the .SRM file at '{}'", f);
-                            std::process::exit(1);
-                        }
-                    },
+                    // Savedata file arg present, try to read file
+                    Some(f) => savedata_path_and_data(f),
                     None => {
+                        // Try to read savedata from right beside the ines file
                         let mut savedata_path = PathBuf::from(nes_file.clone());
                         savedata_path.set_extension("srm");
-                        let savedata = match std::fs::read(savedata_path.clone()) {
-                            Ok(d) => Some(d),
-                            Err(_) => None,
-                        };
-                        (
-                            savedata_path.into_os_string().into_string().unwrap(),
-                            savedata,
-                        )
+                        let s = savedata_path.into_os_string().into_string().unwrap();
+                        savedata_path_and_data(&s)
                     }
                 };
                 let nes = Nes::from_cartridge(Cartridge::new(data.as_slice(), savedata));
@@ -302,7 +311,7 @@ fn main() {
                         Ok(nes) => nes,
                     },
                 };
-                let game_name = match game_name_from_savedata(&savestate_file) {
+                let game_name = match game_name_from_savestate(&savestate_file) {
                     Ok(s) => {
                         debug!("Parsed game name as {}", &s);
                         Some(s)
@@ -312,13 +321,16 @@ fn main() {
                         None
                     }
                 };
-                (nes, String::new(), game_name, args)
+                (nes, None, game_name, args)
             }
             None => {
                 todo!()
             }
         };
-        debug!("Savedata will be saved at {:?}", savedata_path);
+        match savedata_path.as_ref() {
+            Some(s) => info!("Savedata will be saved at {:?}", s),
+            None => debug!("No savedata"),
+        }
         // Load settings
         let mut settings = read_config_file(&args.config_file, AppSettings::default());
         // Load key map
@@ -468,9 +480,14 @@ fn main() {
         .unwrap();
         // Save game if we want to
         if nes.cartridge.has_battery_backed_ram() {
-            info!("Writing savedata to to {:#?}", savedata_path);
-            std::fs::write(&savedata_path, nes.cartridge.memory.prg_ram)
-                .expect("Unable to save savefile");
+            match savedata_path {
+                Some(p) => {
+                    info!("Writing savedata to to {:#?}", &p);
+                    std::fs::write(&p, nes.cartridge.memory.prg_ram)
+                        .expect("Unable to save savefile");
+                }
+                None => error!("Cartridge has savedata but no savedata path is present"),
+            }
         }
     }
 }
