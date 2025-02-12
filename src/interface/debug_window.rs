@@ -33,10 +33,16 @@ pub struct DebugWindow {
 
     chr_tex: NativeTexture,
     nametable_tex: NativeTexture,
+    game_name: Option<String>,
 }
 
 impl DebugWindow {
-    pub fn new(nes: &Nes, video: &VideoSubsystem, sdl: &Sdl) -> DebugWindow {
+    pub fn new(
+        nes: &Nes,
+        video: &VideoSubsystem,
+        sdl: &Sdl,
+        game_name: Option<String>,
+    ) -> DebugWindow {
         // Figure out how many rows/columns
         let num_tiles =
             (nes.cartridge.memory.chr_rom.len() + nes.cartridge.memory.chr_ram.len()) / 0x10;
@@ -89,6 +95,7 @@ impl DebugWindow {
                 nametable_tex,
                 nametable_timer: 0,
                 small_font,
+                game_name,
             }
         }
     }
@@ -322,7 +329,7 @@ impl DebugWindow {
                     &mut settings.restrict_controller_directions,
                 );
                 if ui.button("Quick save (savestate)") {
-                    super::utils::save_new_savestate(nes, settings);
+                    super::utils::save_new_savestate(nes, settings, &self.game_name);
                 }
                 if let Some(c) = ui.begin_combo(
                     "Screen Size",

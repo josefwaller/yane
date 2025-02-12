@@ -4,4 +4,4 @@
 *.log
 *.wav
 **/**.srm
-savestate-*.bin
+**.yane.bin

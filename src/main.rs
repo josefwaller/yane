@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 use log::*;
+use regex::Regex;
 use sdl2::{
     event::{Event, WindowEvent},
     keyboard::Keycode,
@@ -8,7 +9,7 @@ use serde::de::DeserializeOwned;
 use simplelog::{
     ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger,
 };
-use std::thread::sleep;
+use std::{fmt::Error, thread::sleep};
 use std::{fs::File, io::Write, path::PathBuf};
 use std::{
     path::Path,
@@ -172,6 +173,28 @@ where
     };
     val
 }
+fn get_filename(path: &str) -> Result<String, String> {
+    Ok(PathBuf::from(path)
+        .with_extension("")
+        .file_name()
+        .ok_or("Cannot get filename")?
+        .to_str()
+        .ok_or("Cannot convert to str")?
+        .to_string())
+}
+fn game_name_from_savedata(savedata_path: &str) -> Result<String, String> {
+    let game_name_regex = Regex::new(
+        "savestate_(.+)__[0-9]{4}_[0-9]{2}_[0-9]{2}__[0-9]{2}_[0-9]{2}_[0-9]{2}.yane.bin",
+    )
+    .or_else(|e| Err(e.to_string()))?;
+    Ok(game_name_regex
+        .captures(savedata_path)
+        .ok_or("Does not match Regex")?
+        .get(1)
+        .ok_or("No matches")?
+        .as_str()
+        .to_string())
+}
 fn main() {
     {
         // Initialize logger
@@ -203,7 +226,7 @@ fn main() {
 
         // Read file and init NES
         let cli = Cli::parse();
-        let (mut nes, savedata_path, args) = match &cli.command {
+        let (mut nes, savedata_path, game_name, args) = match &cli.command {
             Some(Command::Setup) => match setup_config_directory() {
                 Ok(()) => {
                     info!("Successfully created configuration files");
@@ -225,6 +248,16 @@ fn main() {
                     Err(_) => {
                         println!("Unable to read the file '{}'", nes_file);
                         std::process::exit(1);
+                    }
+                };
+                let game_name = match get_filename(nes_file) {
+                    Ok(s) => {
+                        debug!("Parsed game name as {}", &s);
+                        Some(s)
+                    }
+                    Err(e) => {
+                        error!("Unable to read file name from {}: {}", nes_file, e);
+                        None
                     }
                 };
                 // Read savedata, if there is any
@@ -250,24 +283,37 @@ fn main() {
                     }
                 };
                 let nes = Nes::from_cartridge(Cartridge::new(data.as_slice(), savedata));
-                (nes, savedata_path, args)
+                (nes, savedata_path, game_name, args)
             }
             Some(Command::Savestate {
                 savestate_file,
                 args,
-            }) => match std::fs::read(savestate_file) {
-                Err(e) => {
-                    error!("Unable to read {}: {}", savestate_file, e);
-                    std::process::exit(1);
-                }
-                Ok(data) => match Nes::from_savestate(data) {
+            }) => {
+                let nes = match std::fs::read(savestate_file) {
                     Err(e) => {
-                        error!("Unable to deserialize NES: {}", e);
+                        error!("Unable to read {}: {}", savestate_file, e);
                         std::process::exit(1);
                     }
-                    Ok(nes) => (nes, "".to_string(), args),
-                },
-            },
+                    Ok(data) => match Nes::from_savestate(data) {
+                        Err(e) => {
+                            error!("Unable to deserialize NES: {}", e);
+                            std::process::exit(1);
+                        }
+                        Ok(nes) => nes,
+                    },
+                };
+                let game_name = match game_name_from_savedata(&savestate_file) {
+                    Ok(s) => {
+                        debug!("Parsed game name as {}", &s);
+                        Some(s)
+                    }
+                    Err(e) => {
+                        error!("Unable to parse game name out of {}: {}", savestate_file, e);
+                        None
+                    }
+                };
+                (nes, String::new(), game_name, args)
+            }
             None => {
                 todo!()
             }
@@ -280,12 +326,12 @@ fn main() {
         settings.key_map = key_map;
         // Create debug window if debug argument was passed
         let mut debug_window = if args.debug {
-            Some(DebugWindow::new(&nes, &video, &sdl))
+            Some(DebugWindow::new(&nes, &video, &sdl, game_name.clone()))
         } else {
             None
         };
         // Create window
-        let mut window = Window::new(&video, &sdl);
+        let mut window = Window::new(&video, &sdl, game_name.clone());
         // Set argument settings
         if args.paused {
             settings.paused = true;

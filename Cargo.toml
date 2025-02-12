@@ -18,6 +18,7 @@ imgui-sdl2-support = "0.13.0"
 log = "0.4.22"
 postcard = { version = "1.1.1", features = ["alloc"] }
 rand = "0.8.5"
+regex = "1.11.1"
 rubato = "0.16.1"
 sdl2 = "0.37.0"
 serde = "1.0.217"

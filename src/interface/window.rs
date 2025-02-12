@@ -13,9 +13,10 @@ pub struct Window {
     pub audio: Audio,
     screen: Screen,
     last_keys: Vec<Keycode>,
+    game_name: Option<String>,
 }
 impl Window {
-    pub fn new(video: &VideoSubsystem, sdl: &Sdl) -> Window {
+    pub fn new(video: &VideoSubsystem, sdl: &Sdl, game_name: Option<String>) -> Window {
         // Init SDL window
         let window_width = 256 * 3;
         let window_height = 240 * 3;
@@ -30,6 +31,7 @@ impl Window {
             audio,
             screen,
             last_keys: Vec::new(),
+            game_name,
         }
     }
     fn key_down(k: &Key, keys: &Vec<Keycode>) -> bool {
@@ -80,7 +82,7 @@ impl Window {
 
         // Check for quickload
         if self.key_pressed(&km.quicksave, keys) {
-            save_new_savestate(nes, settings);
+            save_new_savestate(nes, settings, &self.game_name);
         } else if self.key_pressed(&km.quickload, keys) {
             match &settings.quickload_file {
                 Some(f) => match std::fs::read(&f) {
