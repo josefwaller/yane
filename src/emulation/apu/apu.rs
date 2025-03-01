@@ -20,10 +20,16 @@ const NOISE_TIMER_PERIODS: [u32; 16] = [
 const STEPS: [i32; 5] = [7457, 14912, 22371, 29828, 37281];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// The APU (Audio Processing Unit) of the NES.
+/// Handles all audio processing and generates a new audio sample every clock cycle.
 pub struct Apu {
+    /// The pulse (variable length square) registers
     pub pulse_registers: [PulseRegister; 2],
+    /// The triange register
     pub triangle_register: TriangleRegister,
+    /// The noise register
     pub noise_register: NoiseRegister,
+    /// The DMC (delta modulated channel) register
     pub dmc_register: DmcRegister,
     irq_inhibit: bool,
     irq_flag: bool,
@@ -35,6 +41,7 @@ pub struct Apu {
 }
 
 impl Apu {
+    /// Create a new APU.
     pub fn new() -> Apu {
         Apu {
             pulse_registers: [PulseRegister::default(); 2],
@@ -48,8 +55,9 @@ impl Apu {
             queue: Vec::new(),
         }
     }
-    /// Write a byte of data to the APU given its address in CPU memory space
-    //TODO : Remove cartridge from here and solve the audio cartridge issue
+    /// Write a single byte of data to the APU given its address in CPU memory space.
+    /// * `addr`: The address (in CPU memory space) to write to
+    /// * `value`: The byte of data to write
     pub fn write_byte(&mut self, addr: usize, value: u8) {
         let n = &mut self.noise_register;
         let t = &mut self.triangle_register;
@@ -133,6 +141,7 @@ impl Apu {
             _ => warn!("Trying to write {:X} to APU address {:X}", value, addr),
         }
     }
+    /// Read a byte from the APU's registers given an address in CPU memory space
     pub fn read_byte(&mut self, addr: usize) -> u8 {
         macro_rules! bit_flag {
             ($flag: expr, $bit: literal) => {
@@ -192,6 +201,9 @@ impl Apu {
             _ => panic!("Should never happen"),
         }
     }
+    /// Advance the APU by a given number of CPU cycles.
+    /// * `cpu_cycles`: The number of cycles to advance
+    /// * `cartridge`: The cartridge currently inserted in the NES
     pub fn advance_cpu_cycles(&mut self, cpu_cycles: u32, cartridge: &mut Cartridge) {
         const MAX_QUEUE_LEN: usize = 2usize.pow(16);
         (0..cpu_cycles).for_each(|_| {
@@ -310,7 +322,7 @@ impl Apu {
             }
         });
     }
-    pub fn on_quater_frame(&mut self) {
+    fn on_quater_frame(&mut self) {
         self.pulse_registers.iter_mut().for_each(|reg| {
             reg.envelope.clock(reg.length_counter.halt);
         });
@@ -327,7 +339,7 @@ impl Apu {
             }
         }
     }
-    pub fn on_half_frame(&mut self) {
+    fn on_half_frame(&mut self) {
         self.pulse_registers.iter_mut().for_each(|reg| {
             // Clock length halt counter
             reg.length_counter.clock();
@@ -349,7 +361,10 @@ impl Apu {
         self.triangle_register.length_counter.clock();
         self.noise_register.length_counter.clock();
     }
-    // The current output from the mixer
+    /// Get the current output of the mixer unit of the APU.
+    /// Should always be a value between 0 and 1.
+    /// Each CPU cycles, the APU will call this function and store the result in its output queue,
+    /// which can be accessed via `Apu::sample_queue`
     pub fn mixer_output(&self) -> f32 {
         // Add up the pulse registers
         let pulse: u32 = self.pulse_registers.iter().map(|p| p.value()).sum();
@@ -363,7 +378,7 @@ impl Apu {
         };
         let t = self.triangle_register.value();
         let n = self.noise_register.value();
-        let d = self.dmc_register.value();
+        let d = self.dmc_register.output;
         let tnd_out = if t + n + d == 0 {
             0.0
         } else {
@@ -378,6 +393,10 @@ impl Apu {
             v
         }
     }
+    /// Get and clear the sample queue of the APU.
+    /// Returns a vector containing every sample the APU has generated since that last call to `Apu::sample_queue`,
+    /// and then clears the internal queue.
+    /// Use this function to access the NES's sound output.
     pub fn sample_queue(&mut self) -> Vec<f32> {
         let mut v = Vec::new();
         std::mem::swap(&mut self.queue, &mut v);

@@ -1,8 +1,8 @@
 mod nes;
-pub use nes::Nes;
+pub use nes::{Nes, NesState};
 mod cpu;
 pub use cpu::Cpu;
-pub mod apu;
+mod apu;
 pub use apu::Apu;
 mod status_register;
 pub use status_register::StatusRegister;

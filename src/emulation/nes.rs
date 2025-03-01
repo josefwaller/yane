@@ -5,15 +5,20 @@ use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
 use crate::{opcodes::*, Apu, Cartridge, Controller, Cpu, Ppu, Settings};
+/// A snapshot of the NES state at a given point.
+/// Used for debug logging.
 pub struct NesState {
     cpu: Cpu,
     opcode: u8,
     operands: Vec<u8>,
 }
 
+/// The amount of cycles that transferring a page of data to the PPU's OAM memory takes;
 pub const CPU_CYCLES_PER_OAM: u32 = 513;
 
 impl NesState {
+    /// Create a new NES state with the instruction given.
+    /// * `instruction`: The instruction the NES is about to execute, at bytes.
     pub fn new(nes: &Nes, instruction: &[u8]) -> NesState {
         NesState {
             cpu: nes.cpu.clone(),
@@ -49,23 +54,29 @@ pub struct Nes {
     /// Memory of the NES
     #[serde(with = "BigArray")]
     pub mem: [u8; 0x800],
-    // Cartridge inserted in the NES
+    /// Cartridge inserted in the NES
     pub cartridge: Cartridge,
-    // Play 1 and 2 controller states
+    /// Play 1 and 2 controller states
     pub controllers: [Controller; 2],
     // Cached controller states, the ROM will need to poll to keep these up to date
     cached_controllers: [Controller; 2],
     // Current bit being read from the controller
     controller_bits: [usize; 2],
-    // Last 200 instructions executed, stored for debugging purposes
+    /// The last 200 instructions executed by the NES. Stored for debugging purposes.
     #[serde(skip)]
     pub previous_states: VecDeque<NesState>,
 }
 
 impl Nes {
+    /// Initialized the NES with a cartridge that is completely 0s.
+    /// Since the cartridge is where the actual program is stored, this is only useful for
+    /// debugging purposes or manually simulating NES behaviour using [`Nes::decode_and_execute`].
+    /// Use [`Nes::from_cartridge`] for proper emulation.
     pub fn new() -> Nes {
+        // Todo: Move this to cartridge
         let c = [
-            &vec!['N' as u8, 'E' as u8, 'S' as u8, 0x1A][..],
+            // 1 0x4000 bank of PRG ROM
+            &vec!['N' as u8, 'E' as u8, 'S' as u8, 0x1A, 0x01][..],
             &vec![0; 32 * 0x4000 + 16 * 0x2000][..],
         ]
         .concat();
@@ -74,13 +85,21 @@ impl Nes {
             ppu: Ppu::new(),
             apu: Apu::new(),
             mem: [0x00; 0x800],
-            cartridge: Cartridge::new(c.as_slice(), None),
+            cartridge: Cartridge::from_ines(c.as_slice(), None),
             controllers: [Controller::new(); 2],
             cached_controllers: [Controller::new(); 2],
             controller_bits: [0; 2],
             previous_states: VecDeque::with_capacity(NUMBER_STORED_STATES),
         }
     }
+    /// Initialize the NES as if it had just been turned on with a given cartridge inserted.
+    /// The PC will be initialised to the reset vector.
+    /// ```rust,ignore
+    /// use yane::{Nes, Cartridge};
+    /// let game = include_bytes!("my_game.nes");
+    /// let cartridge = Cartridge::from_bytes(game)
+    /// let nes = Nes::from_cartridge(cartridge);
+    /// ```
     pub fn from_cartridge(cartridge: Cartridge) -> Nes {
         let mut nes = Nes {
             cpu: Cpu::new(),
@@ -99,12 +118,20 @@ impl Nes {
         nes
     }
     /// Create a new NES from a savestate.
-    /// The savestate must have come from the exact same version of YANE.
+    /// This is the opposite of [`Nes::to_savestate`]
+    /// ```rust,ignore
+    /// let savestate = include_bytes!("./savestate.yane.bin");
+    /// let nes = Nes::from_savestate(savestate);
+    /// ```
     pub fn from_savestate(savestate: Vec<u8>) -> Result<Nes, postcard::Error> {
         postcard::from_bytes(savestate.deref())
     }
-    /// Get a serialized copy of this NES that can be written to a binary file
-    /// Used for savestates.
+    /// Get a serialized copy of this NES as binary data.
+    /// This is the opposite of [`Nes::from_savestate`].
+    /// ```rust
+    /// let nes = yane::Nes::new();
+    /// let savestate: Vec<u8> = nes.to_savestate().unwrap();
+    /// ```
     pub fn to_savestate(&self) -> Result<Vec<u8>, postcard::Error> {
         postcard::to_allocvec(self)
     }
@@ -125,6 +152,19 @@ impl Nes {
         return if pressed { 1 } else { 0 };
     }
 
+    /// Read a byte of memory given an address in CPU space.
+    /// This is not guaranteed to not modify the NES's state,
+    /// since some read operations affect certain flags (i.e. the PPU VBlank flag)
+    /// ```
+    /// let mut nes = yane::Nes::new();
+    /// // Read a byte of WRAM
+    /// let byte = nes.read_byte(0x0123);
+    /// // Read the PPU's status register
+    /// let ppu_status = nes.read_byte(0x2002);
+    /// // Read the least significant byte of the cartridge's reset vector
+    /// let reset_low = nes.read_byte(0xFFFE);
+    /// ```
+    // Todo: Add debug_read_byte
     pub fn read_byte(&mut self, addr: usize) -> u8 {
         return match addr {
             0..0x2000 => self.mem[addr % 0x0800],
@@ -136,7 +176,17 @@ impl Nes {
             _ => panic!("Invalid read address provided: {:#X}", addr),
         };
     }
-    fn write_byte(&mut self, addr: usize, value: u8) {
+    /// Write a byte using CPU memory
+    /// ```
+    /// let mut nes = yane::Nes::new();
+    /// // Set a byte's value in ram
+    /// nes.write_byte(0x00, 0x12);
+    /// // Enable the NES's NMI by writing to the PPUCTRL register
+    /// nes.write_byte(0x2000, 0x80);
+    /// // Trigger an OAM DMA by writing to the OAMDMA register
+    /// nes.write_byte(0x4014, 0x00);
+    /// ```
+    pub fn write_byte(&mut self, addr: usize, value: u8) {
         match addr {
             0..0x2000 => self.mem[addr % 0x0800] = value,
             0x2000..0x4000 => self.ppu.write_byte(addr, value, &mut self.cartridge),
@@ -159,14 +209,17 @@ impl Nes {
             _ => panic!("Invalid write address provided: {:#X}", addr),
         };
     }
-
-    /// Update the internal controller state in thte NES.
+    /// Update the internal controller state in the NES.
     /// The ROM will still have to poll for the controller state.
-    /// `num` should either be 0 or 1, depending on whose controller state is being updated
+    /// * `num` The controller number of the controller being updated. Should be either `0` or `1`
+    /// * `state` The [`Controller`] containing the controller's state
     pub fn set_input(&mut self, num: usize, state: Controller) {
         self.controllers[num] = state;
     }
-
+    /// Advance the NES by 1 instruction
+    ///
+    /// Reads the next opcode using the CPU's PC, decodes the instruction, and executes it.
+    /// Adds a new [`NesState`] to [`Nes::previous_states`] before executing.
     pub fn step(&mut self) -> Result<u32, String> {
         let pc = self.cpu.p_c as usize;
         let mut inst: [u8; 3] = [0; 3];
@@ -196,7 +249,7 @@ impl Nes {
         }
     }
 
-    pub fn on_nmi(&mut self) {
+    fn on_nmi(&mut self) {
         self.interrupt_to_addr(0xFFFA);
     }
     fn interrupt_to_addr(&mut self, addr: usize) {
@@ -660,7 +713,7 @@ impl Nes {
     }
     /// Advance the NES by 1 frame, approx 29780 cycles.
     /// Technically will just advance the NES to the next VBlank.
-    /// Returns the total number of cycles ran.
+    /// Returns the total number of CPU cycles elapsed.
     pub fn advance_frame(&mut self, settings: &Settings) -> Result<u32, String> {
         let mut cycles = 0;
         let mut has_been_out_of_vblank = !self.ppu.in_vblank();
@@ -891,7 +944,11 @@ impl Nes {
         ];
         return self.read_abs(&second_addr);
     }
-    /// Write a single byte using indexed indirect addressing
+    /// Write a single byte using indexed indirect addressing.
+    /// ```
+    /// let mut nes = yane::Nes::new();
+    /// nes.write_indexed_indirect(&[0x12]);
+    /// ```
     pub fn write_indexed_indirect(&mut self, addr: &[u8], value: u8) {
         let first_addr = addr[0].wrapping_add(self.cpu.x);
         let second_addr = [
@@ -900,6 +957,8 @@ impl Nes {
         ];
         self.write_abs(&second_addr, value);
     }
+    // Transform an address into an indirect indexed address
+    // Reads the byte at the address and then uses that byte as a pointer with the Y register for the address of the actual value
     fn indirect_indexed_addr(&mut self, addr: &[u8]) -> usize {
         let first_addr = addr[0];
         (self.read_byte(first_addr as usize) as u16
@@ -928,7 +987,7 @@ impl Nes {
         self.write_byte(addr as usize, value)
     }
     /// Reset the NES.
-    /// Triggers a reset interrupt using the interrupt vector at 0xFFFE.
+    /// Triggers a reset interrupt using the interrupt vector at `0xFFFE`.
     pub fn reset(&mut self) {
         self.interrupt_to_addr(0xFFFC);
     }

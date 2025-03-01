@@ -9,26 +9,42 @@ pub const DMC_RATES: [u32; 16] = [
 ];
 
 #[derive(Clone, Serialize, Deserialize)]
+/// The DMC register of the NES.
+///
+/// A delta-modulation sound register in the NES.
+/// Takes 1-bit delta encoded samples as input and outputs a value
+/// between 0 and 127 to the APU's mixer.
+/// Can also trigger CPU interupts when the sample ends, though this is rarely
+/// implemented in any games.
 pub struct DmcRegister {
+    /// Whether the IRQ is enabled
     pub irq_enabled: bool,
+    /// The IRQ flag
     pub irq_flag: bool,
+    /// Whether to repeat the sample after playing it
     pub repeat: bool,
+    /// The DMC rate
     pub rate: u32,
+    /// The DMC's timer's value
     pub timer: u32,
+    /// The value to reload the timer with when it runs out
     pub time_reload: u32,
-    // Address of the sample, in CPU memory space
+    /// Address of the sample, in CPU memory space
     pub sample_addr: usize,
-    // Length of hte sample in bytes
+    /// Length of the sample in bytes
     pub sample_len: usize,
-    // Index of the byte currently read from the sample
-    // Set to 0 when reloading
+    /// Index of the byte currently read from the sample
+    /// Set to 0 when reloading
     pub sample_index: usize,
-    // Number of bytes remaining in the sample
+    /// Number of bytes remaining in the sample
     pub bytes_remaining: usize,
-    // Byte of the sample currently in buffer
+    /// Byte of the sample currently in buffer
     pub sample: u8,
+    /// Number of bits left in `sample` for the DMC to read
     pub bits_left: u32,
+    /// The current output of the DMC
     pub output: u32,
+    /// The DMC silent flag
     pub silent: bool,
 }
 impl Debug for DmcRegister {
@@ -67,12 +83,7 @@ impl Default for DmcRegister {
     }
 }
 impl DmcRegister {
-    pub fn muted(&self) -> bool {
-        false
-    }
-    pub fn value(&self) -> u32 {
-        self.output
-    }
+    /// Enable or disable the DMC
     pub fn set_enabled(&mut self, enabled: bool) {
         // Clear IRQ flag
         self.irq_flag = false;
@@ -90,6 +101,8 @@ impl DmcRegister {
     }
 }
 impl DmcRegister {
+    /// Load a new byte into the DMC's sample buffer
+    /// * `cartridge`: The cartridge currently inserted in the NES
     pub fn load_sample(&mut self, cartridge: &mut Cartridge) {
         self.sample = cartridge.read_cpu(self.sample_index);
         if self.sample_index < 0xC000 {

@@ -78,6 +78,9 @@ pub struct Ppu {
 }
 
 impl Ppu {
+    /// Initialise a new PPU.
+    /// Zero out all memory, set all registers to their initial value, and set
+    /// the dot position to `(0, 0)` (The top left pixel of the screen).
     pub fn new() -> Ppu {
         Ppu {
             oam: [0; 0x100],
@@ -103,7 +106,8 @@ impl Ppu {
         }
     }
 
-    /// Read a byte from the PPU register given an address in CPU space
+    /// Read a byte from the PPU register given an address in CPU space.
+    /// Requires the cartridge currently inserted in the NES.
     pub fn read_byte(&mut self, addr: usize, cartridge: &mut Cartridge) -> u8 {
         match addr % 8 {
             2 => {
@@ -132,7 +136,8 @@ impl Ppu {
         }
     }
 
-    /// Write a byte to the PPU registers given an address in CPU space
+    /// Write a byte to the PPU registers given an address in CPU space.
+    /// Requires the cartridge currently inserted in the NES.
     pub fn write_byte(&mut self, addr: usize, value: u8, cartridge: &mut Cartridge) {
         self.open_bus = value;
         self.open_bus_dots = 0;
@@ -186,8 +191,8 @@ impl Ppu {
         }
     }
 
-    /// Write to OAM using OAM_ADDR and the offset provided
-    /// Increments OAM_ADDR
+    /// Write a single byte to OAM using the OAM_ADDR register and the offset provided
+    /// Increments OAM_ADDR after writing.
     pub fn write_oam(&mut self, offset: usize, value: u8) {
         self.oam[(self.oam_addr as usize + offset) % self.oam.len()] = value;
         self.oam_addr = self.oam_addr.wrapping_add(1);
@@ -298,7 +303,10 @@ impl Ppu {
             });
         }
     }
-    // Return whether to trigger an NMI
+    /// Advance the PPU a certain number of dots.
+    /// Write new output to `output` if not in HBlank or VBlank.
+    /// Update the PPU's state accordingly, may set the VBlank flag.
+    /// Return `true` if an NMI is triggered by a VBlank, and `false` otherwise.
     pub fn advance_dots(
         &mut self,
         dots: u32,
@@ -494,16 +502,19 @@ impl Ppu {
             self.v + 0x1000
         };
     }
-
+    /// Whether the PPU is currently in VBlank
     pub fn in_vblank(&self) -> bool {
         self.dot.1 >= 240
     }
+    /// Whether it is safe for the CPU to access VRAM (i.e. the PPU is not currently accessing VRAM).
+    /// Note this does not stop the CPU from accessing VBlank.
+    /// Rather, trying to access VRAM when it is not safe to do so but can cause unexpected behaviour.
     pub fn can_access_vram(&self) -> bool {
         self.in_vblank()
             || (!self.is_background_rendering_enabled() && !self.is_sprite_rendering_enabled())
     }
-    /// Write a single byte to VRAM at `PPUADDR`
-    /// Increments `PPUADDR` by 1 or by 32 depending `PPUSTATUS`
+    /// Write a single byte to VRAM at `PPUADDR` .
+    /// Increments `PPUADDR` by 1 or by 32 depending on `PPUSTATUS`
     fn write_vram(&mut self, value: u8, cartridge: &mut Cartridge) {
         let addr = self.v & 0x3FFF;
         if addr < 0x2000 {
@@ -522,7 +533,7 @@ impl Ppu {
         }
     }
 
-    /// Read a single byte from VRAM
+    /// Read a single byte from VRAM using the v register
     fn read_vram(&mut self, cartridge: &mut Cartridge) -> u8 {
         let addr = self.v & 0x3FFF;
         if self.can_access_vram() {
@@ -565,63 +576,65 @@ impl Ppu {
         self.v = (self.v + if self.ctrl & 0x04 == 0 { 1 } else { 32 }) % 0x3FFF;
         cartridge.mapper.set_addr_value(self.v);
     }
-
+    /// Returns `true` if the NES is in 8x16 sprite mode
     pub fn is_8x16_sprites(&self) -> bool {
         (self.ctrl & 0x20) != 0
     }
-    /// Return true if OAM rendering is enabled, and false otherwise
+    /// Returns `true` if OAM rendering is enabled
     pub fn is_sprite_rendering_enabled(&self) -> bool {
         (self.mask & 0x10) != 0
     }
-    /// Return true if background rendering is enabled, and false otherwise
+    /// Return `true`` if background rendering is enabled
     pub fn is_background_rendering_enabled(&self) -> bool {
         (self.mask & 0x08) != 0
     }
-    /// Whether rendering sprites in the 8 leftmost pixels is disabled.
+    /// Returns `true` if  rendering sprites in the 8 leftmost pixels is disabled
     pub fn sprite_left_clipping(&self) -> bool {
         (self.mask & 0x04) == 0
     }
-    /// Whether rendering the background in the 8 leftmost pixels is disabled.
+    /// Returns `true` if rendering the background in the 8 leftmost pixels is disabled
     pub fn background_left_clipping(&self) -> bool {
         (self.mask & 0x02) == 0
     }
-    /// Return whether greyscale mode is on
+    /// Returns `true` if greyscale mode is on
     pub fn is_greyscale_mode_on(&self) -> bool {
         (self.mask & 0x01) != 0
     }
-    /// Return where to read the sprite patterns from
+    /// Returns the address in PPU memory spaec to read the sprite pattern data from
     pub fn spr_pattern_table_addr(&self) -> usize {
         if self.ctrl & 0x08 != 0 {
             return 0x1000;
         }
         0x0000
     }
-    /// Return where to read the backgronud patterns from
+    /// Return the address in PPU memory space to read the backgronud pattern data from
     pub fn nametable_tile_addr(&self) -> usize {
         if self.ctrl & 0x10 != 0 {
             return 0x1000;
         }
         0x0000
     }
-    // Return whether the red tint is active
+    // Return `true` if the red tint is active
     pub fn is_red_tint_on(&self) -> bool {
         (self.mask & 0x20) != 0
     }
-    // Return whether the blue tint is active
+    // Return `true` if the blue tint is active
     pub fn is_blue_tint_on(&self) -> bool {
         (self.mask & 0x40) != 0
     }
-    // Return whether the green tint is active
+    // Return `true` if the green tint is active
     pub fn is_green_tint_on(&self) -> bool {
         (self.mask & 0x80) != 0
     }
-    /// Return whether the NMI is enabled
+    /// Return `true` if the NMI is enabled
     pub fn get_nmi_enabled(&self) -> bool {
         return self.ctrl & 0x80 != 0;
     }
+    /// Return `true` if the sprite 0 hit bit is set
     pub fn sprite_zero_hit(&self) -> bool {
         (self.status & 0x40) != 0
     }
+    /// Return `true` if the sprite overflow flag is set
     pub fn sprite_overflow(&self) -> bool {
         (self.status & 0x20) != 0
     }

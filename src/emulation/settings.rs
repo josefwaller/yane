@@ -1,4 +1,4 @@
-/// Settings for the emulator.
+/// Settings for how to run the emulator.
 /// Contain a couple fields that change the visual output of the PPU.
 #[derive(Copy, Clone)]
 pub struct Settings {

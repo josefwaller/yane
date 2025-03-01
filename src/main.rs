@@ -291,7 +291,7 @@ fn main() {
                         savedata_path_and_data(&s)
                     }
                 };
-                let nes = Nes::from_cartridge(Cartridge::new(data.as_slice(), savedata));
+                let nes = Nes::from_cartridge(Cartridge::from_ines(data.as_slice(), savedata));
                 (nes, savedata_path, game_name, args)
             }
             Some(Command::Savestate {

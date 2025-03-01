@@ -1,16 +1,20 @@
 use crate::{emulation::cartridge::mapper::get_mapper, Mapper};
 use log::*;
-use serde::{de::Visitor, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::cmp::max;
 
 #[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
+/// The various nametable arrangements a cartridge can have.
+/// Determines how the 2 screens of `VRAM` are mirrored to create the 4 screens of potential outputs.
+/// Note that this is the nametable ARRANGEMENT - `NametableArrangment::Horizontal` means that the
+/// nametables are using VERTICAL mirroring.
 pub enum NametableArrangement {
     OneScreen,
     Horizontal,
     Vertical,
 }
 
-/// Holds all the memory in the cartridge
+/// Holds all memory in the cartridge.
 // Todo: Maybe rename (get rid of cartridge)
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CartridgeMemory {
@@ -20,8 +24,7 @@ pub struct CartridgeMemory {
     pub chr_ram: Vec<u8>,
 }
 impl CartridgeMemory {
-    // Read from CHR ROM or CHR RAM, if CHR ROM is empty
-    // Used for cartridges that don't use both CHR ROM and CHR RAM
+    /// Read a byte from CHR ROM or (if CHR ROM is empty) CHR RAM, given an address in CPU memory space.
     pub fn read_chr(&self, addr: usize) -> u8 {
         if self.chr_rom.len() == 0 {
             self.chr_ram[addr % self.chr_ram.len()]
@@ -29,6 +32,7 @@ impl CartridgeMemory {
             self.chr_rom[addr % self.chr_rom.len()]
         }
     }
+    /// Write a byte from CHR ROM or (if CHR ROM is empty) CHR RAM, given an address in CPU memory space.
     pub fn write_chr(&mut self, addr: usize, value: u8) {
         if self.chr_rom.len() == 0 {
             let i = addr % self.chr_ram.len();
@@ -40,8 +44,8 @@ impl CartridgeMemory {
     }
 }
 
-/// An NES cartridge, or perhaps more accurately, an iNES file.
-/// Contains all the ROM and information encoded in the header.
+/// An NES cartridge.
+/// Contains methods for reading and writing memory, using the appropriate mapper.
 #[derive(Serialize, Deserialize)]
 pub struct Cartridge {
     pub memory: CartridgeMemory,
@@ -54,7 +58,10 @@ pub struct Cartridge {
 }
 
 impl Cartridge {
-    pub fn new(bytes: &[u8], savedata: Option<Vec<u8>>) -> Cartridge {
+    /// Create a new cartridge from an iNes file's contents.
+    /// `bytes` should be the contents of the iNes file.
+    /// `savedata` is the bettery backed static RAM on the cartridge, used to initialise the PRG RAM if present.
+    pub fn from_ines(bytes: &[u8], savedata: Option<Vec<u8>>) -> Cartridge {
         if cfg!(debug_assertions) {
             assert_eq!(bytes[0], 'N' as u8);
             assert_eq!(bytes[1], 'E' as u8);
