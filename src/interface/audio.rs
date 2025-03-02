@@ -1,6 +1,6 @@
 use crate::{AppSettings, Nes, CPU_CLOCK_SPEED};
 use log::*;
-use rubato::{FftFixedIn, Resampler};
+use rubato::{Resampler, SincFixedIn, SincInterpolationParameters};
 use sdl2::{
     audio::{AudioQueue, AudioSpecDesired},
     Sdl,
@@ -8,7 +8,7 @@ use sdl2::{
 
 pub struct Audio {
     queue: AudioQueue<f32>,
-    resampler: FftFixedIn<f32>,
+    resampler: SincFixedIn<f32>,
     data_queue: Vec<f32>,
     last_speed: f32,
     pub all_samples: Vec<f32>,
@@ -31,11 +31,19 @@ impl Audio {
             queue.spec().freq
         );
 
-        let resampler = FftFixedIn::<f32>::new(
-            CPU_CLOCK_SPEED as usize,
-            spec.freq.unwrap() as usize,
+        // Fixed input, since the input is always the number of samples every frame
+        // The output varies with the speed of the emulator
+        let resampler = SincFixedIn::<f32>::new(
+            queue.spec().freq as f64 / CPU_CLOCK_SPEED as f64,
+            10.0,
+            SincInterpolationParameters {
+                sinc_len: 256,
+                f_cutoff: 0.9,
+                oversampling_factor: 128,
+                interpolation: rubato::SincInterpolationType::Nearest,
+                window: rubato::WindowFunction::BlackmanHarris2,
+            },
             CPU_CLOCK_SPEED as usize / 60,
-            60,
             1,
         )
         .expect("Unable to create resampler");
