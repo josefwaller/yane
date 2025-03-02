@@ -1,2 +1,2 @@
-# Y.A.N.E. - Yet Another NES Emulator
-NES emulator written in rust.
+# Y.A.N.E. - Yet Another N.E.S. Emulator
+Nintendo Entertainment System emulator and emulation library.

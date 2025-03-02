@@ -344,10 +344,7 @@ impl DebugWindow {
                         });
                     c.end();
                 }
-                let s = nes.cartridge.debug_string();
-                if !s.is_empty() {
-                    ui.text(s);
-                }
+                ui.text(format!("{:?}", &nes.cartridge));
                 if ui.collapsing_header("Previous Instructions", TreeNodeFlags::empty()) {
                     nes.previous_states.iter().rev().take(0x20).for_each(|s| {
                         ui.text(format!("{:?}", s));

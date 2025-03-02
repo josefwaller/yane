@@ -2,4 +2,4 @@ mod cartridge;
 pub use cartridge::{Cartridge, CartridgeMemory, NametableArrangement};
 mod mapper;
 pub use mapper::Mapper;
-mod mappers;
+pub mod mappers;

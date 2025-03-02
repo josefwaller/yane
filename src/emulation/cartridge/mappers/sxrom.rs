@@ -1,3 +1,5 @@
+use std::fmt::{Debug, Display};
+
 use crate::{
     emulation::cartridge::mapper::bank_addr, CartridgeMemory, Mapper, NametableArrangement,
 };
@@ -5,6 +7,7 @@ use log::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
+/// SxROM and variants (mapper 1)
 pub struct SxRom {
     shift: usize,
     chr_bank_0: usize,
@@ -144,23 +147,32 @@ impl Mapper for SxRom {
         };
         mem.write_chr(addr, value);
     }
-    fn nametable_arrangement(&self) -> Option<NametableArrangement> {
-        Some(match self.control & 0x03 {
+    fn nametable_arrangement(&self, _: &CartridgeMemory) -> NametableArrangement {
+        match self.control & 0x03 {
             0 | 1 => NametableArrangement::OneScreen,
             2 => NametableArrangement::Horizontal,
             3 => NametableArrangement::Vertical,
             _ => panic!("Should never happen"),
-        })
+        }
     }
-    fn get_debug_string(&self) -> String {
-        format!(
-            "Mode: {:X}, Control: {:X}, shift: {:X}",
+
+    fn advance_cpu_cycles(&mut self, _cycles: u32) {
+        self.has_written = false;
+    }
+}
+impl Debug for SxRom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "SxROM, Mode: {:X}, Control: {:X}, shift: {:X}",
             (self.control & 0x0C) >> 2,
             self.control,
             self.shift
         )
     }
-    fn advance_cpu_cycles(&mut self, _cycles: u32) {
-        self.has_written = false;
+}
+impl Display for SxRom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SxROM")
     }
 }

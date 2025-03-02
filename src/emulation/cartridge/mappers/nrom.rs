@@ -1,8 +1,11 @@
+use std::fmt::{Debug, Display};
+
 use crate::{emulation::cartridge::CartridgeMemory, Mapper};
 use log::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Serialize, Deserialize)]
+/// NRom cartridge mapper (mapper 0)
 pub struct NRom {}
 #[typetag::serde]
 impl Mapper for NRom {
@@ -50,5 +53,16 @@ impl Mapper for NRom {
         } else {
             warn!("Trying to write to CHR RAM but there is none present");
         }
+    }
+}
+
+impl Display for NRom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "NROM")
+    }
+}
+impl Debug for NRom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self, f)
     }
 }

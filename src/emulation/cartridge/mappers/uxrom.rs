@@ -1,8 +1,11 @@
+use std::fmt::{Debug, Display};
+
 use crate::{emulation::cartridge::CartridgeMemory, Mapper};
 use log::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Serialize, Deserialize)]
+/// UxROM and variants (mapper 2)
 pub struct UxRom {
     bank: usize,
 }
@@ -46,5 +49,16 @@ impl Mapper for UxRom {
             let l = mem.chr_ram.len();
             mem.chr_ram[ppu_addr % l] = value;
         }
+    }
+}
+
+impl Display for UxRom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "UxROM")
+    }
+}
+impl Debug for UxRom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "UxROM bank={}", self.bank)
     }
 }

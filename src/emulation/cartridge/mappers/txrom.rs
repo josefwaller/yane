@@ -1,3 +1,5 @@
+use std::fmt::{Debug, Display};
+
 use crate::{
     emulation::cartridge::mapper::{bank_addr, num_banks},
     Mapper, NametableArrangement,
@@ -6,6 +8,7 @@ use log::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
+/// TxROM and variants (mapper 4)
 pub struct TxRom {
     prg_banks: [u32; 2],
     chr_banks: [u32; 6],
@@ -182,14 +185,8 @@ impl Mapper for TxRom {
         }
         self.last_ppu_addr = ppu_addr & 0x1000;
     }
-    fn nametable_arrangement(&self) -> Option<NametableArrangement> {
-        Some(self.nametable)
-    }
-    fn get_debug_string(&self) -> String {
-        format!(
-            "Counter enabled = {:}, reload = {:}",
-            self.irq_enable, self.irq_reload
-        )
+    fn nametable_arrangement(&self, _: &crate::CartridgeMemory) -> NametableArrangement {
+        self.nametable
     }
     fn irq_addr(&mut self) -> Option<usize> {
         if self.generate_irq {
@@ -198,5 +195,19 @@ impl Mapper for TxRom {
         } else {
             None
         }
+    }
+}
+impl Debug for TxRom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "TxROM irq_enable = {:} irq_reload = {:}",
+            self.irq_enable, self.irq_reload
+        )
+    }
+}
+impl Display for TxRom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TxROM")
     }
 }

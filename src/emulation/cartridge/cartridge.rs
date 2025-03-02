@@ -1,7 +1,10 @@
 use crate::{emulation::cartridge::mapper::get_mapper, Mapper};
 use log::*;
 use serde::{Deserialize, Serialize};
-use std::cmp::max;
+use std::{
+    cmp::max,
+    fmt::{Debug, Display},
+};
 
 #[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 /// The various nametable arrangements a cartridge can have.
@@ -18,10 +21,17 @@ pub enum NametableArrangement {
 // Todo: Maybe rename (get rid of cartridge)
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CartridgeMemory {
+    /// Program RAM (PRG RAM) of the cartridge
     pub prg_ram: Vec<u8>,
+    /// Program ROM (PRG ROM) of the cartridge
     pub prg_rom: Vec<u8>,
-    pub chr_rom: Vec<u8>,
+    /// Character RAM (CHR RAM) of the cartridge
     pub chr_ram: Vec<u8>,
+    /// Character ROM (CHR ROM) of the cartridge
+    pub chr_rom: Vec<u8>,
+    /// Nametable arrangement of the cartridge, read when parsing the file
+    /// May be changed by the mapper, use [Mapper::nametable_arrangement] to get the current nametable arrangement being used
+    pub nametable_arrangement: NametableArrangement,
 }
 impl CartridgeMemory {
     /// Read a byte from CHR ROM or (if CHR ROM is empty) CHR RAM, given an address in CPU memory space.
@@ -49,8 +59,6 @@ impl CartridgeMemory {
 #[derive(Serialize, Deserialize)]
 pub struct Cartridge {
     pub memory: CartridgeMemory,
-    /// Nametable mirroring arrangement
-    nametable_arrangement: NametableArrangement,
     // Mapper
     pub mapper: Box<dyn Mapper>,
     // Whether the cartridge has battery backed RAM and should be saved
@@ -154,8 +162,8 @@ impl Cartridge {
                 chr_rom,
                 prg_ram,
                 chr_ram: vec![0; chr_ram_size],
+                nametable_arrangement,
             },
-            nametable_arrangement,
             mapper,
             has_battery_ram,
         }
@@ -178,15 +186,6 @@ impl Cartridge {
     pub fn write_ppu(&mut self, addr: usize, value: u8) {
         self.mapper.write_ppu(addr, &mut self.memory, value);
     }
-    /// Write a byte to the cartridge's memory given an address in PPU memory space
-    /// Usually writes tot CHR RAM.
-    /// Todo: Use mapper here?
-    // pub fn write_chr(&mut self, addr: usize, value: u8) {
-    //     // TBA - only do this if there is CHR RAM
-    //     if addr < self.memory.chr_ram.len() {
-    //         self.memory.chr_ram[addr] = value;
-    //     }
-    // }
     pub fn get_pattern_table(&self) -> &[u8] {
         if self.memory.chr_ram.len() == 0 {
             return self.memory.chr_rom.as_slice();
@@ -195,10 +194,7 @@ impl Cartridge {
     }
     /// Transform nametable address to index in VRAM array in PPU
     pub fn transform_nametable_addr(&self, addr: usize) -> usize {
-        let nametable = self
-            .mapper
-            .nametable_arrangement()
-            .unwrap_or(self.nametable_arrangement);
+        let nametable = self.mapper.nametable_arrangement(&self.memory);
         match nametable {
             NametableArrangement::OneScreen => addr % 0x400,
             NametableArrangement::Horizontal => {
@@ -219,18 +215,24 @@ impl Cartridge {
             }
         }
     }
-    pub fn debug_string(&self) -> String {
-        self.mapper.get_debug_string()
-    }
     pub fn has_battery_backed_ram(&self) -> bool {
         self.has_battery_ram
     }
     pub fn nametable_arrangement(&self) -> NametableArrangement {
-        self.mapper
-            .nametable_arrangement()
-            .unwrap_or(self.nametable_arrangement)
+        self.mapper.nametable_arrangement(&self.memory)
     }
     pub fn advance_cpu_cycles(&mut self, cycles: u32) {
         self.mapper.advance_cpu_cycles(cycles);
+    }
+}
+
+impl Display for Cartridge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.mapper, f)
+    }
+}
+impl Debug for Cartridge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(&self.mapper, f)
     }
 }

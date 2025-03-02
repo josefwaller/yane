@@ -1,3 +1,5 @@
+//! Implementations of various mappers used by NES cartridges.
+//! See [Mapper][super::Mapper].
 mod nrom;
 pub use nrom::NRom;
 mod uxrom;

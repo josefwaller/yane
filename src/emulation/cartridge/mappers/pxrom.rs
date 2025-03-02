@@ -1,3 +1,5 @@
+use std::fmt::{Debug, Display};
+
 use crate::{
     emulation::cartridge::mapper::{bank_addr, num_banks},
     Mapper, NametableArrangement,
@@ -6,6 +8,7 @@ use log::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
+/// PxROM mapper and variants (mapper 9)
 pub struct PxRom {
     prg_bank: usize,
     // The CHR banks, indexed first by address (0 = 0x0000-0x0FFF, 1 = 0x1000-0x1FFF)
@@ -112,7 +115,22 @@ impl Mapper for PxRom {
         }
     }
     fn write_ppu(&mut self, ppu_addr: usize, mem: &mut crate::CartridgeMemory, value: u8) {}
-    fn nametable_arrangement(&self) -> Option<NametableArrangement> {
-        Some(self.nametable_arrangement)
+    fn nametable_arrangement(&self, _: &crate::CartridgeMemory) -> NametableArrangement {
+        self.nametable_arrangement
+    }
+}
+
+impl Display for PxRom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PxROM")
+    }
+}
+impl Debug for PxRom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "PxROM, prg_bank={} chr_banks={:?} latches={:?} NT arrangement={:?}",
+            self.prg_bank, self.chr_banks, self.latches, self.nametable_arrangement
+        )
     }
 }

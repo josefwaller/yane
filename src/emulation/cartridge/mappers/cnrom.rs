@@ -1,9 +1,11 @@
+use std::fmt::{Debug, Display};
+
 use crate::{emulation::cartridge::mapper::bank_addr, Mapper};
 use log::*;
 use serde::{Deserialize, Serialize};
-use std::fmt::Display;
 
 #[derive(Default, Serialize, Deserialize)]
+/// The CnROM and variants (mapper 3)
 pub struct CnRom {
     chr_bank_select: usize,
 }
@@ -30,7 +32,18 @@ impl Mapper for CnRom {
     fn read_ppu_debug(&self, ppu_addr: usize, mem: &crate::CartridgeMemory) -> u8 {
         mem.chr_rom[bank_addr(0x2000, self.chr_bank_select, ppu_addr) % mem.chr_rom.len()]
     }
-    fn write_ppu(&mut self, ppu_addr: usize, mem: &mut crate::CartridgeMemory, value: u8) {
-        // unimplemented!("Write PPU for CnRom");
+    fn write_ppu(&mut self, _ppu_addr: usize, _mem: &mut crate::CartridgeMemory, value: u8) {
+        // Does nothing
+    }
+}
+
+impl Display for CnRom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CnROM")
+    }
+}
+impl Debug for CnRom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} chr_bank_select={}", self, self.chr_bank_select)
     }
 }
