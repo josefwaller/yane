@@ -2,7 +2,7 @@
 #[macro_export]
 macro_rules! nes_with_rom {
     ($rom_path: literal) => {
-        Nes::from_cartridge(Cartridge::new(include_bytes!($rom_path), None))
+        Nes::from_cartridge(Cartridge::from_ines(include_bytes!($rom_path), None))
     };
 }
 
@@ -25,7 +25,7 @@ macro_rules! advance_nes_frames {
 macro_rules! rom_test {
     ($nes_file: literal, $num_frames: literal) => {
         let file_contents = include_bytes!($nes_file);
-        let mut nes = Nes::from_cartridge(Cartridge::new(file_contents, None));
+        let mut nes = Nes::from_cartridge(Cartridge::from_ines(file_contents, None));
 
         advance_nes_frames!(nes, $num_frames);
 

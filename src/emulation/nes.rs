@@ -947,7 +947,7 @@ impl Nes {
     /// Write a single byte using indexed indirect addressing.
     /// ```
     /// let mut nes = yane::Nes::new();
-    /// nes.write_indexed_indirect(&[0x12]);
+    /// nes.write_indexed_indirect(&[0x12], 0x01);
     /// ```
     pub fn write_indexed_indirect(&mut self, addr: &[u8], value: u8) {
         let first_addr = addr[0].wrapping_add(self.cpu.x);
