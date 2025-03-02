@@ -29,7 +29,7 @@ impl Cpu {
             x: 0,
             y: 0,
             p_c: 0,
-            s_p: 0xFD,
+            s_p: 0xFF,
             s_r: StatusRegister::new(),
         }
     }

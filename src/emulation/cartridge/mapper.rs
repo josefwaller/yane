@@ -32,9 +32,9 @@ pub trait Mapper: Debug + Display {
     /// Set the value on the PPUADDR pins going into the cartridge.
     /// Must be updated since some cartridges use this value to clock an interrupt timer.
     fn set_addr_value(&mut self, _addr: u32) {}
-    /// Get the address if the CPU has generated an IRQ, or None if it hasn't
-    fn irq_addr(&mut self) -> Option<usize> {
-        None
+    /// Return `true` if the cartridge is triggering an IRQ, and false otherwise
+    fn irq(&mut self) -> bool {
+        false
     }
     /// Get the iNes mapper number of this mapper
     fn mapper_num(&self) -> u32;

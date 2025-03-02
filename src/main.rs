@@ -362,9 +362,6 @@ fn main() {
         let mut last_debug_window_render = Instant::now();
         // Various constants for keeping emulator time in check with real time
         const DEBUG_WINDOW_REFRESH_RATE: Duration = Duration::from_millis(1000 / 60);
-        // const CPU_CYCLES_PER_FRAME: f32 = 262.0 * CPU_CYCLES_PER_SCANLINE;
-        // let wait_time_per_cycle =
-        //     Duration::from_nanos(1_000_000_000 / 60 / CPU_CYCLES_PER_FRAME as u64);
         // Used for logging information every 100 frames
         let mut last_hundred_frames = Instant::now();
         let mut frame_cycles = 0;

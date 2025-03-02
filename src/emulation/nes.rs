@@ -4,7 +4,10 @@ use log::*;
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
-use crate::{opcodes::*, Apu, Cartridge, Controller, Cpu, Ppu, Settings};
+use crate::{
+    opcodes::*, Apu, Cartridge, Controller, Cpu, Ppu, Settings, CARTRIDGE_IRQ_ADDR, NMI_IRQ_ADDR,
+    RESET_IRQ_ADDR,
+};
 /// A snapshot of the NES state at a given point.
 /// Used for debug logging.
 pub struct NesState {
@@ -112,8 +115,10 @@ impl Nes {
             controller_bits: [0; 2],
             previous_states: VecDeque::with_capacity(NUMBER_STORED_STATES),
         };
-        nes.cpu.p_c = ((nes.cartridge.read_cpu(0xFFFD) as u16) << 8)
-            + (nes.cartridge.read_cpu(0xFFFC) as u16);
+        // During startup, the pushes are interpreted as pulls
+        // So instead of the stake pointer going 0xFF -> 0x01, it should go to 0xFD
+        nes.interrupt_to_addr(RESET_IRQ_ADDR);
+        nes.cpu.s_p = 0xFD;
         info!("Initialized PC to {:#X}", nes.cpu.p_c);
         nes
     }
@@ -250,7 +255,7 @@ impl Nes {
     }
 
     fn on_nmi(&mut self) {
-        self.interrupt_to_addr(0xFFFA);
+        self.interrupt_to_addr(NMI_IRQ_ADDR);
     }
     fn interrupt_to_addr(&mut self, addr: usize) {
         self.push_to_stack_u16(self.cpu.p_c);
@@ -734,8 +739,8 @@ impl Nes {
             }
             // Check for cartridge or dmc interrupt interrupt
             if !self.cpu.s_r.i {
-                if let Some(addr) = self.cartridge.mapper.irq_addr() {
-                    self.interrupt_to_addr(addr);
+                if self.cartridge.mapper.irq() {
+                    self.interrupt_to_addr(CARTRIDGE_IRQ_ADDR);
                     c += 7;
                 }
             }
@@ -989,7 +994,7 @@ impl Nes {
     /// Reset the NES.
     /// Triggers a reset interrupt using the interrupt vector at `0xFFFE`.
     pub fn reset(&mut self) {
-        self.interrupt_to_addr(0xFFFC);
+        self.interrupt_to_addr(RESET_IRQ_ADDR);
     }
     // Return true if a page is crossed by an operation using the absolute address and offset given
     // addr is in little endian form

@@ -188,12 +188,12 @@ impl Mapper for TxRom {
     fn nametable_arrangement(&self, _: &crate::CartridgeMemory) -> NametableArrangement {
         self.nametable
     }
-    fn irq_addr(&mut self) -> Option<usize> {
+    fn irq(&mut self) -> bool {
         if self.generate_irq {
             self.generate_irq = false;
-            Some(0xFFFE)
+            true
         } else {
-            None
+            false
         }
     }
 }
