@@ -1,4 +1,4 @@
-use crate::{AppSettings, Nes};
+use crate::{core::Nes, AppSettings};
 use log::*;
 
 pub fn save_new_savestate(nes: &Nes, settings: &mut AppSettings, game_name: &Option<String>) {

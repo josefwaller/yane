@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-use crate::{emulation::cartridge::mapper::bank_addr, Mapper};
+use crate::core::{cartridge::mapper::bank_addr, CartridgeMemory, Mapper};
 use log::*;
 use serde::{Deserialize, Serialize};
 
@@ -15,7 +15,7 @@ impl Mapper for CnRom {
     fn mapper_num(&self) -> u32 {
         3
     }
-    fn read_cpu(&self, cpu_addr: usize, mem: &crate::CartridgeMemory) -> u8 {
+    fn read_cpu(&self, cpu_addr: usize, mem: &CartridgeMemory) -> u8 {
         let max = mem.prg_rom.len();
         if cpu_addr < 0x8000 {
             warn!("Invalid read at address {:X}", cpu_addr);
@@ -24,15 +24,15 @@ impl Mapper for CnRom {
             mem.prg_rom[cpu_addr % max]
         }
     }
-    fn write_cpu(&mut self, cpu_addr: usize, mem: &mut crate::CartridgeMemory, value: u8) {
+    fn write_cpu(&mut self, cpu_addr: usize, mem: &mut CartridgeMemory, value: u8) {
         if cpu_addr >= 0x8000 {
             self.chr_bank_select = (value & 0x03) as usize;
         }
     }
-    fn read_ppu_debug(&self, ppu_addr: usize, mem: &crate::CartridgeMemory) -> u8 {
+    fn read_ppu_debug(&self, ppu_addr: usize, mem: &CartridgeMemory) -> u8 {
         mem.chr_rom[bank_addr(0x2000, self.chr_bank_select, ppu_addr) % mem.chr_rom.len()]
     }
-    fn write_ppu(&mut self, _ppu_addr: usize, _mem: &mut crate::CartridgeMemory, value: u8) {
+    fn write_ppu(&mut self, _ppu_addr: usize, _mem: &mut CartridgeMemory, value: u8) {
         // Does nothing
     }
 }

@@ -1,8 +1,8 @@
 use std::fmt::{Debug, Display};
 
-use crate::{
-    emulation::cartridge::mapper::{bank_addr, num_banks},
-    Mapper, NametableArrangement,
+use crate::core::{
+    cartridge::mapper::{bank_addr, num_banks},
+    CartridgeMemory, Mapper, NametableArrangement,
 };
 use log::*;
 use serde::{Deserialize, Serialize};
@@ -52,7 +52,7 @@ impl Mapper for TxRom {
     fn mapper_num(&self) -> u32 {
         4
     }
-    fn read_cpu(&self, cpu_addr: usize, mem: &crate::CartridgeMemory) -> u8 {
+    fn read_cpu(&self, cpu_addr: usize, mem: &CartridgeMemory) -> u8 {
         if cpu_addr < 0x6000 {
             warn!("Trying to read PRG RAM where there is none: {:X}", cpu_addr);
             0
@@ -94,7 +94,7 @@ impl Mapper for TxRom {
             mem.prg_rom[bank_addr(0x2000, num_banks(0x2000, &mem.prg_rom) - 1, cpu_addr)]
         }
     }
-    fn write_cpu(&mut self, cpu_addr: usize, mem: &mut crate::CartridgeMemory, value: u8) {
+    fn write_cpu(&mut self, cpu_addr: usize, mem: &mut CartridgeMemory, value: u8) {
         if cpu_addr < 0x8000 {
             mem.prg_ram[cpu_addr - 0x6000] = value;
         } else if cpu_addr < 0xA000 {
@@ -144,12 +144,12 @@ impl Mapper for TxRom {
             }
         }
     }
-    fn read_ppu(&mut self, ppu_addr: usize, mem: &crate::CartridgeMemory) -> u8 {
+    fn read_ppu(&mut self, ppu_addr: usize, mem: &CartridgeMemory) -> u8 {
         // Refresh controller ADDR pin values
         self.set_addr_value(ppu_addr as u32);
         self.read_ppu_debug(ppu_addr, mem)
     }
-    fn read_ppu_debug(&self, ppu_addr: usize, mem: &crate::CartridgeMemory) -> u8 {
+    fn read_ppu_debug(&self, ppu_addr: usize, mem: &CartridgeMemory) -> u8 {
         let (bank_size, bank_num) = if self.chr_mode == 0 {
             if ppu_addr < 0x1000 {
                 (0x800, self.chr_banks[ppu_addr / 0x800] / 2)
@@ -165,7 +165,7 @@ impl Mapper for TxRom {
         };
         mem.read_chr(bank_addr(bank_size, bank_num as usize, ppu_addr))
     }
-    fn write_ppu(&mut self, _ppu_addr: usize, _mem: &mut crate::CartridgeMemory, _value: u8) {}
+    fn write_ppu(&mut self, _ppu_addr: usize, _mem: &mut CartridgeMemory, _value: u8) {}
     fn set_addr_value(&mut self, ppu_addr: u32) {
         // Update IRQ
         if self.last_ppu_addr == 0 && ppu_addr & 0x1000 != 0 {
@@ -185,7 +185,7 @@ impl Mapper for TxRom {
         }
         self.last_ppu_addr = ppu_addr & 0x1000;
     }
-    fn nametable_arrangement(&self, _: &crate::CartridgeMemory) -> NametableArrangement {
+    fn nametable_arrangement(&self, _: &CartridgeMemory) -> NametableArrangement {
         self.nametable
     }
     fn irq(&mut self) -> bool {

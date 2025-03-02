@@ -37,7 +37,7 @@ impl StatusRegister {
     }
     /// Get the status register as a single byte to be written to memory.
     /// ```
-    /// let mut s = yane::StatusRegister::new();
+    /// let mut s = yane::core::StatusRegister::new();
     /// s.z = true;
     /// s.d = true;
     /// s.i = false;
@@ -73,7 +73,7 @@ impl StatusRegister {
     }
     /// Set the status register from a given byte that contains one bit per flag.
     /// ```
-    /// let mut s = yane::StatusRegister::new();
+    /// let mut s = yane::core::StatusRegister::new();
     /// s.from_byte(0b11001010);
     /// assert_eq!(s.d, true);
     /// assert_eq!(s.v, true);

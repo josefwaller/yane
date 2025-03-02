@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
 
-use crate::StatusRegister;
+use crate::core::StatusRegister;
 
 /// The CPU of the NES.
 /// Contains all registers and is responsible for changing the flags when the values are set/unset.
@@ -37,7 +37,7 @@ impl Cpu {
     /// Sets the status register accordingly.
     ///
     /// ```
-    /// let mut cpu = yane::Cpu::new();
+    /// let mut cpu = yane::core::Cpu::new();
     /// cpu.lda(0x18);
     /// assert_eq!(cpu.a, 0x18);
     /// ```
@@ -50,7 +50,7 @@ impl Cpu {
     /// Sets the status register accordingly.
     ///
     /// ```
-    /// let mut cpu = yane::Cpu::new();
+    /// let mut cpu = yane::core::Cpu::new();
     /// cpu.ldx(0x18);
     /// assert_eq!(cpu.x, 0x18);
     /// ```
@@ -62,7 +62,7 @@ impl Cpu {
     /// Sets the zero flag is Y = 0 and the negative flag if Y =
     ///
     /// ```
-    /// let mut cpu = yane::Cpu::new();
+    /// let mut cpu = yane::core::Cpu::new();
     /// cpu.ldy(0x18);
     /// assert_eq!(cpu.y, 0x18);
     /// ```
@@ -100,7 +100,7 @@ impl Cpu {
     /// * Z is set if A is 0
     /// * N is set if A is negative (i.e. the MSB is set)
     /// ```
-    /// let mut cpu = yane::Cpu::new();
+    /// let mut cpu = yane::core::Cpu::new();
     /// cpu.a = 0xAA;
     /// cpu.and(0x0F);
     /// assert_eq!(cpu.a, 0x0A);
@@ -116,7 +116,7 @@ impl Cpu {
     /// * Z is set if `value` is 0 after the shift.
     /// * N is set if the MSB of `value` is set after the shift.
     /// ```
-    /// let mut cpu = yane::Cpu::new();
+    /// let mut cpu = yane::core::Cpu::new();
     /// assert_eq!(cpu.asl(0x98), 0x30);
     /// assert_eq!(cpu.s_r.z, false);
     /// assert_eq!(cpu.s_r.c, true);
@@ -151,7 +151,7 @@ impl Cpu {
     /// * V is set to bit 6 of `value`.
     /// * N is set to bit 7 of `value`.
     /// ```
-    /// let mut cpu = yane::Cpu::new();
+    /// let mut cpu = yane::core::Cpu::new();
     /// cpu.a = 0x18;
     /// cpu.bit(0xE0);
     /// // A is not affected
@@ -188,7 +188,7 @@ impl Cpu {
     /// * Z is set to `u == v``
     /// * N is set to the MSB of `u - v`
     /// ```
-    /// let mut cpu = yane::Cpu::new();
+    /// let mut cpu = yane::core::Cpu::new();
     /// cpu.compare(0x18, 0x18);
     /// assert_eq!(cpu.s_r.z, true);
     /// cpu.compare(0x19, 0x18);
@@ -220,7 +220,7 @@ impl Cpu {
     /// * Z is set if the return value is `0`
     /// * N is set if the MSB of the return value is set.
     /// ```
-    /// let mut cpu = yane::Cpu::new();
+    /// let mut cpu = yane::core::Cpu::new();
     /// let a = cpu.dec(0x81);
     /// assert_eq!(a, 0x80);
     /// // Result is not zero
@@ -239,7 +239,7 @@ impl Cpu {
     /// * Z is set to A == 0
     /// * N is set to the MSB of A
     ///```
-    /// let mut cpu = yane::Cpu::new();
+    /// let mut cpu = yane::core::Cpu::new();
     /// cpu.a = 0xFF;
     /// cpu.eor(0x77);
     /// assert_eq!(cpu.a, 0x88);
@@ -266,7 +266,7 @@ impl Cpu {
     /// * C is set to bit 0 of the value before shifting.
     /// * Z is set if the result is 0.
     /// ```
-    /// let mut cpu = yane::Cpu::new();
+    /// let mut cpu = yane::core::Cpu::new();
     /// let value = cpu.lsr(0x81);
     /// assert_eq!(value, 0x40);
     /// assert_eq!(cpu.s_r.c, true);
@@ -284,7 +284,7 @@ impl Cpu {
     /// * Z is set if A == 0
     /// * N is set if A is negative
     /// ```
-    /// let mut cpu = yane::Cpu::new();
+    /// let mut cpu = yane::core::Cpu::new();
     /// cpu.ora(0x18);
     /// assert_eq!(cpu.a, 0x18);
     /// assert_eq!(cpu.s_r.n, false);

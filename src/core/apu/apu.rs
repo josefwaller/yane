@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use log::*;
 use serde::{Deserialize, Serialize};
 
-use crate::Cartridge;
+use crate::core::Cartridge;
 
 use super::{DmcRegister, NoiseRegister, PulseRegister, TriangleRegister, DMC_RATES};
 

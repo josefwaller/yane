@@ -1,7 +1,12 @@
 use clipboard::{ClipboardContext, ClipboardProvider};
 use log::*;
 
-use crate::{check_error, utils::*, AppSettings, Cartridge, Nes, Ppu, DEBUG_PALETTE};
+use crate::{
+    check_error,
+    core::{Cartridge, Nes, Ppu, DEBUG_PALETTE},
+    utils::*,
+    AppSettings,
+};
 use glow::{HasContext, NativeTexture};
 use imgui::{FontId, TextureId, TreeNodeFlags};
 use imgui_glow_renderer::AutoRenderer;

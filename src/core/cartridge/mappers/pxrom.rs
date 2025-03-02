@@ -1,8 +1,8 @@
 use std::fmt::{Debug, Display};
 
-use crate::{
-    emulation::cartridge::mapper::{bank_addr, num_banks},
-    Mapper, NametableArrangement,
+use crate::core::{
+    cartridge::mapper::{bank_addr, num_banks},
+    CartridgeMemory, Mapper, NametableArrangement,
 };
 use log::*;
 use serde::{Deserialize, Serialize};
@@ -33,7 +33,7 @@ impl Mapper for PxRom {
     fn mapper_num(&self) -> u32 {
         9
     }
-    fn read_cpu(&self, cpu_addr: usize, mem: &crate::CartridgeMemory) -> u8 {
+    fn read_cpu(&self, cpu_addr: usize, mem: &CartridgeMemory) -> u8 {
         if cpu_addr < 0x6000 {
             warn!("Invalid CPU addr {:X}", cpu_addr);
             0
@@ -58,7 +58,7 @@ impl Mapper for PxRom {
             mem.prg_rom[bank_addr(0x2000, bank_num, cpu_addr)]
         }
     }
-    fn read_ppu_debug(&self, ppu_addr: usize, mem: &crate::CartridgeMemory) -> u8 {
+    fn read_ppu_debug(&self, ppu_addr: usize, mem: &CartridgeMemory) -> u8 {
         let bank_num = if ppu_addr < 0x1000 {
             if self.latches[0] == 0xFD {
                 self.chr_banks[0][0]
@@ -80,7 +80,7 @@ impl Mapper for PxRom {
         };
         mem.chr_rom[bank_addr(0x1000, bank_num, ppu_addr)]
     }
-    fn read_ppu(&mut self, ppu_addr: usize, mem: &crate::CartridgeMemory) -> u8 {
+    fn read_ppu(&mut self, ppu_addr: usize, mem: &CartridgeMemory) -> u8 {
         let v = self.read_ppu_debug(ppu_addr, mem);
         if ppu_addr == 0x0FD8 {
             self.latches[0] = 0xFD;
@@ -93,7 +93,7 @@ impl Mapper for PxRom {
         }
         v
     }
-    fn write_cpu(&mut self, cpu_addr: usize, mem: &mut crate::CartridgeMemory, value: u8) {
+    fn write_cpu(&mut self, cpu_addr: usize, mem: &mut CartridgeMemory, value: u8) {
         let bank = (value & 0x1F) as usize;
         if cpu_addr < 0xA000 {
         } else if cpu_addr < 0xB000 {
@@ -114,8 +114,8 @@ impl Mapper for PxRom {
             };
         }
     }
-    fn write_ppu(&mut self, ppu_addr: usize, mem: &mut crate::CartridgeMemory, value: u8) {}
-    fn nametable_arrangement(&self, _: &crate::CartridgeMemory) -> NametableArrangement {
+    fn write_ppu(&mut self, ppu_addr: usize, mem: &mut CartridgeMemory, value: u8) {}
+    fn nametable_arrangement(&self, _: &CartridgeMemory) -> NametableArrangement {
         self.nametable_arrangement
     }
 }

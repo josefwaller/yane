@@ -1,9 +1,6 @@
-use std::{
-    cmp::{max, min},
-    collections::VecDeque,
-};
+use std::{cmp::min, collections::VecDeque};
 
-use crate::Settings;
+use crate::core::Settings;
 
 use super::{Cartridge, DEBUG_PALETTE};
 use log::*;

@@ -1,5 +1,5 @@
 mod common;
-use yane::*;
+use yane::core::*;
 
 #[test]
 fn test_clocking() {

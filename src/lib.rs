@@ -1,11 +1,5 @@
+pub mod app;
 mod app_settings;
-mod emulation;
-mod interface;
+pub mod core;
 mod utils;
 pub use app_settings::AppSettings;
-pub use emulation::*;
-pub use interface::*;
-pub const CPU_CLOCK_SPEED: u32 = 1_789_000;
-pub const CARTRIDGE_IRQ_ADDR: usize = 0xFFFE;
-pub const RESET_IRQ_ADDR: usize = 0xFFFC;
-pub const NMI_IRQ_ADDR: usize = 0xFFFA;

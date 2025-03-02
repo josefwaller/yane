@@ -1,4 +1,4 @@
-use crate::{emulation::cartridge::mapper::get_mapper, Mapper};
+use crate::core::{cartridge::mapper::get_mapper, Mapper};
 use log::*;
 use serde::{Deserialize, Serialize};
 use std::{

@@ -1,4 +1,4 @@
-use yane::{Cartridge, Nes};
+use yane::core::{Cartridge, Nes};
 mod common;
 
 #[test]

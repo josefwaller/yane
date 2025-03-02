@@ -1,8 +1,6 @@
 use std::fmt::{Debug, Display};
 
-use crate::{
-    emulation::cartridge::mapper::bank_addr, CartridgeMemory, Mapper, NametableArrangement,
-};
+use crate::core::{cartridge::mapper::bank_addr, CartridgeMemory, Mapper, NametableArrangement};
 use log::*;
 use serde::{Deserialize, Serialize};
 

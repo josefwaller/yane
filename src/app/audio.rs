@@ -1,4 +1,4 @@
-use crate::{AppSettings, Nes, CPU_CLOCK_SPEED};
+use crate::{core::Nes, core::CPU_CLOCK_SPEED, AppSettings};
 use log::*;
 use rubato::{Resampler, SincFixedIn, SincInterpolationParameters};
 use sdl2::{

@@ -8,7 +8,7 @@ use std::{
 };
 
 use assert_hex::assert_eq_hex;
-use yane::{Cartridge, Controller, Nes};
+use yane::core::{Cartridge, Controller, Nes};
 
 // Runs the NES test CPU file and checks the state of the NES after each execution
 #[test]

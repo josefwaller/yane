@@ -1,6 +1,10 @@
 use std::path::PathBuf;
 
-use crate::{utils, AppSettings, Audio, Controller, Nes, Screen, Settings};
+use crate::{
+    app::{Audio, Screen},
+    core::{Controller, Nes, Settings},
+    utils, AppSettings,
+};
 use log::*;
 use sdl2::{keyboard::Keycode, video::GLContext, Sdl, VideoSubsystem};
 

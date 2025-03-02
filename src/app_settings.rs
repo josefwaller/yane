@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::Settings as EmuSettings;
+use crate::core::Settings as EmuSettings;
 use std::path::PathBuf;
 
-use crate::KeyMap;
+use crate::app::KeyMap;
 
 /// Settings used when running Yane as an application.
 /// Contains all the settings for running Yane as an emulator, as well as

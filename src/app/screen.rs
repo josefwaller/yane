@@ -1,4 +1,10 @@
-use crate::{check_error, set_uniform, utils::*, AppSettings, Nes, Settings};
+use crate::{
+    check_error,
+    core::{Nes, Settings},
+    set_uniform,
+    utils::*,
+    AppSettings,
+};
 use glow::*;
 use log::*;
 

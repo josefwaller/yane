@@ -9,14 +9,18 @@ use serde::de::DeserializeOwned;
 use simplelog::{
     ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger,
 };
-use std::{fmt::Error, thread::sleep};
+use std::thread::sleep;
 use std::{fs::File, io::Write, path::PathBuf};
 use std::{
     path::Path,
     time::{Duration, Instant},
 };
 use wavers::{write, Samples};
-use yane::{AppSettings, Cartridge, DebugWindow, KeyMap, Nes, Window, CPU_CLOCK_SPEED};
+use yane::{
+    app::{DebugWindow, KeyMap, Window},
+    core::{Cartridge, Nes, CPU_CLOCK_SPEED},
+    AppSettings,
+};
 
 const SETTINGS_FILENAME: &str = "settings.yaml";
 const KEYMAP_FILENAME: &str = "key_map.yaml";

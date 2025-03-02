@@ -4,7 +4,7 @@ use log::*;
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
-use crate::{
+use crate::core::{
     opcodes::*, Apu, Cartridge, Controller, Cpu, Ppu, Settings, CARTRIDGE_IRQ_ADDR, NMI_IRQ_ADDR,
     RESET_IRQ_ADDR,
 };
@@ -134,7 +134,7 @@ impl Nes {
     /// Get a serialized copy of this NES as binary data.
     /// This is the opposite of [`Nes::from_savestate`].
     /// ```rust
-    /// let nes = yane::Nes::new();
+    /// let nes = yane::core::Nes::new();
     /// let savestate: Vec<u8> = nes.to_savestate().unwrap();
     /// ```
     pub fn to_savestate(&self) -> Result<Vec<u8>, postcard::Error> {
@@ -161,7 +161,7 @@ impl Nes {
     /// This is not guaranteed to not modify the NES's state,
     /// since some read operations affect certain flags (i.e. the PPU VBlank flag)
     /// ```
-    /// let mut nes = yane::Nes::new();
+    /// let mut nes = yane::core::Nes::new();
     /// // Read a byte of WRAM
     /// let byte = nes.read_byte(0x0123);
     /// // Read the PPU's status register
@@ -183,7 +183,7 @@ impl Nes {
     }
     /// Write a byte using CPU memory
     /// ```
-    /// let mut nes = yane::Nes::new();
+    /// let mut nes = yane::core::Nes::new();
     /// // Set a byte's value in ram
     /// nes.write_byte(0x00, 0x12);
     /// // Enable the NES's NMI by writing to the PPUCTRL register
@@ -272,7 +272,7 @@ impl Nes {
     ///
     /// # Examples
     /// ```
-    /// use yane::Nes;
+    /// use yane::core::Nes;
     /// let mut nes = Nes::new();
     /// // Load 0x18 into A
     /// nes.decode_and_execute(&[0xA9, 0x18]);
@@ -795,7 +795,7 @@ impl Nes {
     }
     /// Read a single byte from a zero page address.
     /// ```
-    /// let mut nes = yane::Nes::new();
+    /// let mut nes = yane::core::Nes::new();
     /// nes.read_zp(&[0x18]);
     /// ```
     pub fn read_zp(&mut self, addr: &[u8]) -> u8 {
@@ -803,7 +803,7 @@ impl Nes {
     }
     /// Write a single byte to memory using zero page addressing.
     /// ```
-    /// let mut nes = yane::Nes::new();
+    /// let mut nes = yane::core::Nes::new();
     /// nes.write_zp(&[0x18], 0x29);
     /// assert_eq!(nes.read_zp(&[0x18]), 0x29);
     /// ```
@@ -812,7 +812,7 @@ impl Nes {
     }
     /// Read a single byte using zero page addressing with X register offset.
     /// ```
-    /// let mut nes = yane::Nes::new();
+    /// let mut nes = yane::core::Nes::new();
     /// nes.write_zp(&[0x18], 0x45);
     /// nes.cpu.ldx(0x08);
     /// assert_eq!(nes.read_zp_x(&[0x10]), 0x45);
@@ -822,7 +822,7 @@ impl Nes {
     }
     /// Read a single byte using zero page addressing with Y register offset.
     /// ```
-    /// let mut nes = yane::Nes::new();
+    /// let mut nes = yane::core::Nes::new();
     /// nes.write_zp(&[0x18], 0x45);
     /// nes.cpu.ldy(0x08);
     /// assert_eq!(nes.read_zp_y(&[0x10]), 0x45);
@@ -836,7 +836,7 @@ impl Nes {
     }
     /// Write a single byte using zero page addressing with X register offset
     /// ```
-    /// let mut nes = yane::Nes::new();
+    /// let mut nes = yane::core::Nes::new();
     /// nes.cpu.x = 0x10;
     /// nes.write_zp_x(&[0x18], 0x05);
     /// assert_eq!(nes.read_zp(&[0x28]), 0x05);
@@ -862,7 +862,7 @@ impl Nes {
     /// Read a single byte from memory using absolute addressing.
     /// Note that absolute addressing uses a little endian system.
     /// ```
-    /// let mut nes = yane::Nes::new();
+    /// let mut nes = yane::core::Nes::new();
     /// nes.mem[0x0034] = 0x56;
     /// assert_eq!(nes.read_abs(&[0x34, 0x00]), 0x56);
     /// ```
@@ -872,7 +872,7 @@ impl Nes {
     /// Write a single byte to memory using absolute addressing
     /// Note that absolute addressing uses a little endian system.
     /// ```
-    /// let mut nes = yane::Nes::new();
+    /// let mut nes = yane::core::Nes::new();
     /// nes.write_abs(&[0x12, 0x00], 0x56);
     /// assert_eq!(nes.mem[0x0012], 0x56);
     /// ```
@@ -904,7 +904,7 @@ impl Nes {
     }
     /// Read a byte from memory using absolute addressing with X register offset.
     /// ```
-    /// let mut nes = yane::Nes::new();
+    /// let mut nes = yane::core::Nes::new();
     /// nes.read_abs_x(&[0x12, 0x00]);
     /// ```
     pub fn read_abs_x(&mut self, addr: &[u8]) -> u8 {
@@ -912,7 +912,7 @@ impl Nes {
     }
     /// Read a byte from memory using absolute addressing with Y register offset.
     /// ```
-    /// let mut nes = yane::Nes::new();
+    /// let mut nes = yane::core::Nes::new();
     /// nes.read_abs_y(&[0x12, 0x00]);
     /// ```
     pub fn read_abs_y(&mut self, addr: &[u8]) -> u8 {
@@ -920,7 +920,7 @@ impl Nes {
     }
     /// Write a byte to memory using absolute addressing with X register offset.
     /// ```
-    /// let mut nes = yane::Nes::new();
+    /// let mut nes = yane::core::Nes::new();
     /// nes.write_abs_x(&[0x12, 0x34], 0x56);
     /// ```
     pub fn write_abs_x(&mut self, addr: &[u8], value: u8) {
@@ -928,7 +928,7 @@ impl Nes {
     }
     /// Write a byte to memory using absolute addressing with Y register offset.
     /// ```
-    /// let mut nes = yane::Nes::new();
+    /// let mut nes = yane::core::Nes::new();
     /// nes.write_abs_y(&[0x12, 0x34], 0x56);
     /// ```
     pub fn write_abs_y(&mut self, addr: &[u8], value: u8) {
@@ -938,7 +938,7 @@ impl Nes {
     /// A 2 byte value is read from the zero page address `addr`, which the X register is added to.
     /// This value is then used as a little endian address of the actual value.
     /// ```
-    /// let mut nes = yane::Nes::new();
+    /// let mut nes = yane::core::Nes::new();
     /// nes.read_indexed_indirect(&[0x12]);
     /// ```
     pub fn read_indexed_indirect(&mut self, addr: &[u8]) -> u8 {
@@ -951,7 +951,7 @@ impl Nes {
     }
     /// Write a single byte using indexed indirect addressing.
     /// ```
-    /// let mut nes = yane::Nes::new();
+    /// let mut nes = yane::core::Nes::new();
     /// nes.write_indexed_indirect(&[0x12], 0x01);
     /// ```
     pub fn write_indexed_indirect(&mut self, addr: &[u8], value: u8) {
@@ -974,7 +974,7 @@ impl Nes {
     /// A 2 byte value is read from the zero page address `addr`.
     /// The Y value is then added to this value, and the result is used as the little endian address of the actual value.
     /// ```
-    /// let mut nes = yane::Nes::new();
+    /// let mut nes = yane::core::Nes::new();
     /// nes.read_indirect_indexed(&[0x18]);
     /// ```
     pub fn read_indirect_indexed(&mut self, addr: &[u8]) -> u8 {
@@ -983,7 +983,7 @@ impl Nes {
     }
     /// Write a single byte to memory using indirect indexed addressing.
     /// ```
-    /// let mut nes = yane::Nes::new();
+    /// let mut nes = yane::core::Nes::new();
     /// nes.write_indirect_indexed(&[0x12], 0x34);
     /// assert_eq!(nes.read_indirect_indexed(&[0x12]), 0x34);
     /// ```

@@ -1,5 +1,5 @@
 mod common;
-use yane::{Cartridge, Nes};
+use yane::core::{Cartridge, Nes};
 
 #[test]
 fn test_basic() {

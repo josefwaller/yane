@@ -2,7 +2,7 @@ use log::*;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
-use crate::Cartridge;
+use crate::core::Cartridge;
 
 pub const DMC_RATES: [u32; 16] = [
     428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54,

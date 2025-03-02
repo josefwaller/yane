@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-use crate::{emulation::cartridge::CartridgeMemory, Mapper};
+use crate::core::{cartridge::CartridgeMemory, Mapper};
 use log::*;
 use serde::{Deserialize, Serialize};
 

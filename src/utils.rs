@@ -1,8 +1,5 @@
-use crate::Nes;
-use glow::{
-    Context, HasContext, NativeFramebuffer, NativeProgram, NativeTexture, NativeVertexArray,
-    Program, VertexArray,
-};
+use crate::core::Nes;
+use glow::{Context, HasContext, NativeProgram, NativeTexture, Program, VertexArray};
 use log::*;
 use sdl2::{
     video::{GLContext, Window},
