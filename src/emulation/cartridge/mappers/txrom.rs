@@ -8,7 +8,7 @@ use log::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-/// TxROM and variants (mapper 4)
+/// TxROM cartridge mapper and variants (mapper 4)
 pub struct TxRom {
     prg_banks: [u32; 2],
     chr_banks: [u32; 6],

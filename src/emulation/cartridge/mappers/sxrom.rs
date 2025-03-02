@@ -7,7 +7,7 @@ use log::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-/// SxROM and variants (mapper 1)
+/// SxROM cartridge mapper and variants (mapper 1)
 pub struct SxRom {
     shift: usize,
     chr_bank_0: usize,

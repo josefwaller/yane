@@ -5,7 +5,7 @@ use log::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Serialize, Deserialize)]
-/// The CnROM and variants (mapper 3)
+/// CnROM cartridge mapper (mapper 3)
 pub struct CnRom {
     chr_bank_select: usize,
 }

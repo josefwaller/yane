@@ -8,7 +8,7 @@ use log::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-/// PxROM mapper and variants (mapper 9)
+/// PxROM cartridge mapper and variants (mapper 9)
 pub struct PxRom {
     prg_bank: usize,
     // The CHR banks, indexed first by address (0 = 0x0000-0x0FFF, 1 = 0x1000-0x1FFF)

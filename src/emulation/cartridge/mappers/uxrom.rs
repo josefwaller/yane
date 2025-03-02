@@ -5,7 +5,7 @@ use log::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Serialize, Deserialize)]
-/// UxROM and variants (mapper 2)
+/// UxROM cartridge mapper and variants (mapper 2)
 pub struct UxRom {
     bank: usize,
 }

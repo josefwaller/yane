@@ -5,7 +5,7 @@ use log::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Serialize, Deserialize)]
-/// NRom cartridge mapper (mapper 0)
+/// NROM cartridge mapper (mapper 0)
 pub struct NRom {}
 #[typetag::serde]
 impl Mapper for NRom {

@@ -9,7 +9,7 @@ use std::{
 #[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 /// The various nametable arrangements a cartridge can have.
 /// Determines how the 2 screens of `VRAM` are mirrored to create the 4 screens of potential outputs.
-/// Note that this is the nametable ARRANGEMENT - `NametableArrangment::Horizontal` means that the
+/// Note that this is the nametable ARRANGEMENT - [NametableArrangement::Horizontal] means that the
 /// nametables are using VERTICAL mirroring.
 pub enum NametableArrangement {
     OneScreen,
@@ -17,8 +17,7 @@ pub enum NametableArrangement {
     Vertical,
 }
 
-/// Holds all memory in the cartridge.
-// Todo: Maybe rename (get rid of cartridge)
+/// All of the memory in the cartridge that isn't mapper-specific (latches, dividers, etc).
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CartridgeMemory {
     /// Program RAM (PRG RAM) of the cartridge
@@ -55,18 +54,19 @@ impl CartridgeMemory {
 }
 
 /// An NES cartridge.
-/// Contains methods for reading and writing memory, using the appropriate mapper.
+/// Contains the cartridge's RAM and ROM in [CartridgeMemory] and a [Mapper] responsible for mapping addresses to data.
 #[derive(Serialize, Deserialize)]
 pub struct Cartridge {
+    /// The memory in the cartridge
     pub memory: CartridgeMemory,
-    // Mapper
+    /// The mapper the cartridge is using
     pub mapper: Box<dyn Mapper>,
     // Whether the cartridge has battery backed RAM and should be saved
     has_battery_ram: bool,
 }
 
 impl Cartridge {
-    /// Create a new cartridge from an iNes file's contents.
+    /// Create a new cartridge from the contents of an iNes (.nes) file.
     /// `bytes` should be the contents of the iNes file.
     /// `savedata` is the bettery backed static RAM on the cartridge, used to initialise the PRG RAM if present.
     pub fn from_ines(bytes: &[u8], savedata: Option<Vec<u8>>) -> Cartridge {
@@ -80,40 +80,40 @@ impl Cartridge {
         let chr_rom_size = 0x2000 * bytes[5] as usize;
         let prg_ram_size = max(bytes[8] as usize * 0x2000, 0x2000);
         let mut chr_ram_size = if chr_rom_size == 0 { 0x2000 } else { 0x0 };
-        info!("Header: {:X?}", &bytes[0..16]);
+        debug!("Cartridge header: {:X?}", &bytes[0..16]);
         let has_battery_ram = (bytes[6] & 0x02) != 0;
         let has_trainer = (bytes[6] & 0x04) != 0;
         let alt_nametable_layout = (bytes[6] & 0x08) != 0;
-        info!(
+        debug!(
             "Trainer: {}, alternate nametable: {}, battery backed ram: {}",
             has_trainer, alt_nametable_layout, has_battery_ram
         );
         // Detect type of iNes file
         let total_file_size = 16 + if has_trainer { 512 } else { 0 } + prg_rom_size + chr_rom_size;
-        info!(
+        debug!(
             "Total data size: {:X} bytes. File size: {:X}",
             total_file_size,
             bytes.len()
         );
         let file_type = if bytes[7] & 0x0C == 0x08 && bytes.len() >= total_file_size {
-            info!("iNES 2.0 detected");
+            debug!("iNES 2.0 detected");
             0
         } else if bytes[7] & 0x0C == 0x04 {
-            info!("Archaic iNES detected");
+            debug!("Archaic iNES detected");
             chr_ram_size = 0;
             1
         } else if bytes[7] & 0x0C == 0x00 {
-            info!("iNES detected");
+            debug!("iNES detected");
             2
         } else {
-            info!("Archaic iNES probably detected");
+            debug!("Archaic iNES probably detected");
             1
         };
-        info!(
+        debug!(
             "Detected as {}, ignoring.",
             if bytes[9] & 0x01 != 0 { "PAL" } else { "NTSC" }
         );
-        info!(
+        debug!(
             "{:X} bytes PRG ROM, {:X} bytes CHR ROM, {:X} bytes PRG RAM, {:X} bytes CHR RAM",
             prg_rom_size, chr_rom_size, prg_ram_size, chr_ram_size
         );
@@ -124,11 +124,11 @@ impl Cartridge {
         } else {
             NametableArrangement::Horizontal
         };
-        info!(
+        debug!(
             "Cartridge is using a {:?} nametable arrangment",
             nametable_arrangement
         );
-        info!(
+        debug!(
             "Cartridge {} using an alternative nametable arrangement",
             if (bytes[6] & 0x08) == 0 {
                 "isn't"
@@ -136,7 +136,7 @@ impl Cartridge {
                 "is"
             }
         );
-        info!(
+        debug!(
             "Cartridge is using {} mapper (0x{:X})",
             mapper_id, mapper_id
         );
@@ -146,7 +146,7 @@ impl Cartridge {
         let prg_rom = bytes[start..end].to_vec();
         start = end;
         end += chr_rom_size;
-        info!("Reading CHRROM at {:#X}", start);
+        debug!("Reading CHR ROM at {:#X}", start);
         let chr_rom = bytes[start..end].to_vec();
         // Load PRG RAM from savedata if we have some
         let prg_ram = match savedata {
@@ -183,16 +183,23 @@ impl Cartridge {
     pub fn read_ppu(&mut self, addr: usize) -> u8 {
         self.mapper.read_ppu(addr, &self.memory)
     }
+    /// Write a byte of data to CHR ROM/RAM in PPU memory space.
     pub fn write_ppu(&mut self, addr: usize, value: u8) {
         self.mapper.write_ppu(addr, &mut self.memory, value);
     }
+    /// Get all of the CHR data as bytes.
+    /// Only used for debug purposes, the PPU should use [Cartridge::read_ppu] to allow the mapper to transform the address.
     pub fn get_pattern_table(&self) -> &[u8] {
         if self.memory.chr_ram.len() == 0 {
             return self.memory.chr_rom.as_slice();
         }
         return &self.memory.chr_ram;
     }
-    /// Transform nametable address to index in VRAM array in PPU
+    /// Transform a given nametable address to a valid address in the PPU's VRAM.
+    /// The NES needs to show four full screens of nametable data (top left, top right, bottom left, and bottom right),
+    /// but only has enough memory to store 2 full screens of nametable data.
+    /// So two of the screens are mirrored by transforming the addresses when reading nametable data.
+    /// See [the NESDEV wiki](https://www.nesdev.org/wiki/PPU_nametables).
     pub fn transform_nametable_addr(&self, addr: usize) -> usize {
         let nametable = self.mapper.nametable_arrangement(&self.memory);
         match nametable {
@@ -215,12 +222,15 @@ impl Cartridge {
             }
         }
     }
+    /// `true` if the cartridge has battery backed RAM (i.e. save data), false otherwise
     pub fn has_battery_backed_ram(&self) -> bool {
         self.has_battery_ram
     }
+    /// Get the nametable arrangement the cartridge is currently using
     pub fn nametable_arrangement(&self) -> NametableArrangement {
         self.mapper.nametable_arrangement(&self.memory)
     }
+    /// Advance the cartridge by a certain number of CPU cycles
     pub fn advance_cpu_cycles(&mut self, cycles: u32) {
         self.mapper.advance_cpu_cycles(cycles);
     }
