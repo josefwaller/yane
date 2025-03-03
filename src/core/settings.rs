@@ -1,5 +1,8 @@
 /// Settings for how to run the emulator.
-/// Contain a couple fields that change the visual output of the PPU.
+///
+/// Contain fields that change the visual output of the PPU.
+/// Some fields can also change the behaviour of some games (by interfering with the
+/// sprite 0 hit or sprite overflow flags).
 #[derive(Copy, Clone)]
 pub struct Settings {
     /// Debugging palette override, assigns each palette a unique colour to quickly show which tiles are using which palettes.

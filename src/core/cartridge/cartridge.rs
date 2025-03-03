@@ -8,6 +8,7 @@ use std::{
 
 #[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 /// The various nametable arrangements a cartridge can have.
+///
 /// Determines how the 2 screens of `VRAM` are mirrored to create the 4 screens of potential outputs.
 /// Note that this is the nametable ARRANGEMENT - [NametableArrangement::Horizontal] means that the
 /// nametables are using VERTICAL mirroring.
@@ -17,7 +18,10 @@ pub enum NametableArrangement {
     Vertical,
 }
 
-/// All of the memory in the cartridge that isn't mapper-specific (latches, dividers, etc).
+/// Contains all memory in the cartridge that isn't mapper-specific.
+///
+/// Contains PRG/CHR ROM/RAM.
+/// Does not contain any latches, banks, or dividers used by mappers.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CartridgeMemory {
     /// Program RAM (PRG RAM) of the cartridge
@@ -28,12 +32,15 @@ pub struct CartridgeMemory {
     pub chr_ram: Vec<u8>,
     /// Character ROM (CHR ROM) of the cartridge
     pub chr_rom: Vec<u8>,
-    /// Nametable arrangement of the cartridge, read when parsing the file
+    /// Nametable arrangement of the cartridge, read when parsing the file.
     /// May be changed by the mapper, use [Mapper::nametable_arrangement] to get the current nametable arrangement being used
     pub nametable_arrangement: NametableArrangement,
 }
 impl CartridgeMemory {
-    /// Read a byte from CHR ROM or (if CHR ROM is empty) CHR RAM, given an address in CPU memory space.
+    /// Read a byte from CHR ROM or (if CHR ROM is empty) CHR RAM.
+    ///
+    /// This is really a convience function, since most cartridges either are all CHR ROM or CHR RAM.
+    /// So this could be interpreted as just "Read CHR from whatever format I'm using"
     pub fn read_chr(&self, addr: usize) -> u8 {
         if self.chr_rom.len() == 0 {
             self.chr_ram[addr % self.chr_ram.len()]
@@ -41,19 +48,17 @@ impl CartridgeMemory {
             self.chr_rom[addr % self.chr_rom.len()]
         }
     }
-    /// Write a byte from CHR ROM or (if CHR ROM is empty) CHR RAM, given an address in CPU memory space.
+    /// Write a byte to CHR RAM, if present.
     pub fn write_chr(&mut self, addr: usize, value: u8) {
-        if self.chr_rom.len() == 0 {
+        if self.chr_ram.len() != 0 {
             let i = addr % self.chr_ram.len();
             self.chr_ram[i] = value;
-        } else {
-            let i = addr % self.chr_rom.len();
-            self.chr_rom[i] = value;
         }
     }
 }
 
 /// An NES cartridge.
+///
 /// Contains the cartridge's RAM and ROM in [CartridgeMemory] and a [Mapper] responsible for mapping addresses to data.
 #[derive(Serialize, Deserialize)]
 pub struct Cartridge {

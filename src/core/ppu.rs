@@ -24,6 +24,11 @@ fn zeros() -> [[usize; 256]; 240] {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+/// The PPU (picture processing unit) of the NES.
+///
+/// Responsible for computing the picture output of the console.
+/// Every dot, the [Ppu] will output a new pixel value, which is stored at the corresponding `(x, y)`
+/// coordinate in [Ppu::output].
 pub struct Ppu {
     /// The Object Access Memory, or OAM
     #[serde(with = "BigArray")]
@@ -373,6 +378,7 @@ impl Ppu {
         });
         to_return
     }
+    /// Compute the output at the current dot, and set it in [Ppu::output]
     fn set_output(&mut self, settings: &Settings) {
         // If we are in the render window
         if self.dot.0 < RENDER_DOTS && self.dot.1 < RENDER_SCANLINES {
@@ -641,7 +647,7 @@ impl Ppu {
     /// * 2 means that the base nametable is bot left (0x2800)
     /// * 3 means that the base nametable is bot right (0x2C00)
     ///
-    /// The base nametable address can then be found by calculating `0x2000 + 0x400 * ppu.base_nametable_num()`
+    /// The base nametable address can then be found by calculating `0x2000 + 0x400 * `[Ppu::base_nametable_num]
     pub fn base_nametable_num(&self) -> usize {
         (self.ctrl as usize) & 0x03
     }

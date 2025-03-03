@@ -1,20 +1,15 @@
 use crate::{
     app::Config,
-    check_error,
-    core::{Nes, Settings},
-    set_uniform,
+    core::{Nes, HV_TO_RGB},
     utils::*,
 };
 use glow::*;
-use log::*;
 
 /// An NES rendering implementation that uses OpenGL 3.3.
 /// Uses the `glow` library to render, so requires a `glow` `Context`.
-/// Can be paired with a `Window` to render to an SDL2 window.
+/// Can be paired with a [Window][crate::app::Window] to render to an SDL2 window.
 pub struct Screen {
     gl: Context,
-    // palette: [[f32; 3]; 0x40],
-    palette: [[u8; 3]; 0x40],
     // Stuff for rendering to screen
     screen_texture: NativeTexture,
     screen_program: NativeProgram,
@@ -29,10 +24,6 @@ impl Screen {
         unsafe {
             let (screen_vao, screen_program, screen_texture) =
                 create_screen_texture(&gl, (256, 240));
-            // Load pallete data and convert to RGB values
-            let palette_data: &[u8] = include_bytes!("../2C02G_wiki.pal");
-            let palette: [[u8; 3]; 64] =
-                core::array::from_fn(|i| core::array::from_fn(|j| palette_data[3 * i + j]));
             let wireframe_program = create_program(
                 &gl,
                 include_str!("../shaders/wireframe.vert"),
@@ -49,7 +40,6 @@ impl Screen {
                 screen_program,
                 screen_texture,
                 screen_vao,
-                palette,
                 wireframe_program,
                 wireframe_vao,
             }
@@ -75,7 +65,7 @@ impl Screen {
                 .output
                 .as_flattened()
                 .iter()
-                .map(|i| self.palette[*i & 0x3F])
+                .map(|i| HV_TO_RGB[*i & 0x3F])
                 .flatten()
                 .collect();
             self.gl.tex_image_2d(

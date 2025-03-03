@@ -5,6 +5,7 @@ use super::{
 use std::fmt::{Debug, Display};
 #[typetag::serde(tag = "mapper")]
 /// Interface for the various cartridge mappers.
+///
 /// Reading and writing bytes will go through these functions,
 /// which may transform the address depending on the mapper's state.
 pub trait Mapper: Debug + Display {

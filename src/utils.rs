@@ -6,7 +6,6 @@ use sdl2::{
     VideoSubsystem,
 };
 
-#[macro_export]
 macro_rules! check_error {
     ($gl: expr, $str: expr) => {
         #[cfg(debug_assertions)]
@@ -24,7 +23,8 @@ macro_rules! check_error {
         check_error!($gl, "None provided");
     };
 }
-#[macro_export]
+pub(crate) use check_error;
+
 macro_rules! set_uniform {
     ($gl: expr, $program: expr, $name: expr, $func: ident, $($vals: expr),+) => {
         let loc = $gl.get_uniform_location($program, $name);
@@ -36,6 +36,7 @@ macro_rules! set_uniform {
         );
     };
 }
+pub(crate) use set_uniform;
 
 pub fn create_window(
     video: &VideoSubsystem,
@@ -99,62 +100,6 @@ pub unsafe fn create_program(
     }
     program
 }
-
-/// Set the texture given to the CHR ROM/RAM in the nes given
-pub unsafe fn refresh_chr_texture(gl: &Context, chr_tex: NativeTexture, nes: &Nes, chr: Vec<u8>) {
-    let texture_data: Vec<u8> = chr
-        .chunks(16)
-        .map(|sprite_data| {
-            (0..(8 * 8)).map(|i| {
-                let less_sig = (sprite_data[i / 8] >> (7 - i % 8)) & 0x01;
-                let more_sig = (sprite_data[i / 8 + 8] >> (7 - i % 8)) & 0x01;
-                2 * more_sig + less_sig
-            })
-        })
-        .flatten()
-        .collect();
-    gl.bind_texture(glow::TEXTURE_2D, Some(chr_tex));
-    check_error!(gl);
-    // Generate a texture 8 pixels long to use for the CHR ROM/RAM
-    let width = 8;
-    gl.tex_image_2d(
-        glow::TEXTURE_2D,
-        0,
-        glow::R8 as i32,
-        width,
-        texture_data.len() as i32 / width,
-        0,
-        glow::RED,
-        glow::UNSIGNED_BYTE,
-        Some(&texture_data),
-    );
-    check_error!(gl);
-    gl.tex_parameter_i32(
-        glow::TEXTURE_2D,
-        glow::TEXTURE_MIN_FILTER,
-        glow::NEAREST as i32,
-    );
-    check_error!(gl);
-    gl.tex_parameter_i32(
-        glow::TEXTURE_2D,
-        glow::TEXTURE_MAG_FILTER,
-        glow::NEAREST as i32,
-    );
-    check_error!(gl);
-}
-
-pub unsafe fn set_int_uniform(gl: &glow::Context, program: &glow::Program, name: &str, value: i32) {
-    let location = gl.get_uniform_location(*program, name);
-    check_error!(gl);
-    gl.uniform_1_i32(location.as_ref(), value);
-    check_error!(
-        gl,
-        format!(
-            "Setting int uniform {} at location {:?} to value {}",
-            name, location, value
-        )
-    );
-}
 pub unsafe fn create_f32_slice_vao(gl: &Context, verts: &[f32], element_size: i32) -> VertexArray {
     let buf = gl.create_buffer().unwrap();
     check_error!(gl);
@@ -181,36 +126,6 @@ pub unsafe fn create_f32_slice_vao(gl: &Context, verts: &[f32], element_size: i3
     check_error!(gl);
     vao
 }
-pub unsafe fn buffer_data_slice(gl: &Context, program: &Program, data: &[i32]) -> VertexArray {
-    gl.use_program(Some(*program));
-    check_error!(gl);
-    let vao = gl
-        .create_vertex_array()
-        .expect("Could not create VertexArray");
-    check_error!(gl);
-    gl.bind_vertex_array(Some(vao));
-    check_error!(gl);
-    // Pipe data
-    let data_u8: &[u8] =
-        core::slice::from_raw_parts(data.as_ptr() as *const u8, data.len() * size_of::<i32>());
-    let vbo = gl.create_buffer().unwrap();
-    check_error!(gl);
-    gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
-    check_error!(gl);
-    gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, data_u8, glow::STATIC_DRAW);
-    check_error!(gl);
-    // Describe the format of the data
-    gl.enable_vertex_attrib_array(0);
-    check_error!(gl);
-    gl.vertex_attrib_pointer_i32(0, 1 as i32, glow::INT, 4, 0);
-    check_error!(gl);
-    // Unbind
-    gl.bind_vertex_array(None);
-    check_error!(gl);
-
-    vao
-}
-
 pub unsafe fn create_screen_texture(
     gl: &Context,
     size: (usize, usize),

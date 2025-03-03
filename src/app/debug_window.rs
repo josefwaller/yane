@@ -3,7 +3,6 @@ use log::*;
 
 use crate::{
     app::Config,
-    check_error,
     core::{Cartridge, Nes, Ppu, DEBUG_PALETTE},
     utils::*,
 };

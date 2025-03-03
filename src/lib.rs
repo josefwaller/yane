@@ -1,3 +1,3 @@
 pub mod app;
 pub mod core;
-mod utils;
+pub(crate) mod utils;

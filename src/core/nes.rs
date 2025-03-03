@@ -46,6 +46,10 @@ impl Debug for NesState {
 const NUMBER_STORED_STATES: usize = 200;
 
 /// The NES.
+///
+/// The entire NES console.
+/// Contains a [Cpu], [Ppu], and [Apu], and keeps them all synchonized.
+/// Also contains all of the memory on the console and the [Cartridge] currently inserted in the console.
 #[derive(Serialize, Deserialize)]
 pub struct Nes {
     /// CPU of the NES
@@ -221,10 +225,12 @@ impl Nes {
     pub fn set_input(&mut self, num: usize, state: Controller) {
         self.controllers[num] = state;
     }
-    /// Advance the NES by 1 instruction
+    /// Execute the next instruction in the NES's code.
     ///
     /// Reads the next opcode using the CPU's PC, decodes the instruction, and executes it.
     /// Adds a new [`NesState`] to [`Nes::previous_states`] before executing.
+    /// Does not advance anything other than the CPU.
+    /// Use [Nes::advance_instruction] to emulate the entire console.
     pub fn step(&mut self) -> Result<u32, String> {
         let pc = self.cpu.p_c as usize;
         let mut inst: [u8; 3] = [0; 3];
@@ -716,47 +722,52 @@ impl Nes {
             }
         }
     }
+    /// Advance the NES by 1 instruction.
+    ///
+    /// Executes the next instructions pointed to by the CPU's program counter.
+    pub fn advance_instruction(&mut self, settings: &Settings) -> Result<u32, String> {
+        // Advance the CPU by 1 instruction
+        let mut c = self.step()?;
+        // If we are in VBlank
+        if self.ppu.in_vblank() {
+            // Check for OAM DMA
+            if self.check_oam_dma() {
+                c += CPU_CYCLES_PER_OAM;
+            }
+        }
+        // Check for cartridge or dmc interrupt interrupt
+        if !self.cpu.s_r.i {
+            if self.cartridge.mapper.irq() {
+                self.interrupt_to_addr(CARTRIDGE_IRQ_ADDR);
+                c += 7;
+            }
+        }
+        self.apu.advance_cpu_cycles(c, &mut self.cartridge);
+        self.cartridge.advance_cpu_cycles(c);
+        if self
+            .ppu
+            .advance_dots(3 * c as u32, &mut self.cartridge, &settings)
+            && self.ppu.get_nmi_enabled()
+        {
+            self.on_nmi();
+            c += 7;
+            self.apu.advance_cpu_cycles(7, &mut self.cartridge);
+            self.cartridge.advance_cpu_cycles(7);
+            self.ppu.advance_dots(21, &mut self.cartridge, &settings);
+        }
+        Ok(c)
+    }
     /// Advance the NES by 1 frame, approx 29780 cycles.
-    /// Technically will just advance the NES to the next VBlank.
+    ///
+    /// Advance the NES until it has just entered the VBlank interval.
     /// Returns the total number of CPU cycles elapsed.
     pub fn advance_frame(&mut self, settings: &Settings) -> Result<u32, String> {
         let mut cycles = 0;
         let mut has_been_out_of_vblank = !self.ppu.in_vblank();
         loop {
-            // Advance the CPU by 1 instruction
-            let mut c = match self.step() {
-                Ok(x) => x as u32,
-                Err(e) => return Err(e),
-            };
-            // If we are in VBlank
-            if self.ppu.in_vblank() {
-                // Check for OAM DMA
-                if self.check_oam_dma() {
-                    c += CPU_CYCLES_PER_OAM;
-                }
-            } else {
+            cycles += self.advance_instruction(settings)?;
+            if !self.ppu.in_vblank() {
                 has_been_out_of_vblank = true;
-            }
-            // Check for cartridge or dmc interrupt interrupt
-            if !self.cpu.s_r.i {
-                if self.cartridge.mapper.irq() {
-                    self.interrupt_to_addr(CARTRIDGE_IRQ_ADDR);
-                    c += 7;
-                }
-            }
-            self.apu.advance_cpu_cycles(c, &mut self.cartridge);
-            self.cartridge.advance_cpu_cycles(c);
-            cycles += c;
-            if self
-                .ppu
-                .advance_dots(3 * c as u32, &mut self.cartridge, &settings)
-                && self.ppu.get_nmi_enabled()
-            {
-                self.on_nmi();
-                cycles += 7;
-                self.apu.advance_cpu_cycles(7, &mut self.cartridge);
-                self.cartridge.advance_cpu_cycles(7);
-                self.ppu.advance_dots(21, &mut self.cartridge, &settings);
             }
             // If we have been out of vblank at some time and now are back in vblank
             if has_been_out_of_vblank && self.ppu.in_vblank() {

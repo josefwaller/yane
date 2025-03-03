@@ -21,7 +21,9 @@ const STEPS: [i32; 5] = [7457, 14912, 22371, 29828, 37281];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// The APU (Audio Processing Unit) of the NES.
+///
 /// Handles all audio processing and generates a new audio sample every clock cycle.
+/// These samples are available via [Apu::sample_queue].
 pub struct Apu {
     /// The pulse (variable length square) registers
     pub pulse_registers: [PulseRegister; 2],

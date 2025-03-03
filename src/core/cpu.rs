@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::core::StatusRegister;
 
 /// The CPU of the NES.
+///
 /// Contains all registers and is responsible for changing the flags when the values are set/unset.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Cpu {
