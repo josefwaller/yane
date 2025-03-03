@@ -399,11 +399,7 @@ fn main() {
             {
                 last_debug_window_render += DEBUG_WINDOW_REFRESH_RATE;
                 match debug_window.as_mut() {
-                    Some(d) => {
-                        if d.render(&mut nes, &event_pump, &mut config) {
-                            nes.reset();
-                        }
-                    }
+                    Some(d) => d.render(&mut nes, &event_pump, &mut config),
                     None => {}
                 }
             }

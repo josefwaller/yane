@@ -145,9 +145,8 @@ impl DebugWindow {
             .flatten()
             .collect()
     }
-    /// Render the debug window, and update the [Config] if any of the imgui buttons are pressed.
-    /// Returns [true] if the reset button was clicked, and false otherwise.
-    pub fn render(&mut self, nes: &Nes, event_pump: &EventPump, config: &mut Config) -> bool {
+    /// Render the debug window, and update the [Config] and [Nes] if any of the imgui buttons are pressed.
+    pub fn render(&mut self, nes: &mut Nes, event_pump: &EventPump, config: &mut Config) {
         let chr_tex_num: i32 = 1;
         unsafe {
             self.window.gl_make_current(&self.gl_context).unwrap();
@@ -190,6 +189,8 @@ impl DebugWindow {
             // Only update texture if there is a change since this is a fairly costly method
             self.nametable_timer = (self.nametable_timer + 1) % 6;
             if self.nametable_timer == 0 {
+                // Pass a reference to the reference so that the closures can take ownership
+                let nes = &nes;
                 let nametables = [
                     [
                         nes.ppu.top_left_nametable_addr(),
@@ -282,8 +283,6 @@ impl DebugWindow {
             gl.clear(glow::COLOR_BUFFER_BIT);
         }
 
-        let mut to_return = false;
-
         // Draw imgui
         self.platform
             .prepare_frame(&mut self.imgui, &self.window, event_pump);
@@ -295,7 +294,9 @@ impl DebugWindow {
                 imgui::Condition::Always,
             )
             .build(|| {
-                to_return = ui.button("Reset");
+                if ui.button("Reset") {
+                    nes.reset();
+                }
                 ui.checkbox("Debug OAM", &mut config.oam_debug);
                 if ui.checkbox("Paused", &mut config.paused) {
                     info!(
@@ -416,7 +417,6 @@ impl DebugWindow {
             .render(draw_data)
             .expect("Error rendering DearImGui");
         self.window.gl_swap_window();
-        return to_return;
     }
     fn format_nametable_text(ppu: &Ppu, cartridge: &Cartridge) -> String {
         [
