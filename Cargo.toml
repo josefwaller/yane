@@ -5,6 +5,8 @@ edition = "2021"
 readme = "README.MD"
 repository = "github.com/josefwaller/yane"
 authors = ["Josef Waller josef@josefwaller.com"]
+description = "An N.E.S. emulator and emulation library."
+license = "MIT"
 
 [dependencies]
 anstyle = "1.0.10"
