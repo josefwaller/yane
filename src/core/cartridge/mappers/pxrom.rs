@@ -93,7 +93,7 @@ impl Mapper for PxRom {
         }
         v
     }
-    fn write_cpu(&mut self, cpu_addr: usize, mem: &mut CartridgeMemory, value: u8) {
+    fn write_cpu(&mut self, cpu_addr: usize, _mem: &mut CartridgeMemory, value: u8) {
         let bank = (value & 0x1F) as usize;
         if cpu_addr < 0xA000 {
         } else if cpu_addr < 0xB000 {
@@ -114,7 +114,9 @@ impl Mapper for PxRom {
             };
         }
     }
-    fn write_ppu(&mut self, ppu_addr: usize, mem: &mut CartridgeMemory, value: u8) {}
+    fn write_ppu(&mut self, _ppu_addr: usize, _mem: &mut CartridgeMemory, _value: u8) {
+        // does nothing
+    }
     fn nametable_arrangement(&self, _: &CartridgeMemory) -> NametableArrangement {
         self.nametable_arrangement
     }

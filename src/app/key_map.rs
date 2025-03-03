@@ -1,4 +1,4 @@
-use sdl2::keyboard::{Keycode, Scancode};
+use sdl2::keyboard::Keycode;
 use serde::{de::Visitor, Deserialize, Serialize};
 
 // This just exists so we can implement Serialize for it

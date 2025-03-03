@@ -76,6 +76,7 @@ pub struct Nes {
 
 impl Nes {
     /// Initialized the NES with a cartridge that is completely 0s.
+    ///
     /// Since the cartridge is where the actual program is stored, this is only useful for
     /// debugging purposes or manually simulating NES behaviour using [`Nes::decode_and_execute`].
     /// Use [`Nes::from_cartridge`] for proper emulation.
@@ -99,7 +100,8 @@ impl Nes {
             previous_states: VecDeque::with_capacity(NUMBER_STORED_STATES),
         }
     }
-    /// Initialize the NES as if it had just been turned on with a given cartridge inserted.
+    /// Initialize the NES with a given cartridge inserted.
+    ///
     /// The PC will be initialised to the reset vector.
     /// ```rust,ignore
     /// use yane::{Nes, Cartridge};
@@ -127,6 +129,7 @@ impl Nes {
         nes
     }
     /// Create a new NES from a savestate.
+    ///
     /// This is the opposite of [`Nes::to_savestate`]
     /// ```rust,ignore
     /// let savestate = include_bytes!("./savestate.yane.bin");
@@ -136,6 +139,7 @@ impl Nes {
         postcard::from_bytes(savestate.deref())
     }
     /// Get a serialized copy of this NES as binary data.
+    ///
     /// This is the opposite of [`Nes::from_savestate`].
     /// ```rust
     /// let nes = yane::core::Nes::new();
@@ -162,6 +166,7 @@ impl Nes {
     }
 
     /// Read a byte of memory given an address in CPU space.
+    ///
     /// This is not guaranteed to not modify the NES's state,
     /// since some read operations affect certain flags (i.e. the PPU VBlank flag)
     /// ```
@@ -173,7 +178,6 @@ impl Nes {
     /// // Read the least significant byte of the cartridge's reset vector
     /// let reset_low = nes.read_byte(0xFFFE);
     /// ```
-    // Todo: Add debug_read_byte
     pub fn read_byte(&mut self, addr: usize) -> u8 {
         return match addr {
             0..0x2000 => self.mem[addr % 0x0800],
@@ -186,6 +190,7 @@ impl Nes {
         };
     }
     /// Write a byte using CPU memory
+    ///
     /// ```
     /// let mut nes = yane::core::Nes::new();
     /// // Set a byte's value in ram
@@ -219,6 +224,7 @@ impl Nes {
         };
     }
     /// Update the internal controller state in the NES.
+    ///
     /// The ROM will still have to poll for the controller state.
     /// * `num` The controller number of the controller being updated. Should be either `0` or `1`
     /// * `state` The [`Controller`] containing the controller's state
@@ -259,10 +265,10 @@ impl Nes {
             }
         }
     }
-
     fn on_nmi(&mut self) {
         self.interrupt_to_addr(NMI_IRQ_ADDR);
     }
+    // Interrupt the CPU to a given address
     fn interrupt_to_addr(&mut self, addr: usize) {
         self.push_to_stack_u16(self.cpu.p_c);
         self.push_to_stack(self.cpu.s_r.to_byte());
@@ -271,8 +277,10 @@ impl Nes {
         self.cpu.s_r.i = true;
     }
 
-    /// Decode and then execute first byte of `opcode` as an NES opcode.
-    /// Returns `(bytes, cycles`, where `bytes` is how much the program counter should be incremented by,
+    /// Decode and then execute a single CPU instruction.
+    ///
+    /// Decode first byte of `opcode` as an NES opcode, and then execute it.
+    /// Returns either an `Err` or `Ok((bytes, cycles))`, where `bytes` is how much the program counter should be incremented by,
     /// i.e. how many bytes were used by the opcode, and `cycles` is how many cycles the operation needed.
     /// Does not change the program counter.
     ///
@@ -725,6 +733,7 @@ impl Nes {
     /// Advance the NES by 1 instruction.
     ///
     /// Executes the next instructions pointed to by the CPU's program counter.
+    /// Updates the PPU, APU, and cartridge accordingly.
     pub fn advance_instruction(&mut self, settings: &Settings) -> Result<u32, String> {
         // Advance the CPU by 1 instruction
         let mut c = self.step()?;
@@ -777,9 +786,11 @@ impl Nes {
         Ok(cycles)
     }
 
+    /// Check for OAM DMA.
+    ///
     /// Check if the PPU's OAM DMA register has been set.
     /// If it has been, execute the DMA and reset the regsiter to None.
-    /// Return `true` if the DMA is executed, and `false` otherwise.
+    /// Return [true] if the DMA is executed, and [false] otherwise.
     pub fn check_oam_dma(&mut self) -> bool {
         if let Some(dma_reg) = self.ppu.oam_dma {
             let addr = (dma_reg as usize) << 8;
@@ -793,11 +804,9 @@ impl Nes {
         false
     }
 
-    #[inline]
     fn read_immediate(&self, addr: &[u8]) -> u8 {
         addr[0]
     }
-    #[inline]
     fn read_a(&self, _addr: &[u8]) -> u8 {
         self.cpu.a
     }
@@ -871,6 +880,7 @@ impl Nes {
         Nes::get_absolute_addr_offset(addr, 0)
     }
     /// Read a single byte from memory using absolute addressing.
+    ///
     /// Note that absolute addressing uses a little endian system.
     /// ```
     /// let mut nes = yane::core::Nes::new();
@@ -881,6 +891,7 @@ impl Nes {
         self.read_byte(Nes::get_absolute_addr(addr))
     }
     /// Write a single byte to memory using absolute addressing
+    ///
     /// Note that absolute addressing uses a little endian system.
     /// ```
     /// let mut nes = yane::core::Nes::new();
@@ -946,6 +957,7 @@ impl Nes {
         self.write_abs_offset(addr, self.cpu.y, value)
     }
     /// Read a single byte from memory using indexed indirect addressing.
+    ///
     /// A 2 byte value is read from the zero page address `addr`, which the X register is added to.
     /// This value is then used as a little endian address of the actual value.
     /// ```
@@ -982,6 +994,7 @@ impl Nes {
             .wrapping_add(self.cpu.y as u16) as usize
     }
     /// Read a single byte from memory using indirect indexed addressing.
+    ///
     /// A 2 byte value is read from the zero page address `addr`.
     /// The Y value is then added to this value, and the result is used as the little endian address of the actual value.
     /// ```
@@ -1003,7 +1016,8 @@ impl Nes {
         self.write_byte(addr as usize, value)
     }
     /// Reset the NES.
-    /// Triggers a reset interrupt using the interrupt vector at `0xFFFE`.
+    ///
+    /// Triggers a reset interrupt using the interrupt vector at [RESET_IRQ_ADDR].
     pub fn reset(&mut self) {
         self.interrupt_to_addr(RESET_IRQ_ADDR);
     }

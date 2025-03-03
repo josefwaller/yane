@@ -8,12 +8,14 @@ use std::fmt::{Debug, Display};
 ///
 /// Reading and writing bytes will go through these functions,
 /// which may transform the address depending on the mapper's state.
+/// It may also change the internal state of the mapper, in order to clock a divider and trigger an interrupt, for example.
 pub trait Mapper: Debug + Display {
     /// Read a byte given an address in CPU memory space
     fn read_cpu(&self, cpu_addr: usize, mem: &CartridgeMemory) -> u8;
     /// Write a byte given the address in CPU memory space
     fn write_cpu(&mut self, cpu_addr: usize, mem: &mut CartridgeMemory, value: u8);
     /// Reach a byte given the address in PPU memory space
+    ///
     /// Used by the emulator and may change the cartridge's state, for debug reading use read_ppu_debug
     fn read_ppu(&mut self, ppu_addr: usize, mem: &CartridgeMemory) -> u8 {
         self.read_ppu_debug(ppu_addr, mem)
@@ -22,6 +24,7 @@ pub trait Mapper: Debug + Display {
     fn write_ppu(&mut self, ppu_addr: usize, mem: &mut CartridgeMemory, value: u8);
     /// Read a byte in PPU memory space, transforming the address as it usually would, but not changing the cartridge's
     /// state at all.
+    ///
     /// Used for debug purposes.
     fn read_ppu_debug(&self, ppu_addr: usize, mem: &CartridgeMemory) -> u8;
     /// Get the nametable arrangement the cartridge is currently using
@@ -31,9 +34,10 @@ pub trait Mapper: Debug + Display {
     /// Advance the cartridge's state a certain number of CPU cycles
     fn advance_cpu_cycles(&mut self, _cycles: u32) {}
     /// Set the value on the PPUADDR pins going into the cartridge.
+    ///
     /// Must be updated since some cartridges use this value to clock an interrupt timer.
     fn set_addr_value(&mut self, _addr: u32) {}
-    /// Return `true` if the cartridge is triggering an IRQ, and false otherwise
+    /// Return [true] if the cartridge is triggering an IRQ, and false otherwise
     fn irq(&mut self) -> bool {
         false
     }
@@ -52,7 +56,7 @@ pub fn get_mapper(mapper_id: usize) -> Box<dyn Mapper> {
         _ => panic!("Unsupported mapper: {}", mapper_id),
     }
 }
-
+/// Get the address given a certain bank of a certain size, and the original address
 pub fn bank_addr(bank_size: usize, bank_num: usize, offset: usize) -> usize {
     bank_size * bank_num + (offset % bank_size)
 }

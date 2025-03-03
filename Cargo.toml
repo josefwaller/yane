@@ -11,7 +11,6 @@ license = "MIT"
 [dependencies]
 anstyle = "1.0.10"
 assert_hex = "0.4.1"
-cargo-insta = "1.41.1"
 chrono = "0.4.39"
 clap = { version = "4.5.27", features = ["derive", "string"] }
 clipboard = "0.5.0"

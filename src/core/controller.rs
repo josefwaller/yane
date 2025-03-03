@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-/// Struct that contains the state a controller is in
+/// An NES controller
+///
+/// Used to represent the controller's state in the emulator.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Controller {
     pub up: bool,

@@ -10,7 +10,7 @@ use glow::{HasContext, NativeTexture};
 use imgui::{FontId, TextureId, TreeNodeFlags};
 use imgui_glow_renderer::AutoRenderer;
 use imgui_sdl2_support::SdlPlatform;
-use sdl2::{event::Event, EventPump, Sdl, VideoSubsystem};
+use sdl2::{event::Event, EventPump, VideoSubsystem};
 
 /// The debug window that spawns when the debug argument is passed.
 /// Allows the user to change various settings of the emulator.
@@ -146,7 +146,7 @@ impl DebugWindow {
             .collect()
     }
     /// Render the debug window, and update the [Config] if any of the imgui buttons are pressed.
-    /// Returns `true` if the reset button was clicked, and false otherwise.
+    /// Returns [true] if the reset button was clicked, and false otherwise.
     pub fn render(&mut self, nes: &Nes, event_pump: &EventPump, config: &mut Config) -> bool {
         let chr_tex_num: i32 = 1;
         unsafe {

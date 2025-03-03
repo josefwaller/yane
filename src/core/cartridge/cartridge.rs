@@ -40,7 +40,7 @@ impl CartridgeMemory {
     /// Read a byte from CHR ROM or (if CHR ROM is empty) CHR RAM.
     ///
     /// This is really a convience function, since most cartridges either are all CHR ROM or CHR RAM.
-    /// So this could be interpreted as just "Read CHR from whatever format I'm using"
+    /// So this could be interpreted as just "Read CHR from whatever format the cartridge using"
     pub fn read_chr(&self, addr: usize) -> u8 {
         if self.chr_rom.len() == 0 {
             self.chr_ram[addr % self.chr_ram.len()]
@@ -72,8 +72,9 @@ pub struct Cartridge {
 
 impl Cartridge {
     /// Create a new cartridge from the contents of an iNes (.nes) file.
-    /// `bytes` should be the contents of the iNes file.
-    /// `savedata` is the bettery backed static RAM on the cartridge, used to initialise the PRG RAM if present.
+    ///
+    /// * `bytes` The contents of the iNes file.
+    /// * `savedata` The battery backed static RAM on the cartridge, used to initialise the PRG RAM if present.
     pub fn from_ines(bytes: &[u8], savedata: Option<Vec<u8>>) -> Cartridge {
         if cfg!(debug_assertions) {
             assert_eq!(bytes[0], 'N' as u8);
@@ -174,17 +175,14 @@ impl Cartridge {
         }
     }
     /// Read a byte from the cartridge's memory given an address in CPU memory space
-    /// Usually reads from PRG ROM/RAM.
     pub fn read_cpu(&self, addr: usize) -> u8 {
         self.mapper.read_cpu(addr, &self.memory)
     }
     /// Write a byte in the cartridge's memory given an address in CPU memory space
-    /// Usually reads from PRG RAM.
     pub fn write_cpu(&mut self, addr: usize, value: u8) {
         self.mapper.write_cpu(addr, &mut self.memory, value);
     }
     /// Read a byte in the cartridge's memory given an address in PPU memory space
-    /// Usually reads from CHR ROM/RAM.
     pub fn read_ppu(&mut self, addr: usize) -> u8 {
         self.mapper.read_ppu(addr, &self.memory)
     }
@@ -193,6 +191,7 @@ impl Cartridge {
         self.mapper.write_ppu(addr, &mut self.memory, value);
     }
     /// Get all of the CHR data as bytes.
+    ///
     /// Only used for debug purposes, the PPU should use [Cartridge::read_ppu] to allow the mapper to transform the address.
     pub fn get_pattern_table(&self) -> &[u8] {
         if self.memory.chr_ram.len() == 0 {
@@ -201,6 +200,7 @@ impl Cartridge {
         return &self.memory.chr_ram;
     }
     /// Transform a given nametable address to a valid address in the PPU's VRAM.
+    ///
     /// The NES needs to show four full screens of nametable data (top left, top right, bottom left, and bottom right),
     /// but only has enough memory to store 2 full screens of nametable data.
     /// So two of the screens are mirrored by transforming the addresses when reading nametable data.
@@ -227,7 +227,7 @@ impl Cartridge {
             }
         }
     }
-    /// `true` if the cartridge has battery backed RAM (i.e. save data), false otherwise
+    /// [true] if the cartridge has battery backed RAM (i.e. save data), [false] otherwise
     pub fn has_battery_backed_ram(&self) -> bool {
         self.has_battery_ram
     }

@@ -23,7 +23,7 @@ pub struct StatusRegister {
 }
 
 impl StatusRegister {
-    /// Create a new StatusRegister, initialising all flags to `false`.
+    /// Create a new StatusRegister, initialising all flags to [false].
     pub fn new() -> StatusRegister {
         StatusRegister {
             c: false,

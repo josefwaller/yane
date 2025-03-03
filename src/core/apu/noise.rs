@@ -14,7 +14,7 @@ pub struct NoiseRegister {
     /// The reload value for the timer
     pub timer_reload: u32,
     pub envelope: Envelope,
-    /// The mode (`false` = 0, `true` = 1)
+    /// The mode ([false] = 0, [true] = 1)
     pub mode: bool,
     /// The shift register
     pub shift: u16,

@@ -1,8 +1,6 @@
-use std::path::PathBuf;
-
 use crate::{
     app::{Audio, Config, Screen},
-    core::{Controller, Nes, Settings},
+    core::{Controller, Nes},
     utils,
 };
 use log::*;

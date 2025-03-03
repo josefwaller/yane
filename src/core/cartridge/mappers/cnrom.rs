@@ -24,7 +24,7 @@ impl Mapper for CnRom {
             mem.prg_rom[cpu_addr % max]
         }
     }
-    fn write_cpu(&mut self, cpu_addr: usize, mem: &mut CartridgeMemory, value: u8) {
+    fn write_cpu(&mut self, cpu_addr: usize, _mem: &mut CartridgeMemory, value: u8) {
         if cpu_addr >= 0x8000 {
             self.chr_bank_select = (value & 0x03) as usize;
         }
@@ -32,7 +32,7 @@ impl Mapper for CnRom {
     fn read_ppu_debug(&self, ppu_addr: usize, mem: &CartridgeMemory) -> u8 {
         mem.chr_rom[bank_addr(0x2000, self.chr_bank_select, ppu_addr) % mem.chr_rom.len()]
     }
-    fn write_ppu(&mut self, _ppu_addr: usize, _mem: &mut CartridgeMemory, value: u8) {
+    fn write_ppu(&mut self, _ppu_addr: usize, _mem: &mut CartridgeMemory, _value: u8) {
         // Does nothing
     }
 }

@@ -1,6 +1,12 @@
 use std::fmt::{Debug, Display};
 
-use crate::core::{cartridge::CartridgeMemory, Mapper};
+use crate::core::{
+    cartridge::{
+        mapper::{bank_addr, num_banks},
+        CartridgeMemory,
+    },
+    Mapper,
+};
 use log::*;
 use serde::{Deserialize, Serialize};
 
@@ -19,15 +25,13 @@ impl Mapper for UxRom {
     fn read_cpu(&self, cpu_addr: usize, mem: &CartridgeMemory) -> u8 {
         if cpu_addr < 0x8000 {
             warn!("Reading PRG RAM when there is none (ADDR = {:X})", cpu_addr);
-            return 0;
+            0
+        } else if cpu_addr >= 0xC000 {
+            // Fixed to last bank
+            mem.prg_rom[bank_addr(BANK_SIZE, num_banks(BANK_SIZE, &mem.prg_rom) - 1, cpu_addr)]
+        } else {
+            mem.prg_rom[bank_addr(BANK_SIZE, self.bank, cpu_addr)]
         }
-        // Fixed to last bank
-        if cpu_addr >= 0xC000 {
-            let last_bank = &mem.prg_rom[(mem.prg_rom.len() - BANK_SIZE)..(mem.prg_rom.len())];
-            return last_bank[(cpu_addr - 0xC000) % last_bank.len()];
-        }
-        let final_addr = (cpu_addr - 0x8000 + self.bank * BANK_SIZE);
-        mem.prg_rom[final_addr % mem.prg_rom.len()]
     }
     fn write_cpu(&mut self, _cpu_addr: usize, _mem: &mut CartridgeMemory, value: u8) {
         self.bank = value as usize;

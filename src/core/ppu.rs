@@ -44,6 +44,7 @@ pub struct Ppu {
     /// The PPUDATA register (actually the read buffer)
     pub data: u8,
     /// The OAMDMA register
+    ///
     /// This register is usually None, and is only set to Some(n) when written to.
     /// It is then reset when the DMA is executed.
     pub oam_dma: Option<u8>,
@@ -64,7 +65,11 @@ pub struct Ppu {
     // None means no sprite on that pixel
     #[serde(with = "BigArray")]
     scanline_sprites: [Option<(usize, usize)>; 256],
-    // Internal screen buffer, olding indices of colours in TV palette
+    /// The current output on the screen.
+    ///
+    /// Holds the output as a HV (Hue value) byte, which can be transformed into an RGB value
+    /// using an NES palette, such as [HV_TO_RGB][crate::core::HV_TO_RGB].
+    /// A new entry is added every dot.
     #[serde(skip, default = "zeros")]
     pub output: [[usize; 256]; 240],
     // Open bus output
@@ -81,6 +86,7 @@ pub struct Ppu {
 
 impl Ppu {
     /// Initialise a new PPU.
+    ///
     /// Zero out all memory, set all registers to their initial value, and set
     /// the dot position to `(0, 0)` (The top left pixel of the screen).
     pub fn new() -> Ppu {
@@ -107,8 +113,8 @@ impl Ppu {
             tile_buffer: VecDeque::from([(0, 0); 16]),
         }
     }
-
     /// Read a byte from the PPU register given an address in CPU space.
+    ///
     /// Requires the cartridge currently inserted in the NES.
     pub fn read_byte(&mut self, addr: usize, cartridge: &mut Cartridge) -> u8 {
         match addr % 8 {
@@ -137,8 +143,8 @@ impl Ppu {
             _ => self.open_bus,
         }
     }
-
     /// Write a byte to the PPU registers given an address in CPU space.
+    ///
     /// Requires the cartridge currently inserted in the NES.
     pub fn write_byte(&mut self, addr: usize, value: u8, cartridge: &mut Cartridge) {
         self.open_bus = value;
@@ -192,15 +198,15 @@ impl Ppu {
             _ => panic!("This should never happen. Addr is {:#X}", addr),
         }
     }
-
     /// Write a single byte to OAM using the OAM_ADDR register and the offset provided
+    ///
     /// Increments OAM_ADDR after writing.
     pub fn write_oam(&mut self, offset: usize, value: u8) {
         self.oam[(self.oam_addr as usize + offset) % self.oam.len()] = value;
         self.oam_addr = self.oam_addr.wrapping_add(1);
     }
 
-    // Refresh `scanline_sprites` by fetching the first 8 sprites on the scanline given
+    // Refresh scanline_sprites by fetching the first 8 sprites on the scanline given
     // May set the overflow flag.
     // Note that this is done at the end of the scanline, so these sprites will show up on the next scanline (and thus will appear at Y + 1)
     fn refresh_scanline_sprites(
@@ -306,9 +312,10 @@ impl Ppu {
         }
     }
     /// Advance the PPU a certain number of dots.
-    /// Write new output to `output` if not in HBlank or VBlank.
+    ///
+    /// Write new output to [Ppu::output] if not in HBlank or VBlank.
     /// Update the PPU's state accordingly, may set the VBlank flag.
-    /// Return `true` if an NMI is triggered by a VBlank, and `false` otherwise.
+    /// Return [true] if an NMI is triggered by a VBlank, and [false] otherwise.
     pub fn advance_dots(
         &mut self,
         dots: u32,
@@ -510,6 +517,7 @@ impl Ppu {
         self.dot.1 >= 240
     }
     /// Whether it is safe for the CPU to access VRAM (i.e. the PPU is not currently accessing VRAM).
+    ///
     /// Note this does not stop the CPU from accessing VBlank.
     /// Rather, trying to access VRAM when it is not safe to do so but can cause unexpected behaviour.
     pub fn can_access_vram(&self) -> bool {
@@ -579,69 +587,70 @@ impl Ppu {
         self.v = (self.v + if self.ctrl & 0x04 == 0 { 1 } else { 32 }) % 0x3FFF;
         cartridge.mapper.set_addr_value(self.v);
     }
-    /// Returns `true` if the NES is in 8x16 sprite mode
+    /// Returns [true] if the NES is in 8x16 sprite mode
     pub fn is_8x16_sprites(&self) -> bool {
         (self.ctrl & 0x20) != 0
     }
-    /// Returns `true` if OAM rendering is enabled
+    /// Returns [true] if OAM rendering is enabled
     pub fn is_sprite_rendering_enabled(&self) -> bool {
         (self.mask & 0x10) != 0
     }
-    /// Return `true`` if background rendering is enabled
+    /// Return [true]` if background rendering is enabled
     pub fn is_background_rendering_enabled(&self) -> bool {
         (self.mask & 0x08) != 0
     }
-    /// Returns `true` if  rendering sprites in the 8 leftmost pixels is disabled
+    /// Returns [true] if  rendering sprites in the 8 leftmost pixels is disabled
     pub fn sprite_left_clipping(&self) -> bool {
         (self.mask & 0x04) == 0
     }
-    /// Returns `true` if rendering the background in the 8 leftmost pixels is disabled
+    /// Returns [true] if rendering the background in the 8 leftmost pixels is disabled
     pub fn background_left_clipping(&self) -> bool {
         (self.mask & 0x02) == 0
     }
-    /// Returns `true` if greyscale mode is on
+    /// Returns [true] if greyscale mode is on
     pub fn is_greyscale_mode_on(&self) -> bool {
         (self.mask & 0x01) != 0
     }
-    /// Returns the address in PPU memory spaec to read the sprite pattern data from
+    /// Returns the address in PPU memory space to read the sprite pattern data from
     pub fn spr_pattern_table_addr(&self) -> usize {
         if self.ctrl & 0x08 != 0 {
             return 0x1000;
         }
         0x0000
     }
-    /// Return the address in PPU memory space to read the backgronud pattern data from
+    /// Return the address in PPU memory space to read the background pattern data from
     pub fn nametable_tile_addr(&self) -> usize {
         if self.ctrl & 0x10 != 0 {
             return 0x1000;
         }
         0x0000
     }
-    // Return `true` if the red tint is active
+    // Return [true] if the red tint is active
     pub fn is_red_tint_on(&self) -> bool {
         (self.mask & 0x20) != 0
     }
-    // Return `true` if the blue tint is active
+    // Return [true] if the blue tint is active
     pub fn is_blue_tint_on(&self) -> bool {
         (self.mask & 0x40) != 0
     }
-    // Return `true` if the green tint is active
+    // Return [true] if the green tint is active
     pub fn is_green_tint_on(&self) -> bool {
         (self.mask & 0x80) != 0
     }
-    /// Return `true` if the NMI is enabled
+    /// Return [true] if the NMI is enabled
     pub fn get_nmi_enabled(&self) -> bool {
         return self.ctrl & 0x80 != 0;
     }
-    /// Return `true` if the sprite 0 hit bit is set
+    /// Return [true] if the sprite 0 hit bit is set
     pub fn sprite_zero_hit(&self) -> bool {
         (self.status & 0x40) != 0
     }
-    /// Return `true` if the sprite overflow flag is set
+    /// Return [true] if the sprite overflow flag is set
     pub fn sprite_overflow(&self) -> bool {
         (self.status & 0x20) != 0
     }
     /// Returns the base nametable number, a nubmer between 0 and 3.
+    ///
     /// * 0 means that the base nametable is top left (0x2000)
     /// * 1 means that the base nametable is top right (0x2400)
     /// * 2 means that the base nametable is bot left (0x2800)

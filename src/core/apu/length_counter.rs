@@ -11,7 +11,7 @@ pub struct LengthCounter {
     pub load: usize,
 }
 impl LengthCounter {
-    /// Return `true` if the counter should be muting the register
+    /// Return [true] if the counter should be muting the register
     pub fn muted(&self) -> bool {
         self.load == 0
     }
