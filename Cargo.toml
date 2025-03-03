@@ -34,9 +34,5 @@ test-case = "3.3.1"
 typetag = "0.2.19"
 wavers = "1.5.1"
 
-[features]
-default = ["gui"]
-gui = []
-
 [dev-dependencies]
 insta = "1.41.1"
