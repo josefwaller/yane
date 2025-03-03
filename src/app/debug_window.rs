@@ -297,6 +297,7 @@ impl DebugWindow {
                 if ui.button("Reset") {
                     nes.reset();
                 }
+
                 ui.checkbox("Debug OAM", &mut config.oam_debug);
                 if ui.checkbox("Paused", &mut config.paused) {
                     info!(
@@ -308,6 +309,28 @@ impl DebugWindow {
                         }
                     );
                 }
+                ui.disabled(!config.paused, || {
+                    if ui.button("Advance instruction") {
+                        match nes.advance_instruction(&config.emu_settings) {
+                            Err(e) => error!("Error while advancing instruction: {:?}", e),
+                            _ => {}
+                        }
+                    }
+                    if ui.button("Advance end of vblank") {
+                        while nes.ppu.in_vblank() {
+                            match nes.advance_instruction(&config.emu_settings) {
+                                Err(e) => error!("Error while advancing instruction: {:?}", e),
+                                _ => {}
+                            }
+                        }
+                    }
+                    if ui.button("Advance frame") {
+                        match nes.advance_frame(&config.emu_settings) {
+                            Err(e) => error!("Error while advancing frame: {:?}", e),
+                            _ => {}
+                        }
+                    }
+                });
                 ui.checkbox(
                     "Scanline sprite limit",
                     &mut config.emu_settings.scanline_sprite_limit,
