@@ -9,7 +9,7 @@ use crate::app::KeyMap;
 /// Contains all the settings for running Yane as an emulator, as well as
 /// other fields such as quicksave locations, volume, speed, etc.
 #[derive(Clone, Serialize, Deserialize)]
-pub struct AppSettings {
+pub struct Config {
     // Display OAM debug information on the screen
     pub oam_debug: bool,
     // Pause the game
@@ -45,9 +45,9 @@ pub struct AppSettings {
     pub savestate_dir: PathBuf,
 }
 
-impl Default for AppSettings {
-    fn default() -> AppSettings {
-        AppSettings {
+impl Default for Config {
+    fn default() -> Config {
+        Config {
             paused: false,
             oam_debug: false,
             volume: 1.0,

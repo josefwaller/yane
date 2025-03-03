@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
 use crate::{
-    app::{Audio, Screen},
+    app::{Audio, Config, Screen},
     core::{Controller, Nes, Settings},
-    utils, AppSettings,
+    utils,
 };
 use log::*;
 use sdl2::{keyboard::Keycode, video::GLContext, Sdl, VideoSubsystem};
@@ -44,14 +44,8 @@ impl Window {
     fn key_pressed(&self, k: &Key, keys: &Vec<Keycode>) -> bool {
         Window::key_down(k, keys) && !Window::key_down(k, &self.last_keys)
     }
-    fn update_controller(
-        &self,
-        nes: &mut Nes,
-        index: usize,
-        keys: &Vec<Keycode>,
-        settings: &AppSettings,
-    ) {
-        let c = &settings.key_map.controllers;
+    fn update_controller(&self, nes: &mut Nes, index: usize, keys: &Vec<Keycode>, config: &Config) {
+        let c = &config.key_map.controllers;
         // P1
         let controller = Controller {
             up: Window::key_down(&c[index].up, keys),
@@ -65,13 +59,13 @@ impl Window {
         };
         nes.set_input(index, controller);
     }
-    pub fn update(&mut self, nes: &mut Nes, keys: &Vec<Keycode>, settings: &mut AppSettings) {
+    pub fn update(&mut self, nes: &mut Nes, keys: &Vec<Keycode>, config: &mut Config) {
         // Update inputs
-        self.update_controller(nes, 0, &keys, settings);
-        self.update_controller(nes, 1, &keys, settings);
-        let km = &settings.key_map;
+        self.update_controller(nes, 0, &keys, config);
+        self.update_controller(nes, 1, &keys, config);
+        let km = &config.key_map;
         if self.key_pressed(&km.pause, keys) {
-            settings.paused = !settings.paused;
+            config.paused = !config.paused;
         }
         let diff = if self.key_pressed(&km.volume_up, keys) {
             0.1
@@ -80,15 +74,15 @@ impl Window {
         } else {
             0.0
         };
-        settings.volume = (settings.volume + diff).clamp(0.0, 3.0) as f32;
+        config.volume = (config.volume + diff).clamp(0.0, 3.0) as f32;
         // Update audio
-        self.audio.update_audio(nes, settings);
+        self.audio.update_audio(nes, config);
 
         // Check for quickload
         if self.key_pressed(&km.quicksave, keys) {
-            save_new_savestate(nes, settings, &self.game_name);
+            save_new_savestate(nes, config, &self.game_name);
         } else if self.key_pressed(&km.quickload, keys) {
-            match &settings.quickload_file {
+            match &config.quickload_file {
                 Some(f) => match std::fs::read(&f) {
                     Ok(data) => match postcard::from_bytes(&data) {
                         Ok(n) => {
@@ -105,9 +99,9 @@ impl Window {
 
         self.last_keys = keys.clone();
     }
-    pub fn render(&mut self, nes: &Nes, settings: &AppSettings) {
+    pub fn render(&mut self, nes: &Nes, config: &Config) {
         self.window.gl_make_current(&self.gl_context).unwrap();
-        self.screen.render(nes, self.window.size(), settings);
+        self.screen.render(nes, self.window.size(), config);
         self.window.gl_swap_window();
     }
     pub fn screen(&mut self) -> &mut Screen {

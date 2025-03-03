@@ -2,7 +2,7 @@
 //!
 //! A Nintendo Entertainment System emulator.
 //! Uses OpenGL and SDL to create a multiplatform window.
-//! Allows for customizing controls, screen size, volume, speed, and others (see [AppSettings][crate::AppSettings])
+//! Allows for customizing controls, screen size, volume, speed, and others (see [Config]).
 mod screen;
 pub use screen::Screen;
 mod audio;
@@ -13,4 +13,6 @@ mod debug_window;
 pub use debug_window::DebugWindow;
 mod key_map;
 pub use key_map::KeyMap;
+mod config;
 pub mod utils;
+pub use config::Config;

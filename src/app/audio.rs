@@ -1,4 +1,4 @@
-use crate::{core::Nes, core::CPU_CLOCK_SPEED, AppSettings};
+use crate::{app::Config, core::Nes, core::CPU_CLOCK_SPEED};
 use log::*;
 use rubato::{Resampler, SincFixedIn, SincInterpolationParameters};
 use sdl2::{
@@ -55,13 +55,13 @@ impl Audio {
             all_samples: Vec::new(),
         }
     }
-    pub fn update_audio(&mut self, nes: &mut Nes, settings: &AppSettings) {
+    pub fn update_audio(&mut self, nes: &mut Nes, config: &Config) {
         // Clear queue if it's too big
         // Should only happen on startup when SDL is booting up
         if self.queue.size() > CPU_CLOCK_SPEED / 60 {
             debug!("Queue is too big, clearing (was {})", self.queue.size());
             self.queue.clear();
-        } else if self.queue.size() == 0 && !settings.paused {
+        } else if self.queue.size() == 0 && !config.paused {
             warn!("Queue is empty!");
         }
         // Get and transform data
@@ -69,19 +69,19 @@ impl Audio {
             .apu
             .sample_queue()
             .iter()
-            .map(|x| settings.volume * x)
+            .map(|x| config.volume * x)
             .collect::<Vec<f32>>();
         self.data_queue.extend_from_slice(&data);
-        if settings.record_audio {
+        if config.record_audio {
             self.all_samples.extend_from_slice(&data);
         }
         // Downsample to audio output rate
         let input_size = self.resampler.input_frames_next();
         let mut out = vec![vec![0.0; self.resampler.output_frames_max()]; 1];
-        if settings.speed != self.last_speed {
-            self.last_speed = settings.speed;
+        if config.speed != self.last_speed {
+            self.last_speed = config.speed;
             let ratio = (self.queue.spec().freq as f64 / CPU_CLOCK_SPEED as f64)
-                / settings.speed.min(9.9999) as f64;
+                / config.speed.min(9.9999) as f64;
             self.resampler.reset();
             self.resampler
                 .set_resample_ratio(ratio, false)

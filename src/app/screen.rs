@@ -1,9 +1,9 @@
 use crate::{
+    app::Config,
     check_error,
     core::{Nes, Settings},
     set_uniform,
     utils::*,
-    AppSettings,
 };
 use glow::*;
 use log::*;
@@ -55,7 +55,7 @@ impl Screen {
             }
         }
     }
-    pub fn render(&mut self, nes: &Nes, window_size: (u32, u32), settings: &AppSettings) {
+    pub fn render(&mut self, nes: &Nes, window_size: (u32, u32), config: &Config) {
         unsafe {
             self.gl.disable(glow::STENCIL_TEST);
             self.gl.disable(glow::DEPTH_TEST);
@@ -93,8 +93,8 @@ impl Screen {
                 self.screen_program,
                 "screenSize",
                 uniform_2_f32,
-                settings.screen_size.0 as f32,
-                settings.screen_size.1 as f32
+                config.screen_size.0 as f32,
+                config.screen_size.1 as f32
             );
             check_error!(self.gl);
             let loc = self
@@ -111,7 +111,7 @@ impl Screen {
             check_error!(self.gl);
 
             // Render wireframe box around each OAM object
-            if settings.oam_debug {
+            if config.oam_debug {
                 self.gl.use_program(Some(self.wireframe_program));
                 self.gl.bind_vertex_array(Some(self.wireframe_vao));
                 check_error!(self.gl);
@@ -120,8 +120,8 @@ impl Screen {
                     self.wireframe_program,
                     "screenSize",
                     uniform_2_f32,
-                    settings.screen_size.0 as f32,
-                    settings.screen_size.1 as f32
+                    config.screen_size.0 as f32,
+                    config.screen_size.1 as f32
                 );
                 check_error!(self.gl);
                 nes.ppu.oam.chunks(4).enumerate().for_each(|(i, obj)| {

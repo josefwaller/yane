@@ -6,9 +6,7 @@ use sdl2::{
     keyboard::Keycode,
 };
 use serde::de::DeserializeOwned;
-use simplelog::{
-    ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger,
-};
+use simplelog::{ColorChoice, CombinedLogger, LevelFilter, TermLogger, TerminalMode, WriteLogger};
 use std::thread::sleep;
 use std::{fs::File, io::Write, path::PathBuf};
 use std::{
@@ -17,9 +15,8 @@ use std::{
 };
 use wavers::{write, Samples};
 use yane::{
-    app::{DebugWindow, KeyMap, Window},
+    app::{Config, DebugWindow, KeyMap, Window},
     core::{Cartridge, Nes, CPU_CLOCK_SPEED},
-    AppSettings,
 };
 
 const SETTINGS_FILENAME: &str = "settings.yaml";
@@ -126,7 +123,7 @@ fn setup_config_directory() -> Result<(), Box<dyn std::error::Error>> {
     debug!("Created directory at {:?}", &config_dir);
     let contents = serde_yaml::to_string(&KeyMap::default())?;
     add_config_file(KEYMAP_FILENAME, &contents)?;
-    let contents = serde_yaml::to_string(&AppSettings::default())?;
+    let contents = serde_yaml::to_string(&Config::default())?;
     add_config_file(SETTINGS_FILENAME, &contents)?;
     Ok(())
 }
@@ -224,13 +221,13 @@ fn main() {
         CombinedLogger::init(vec![
             TermLogger::new(
                 LevelFilter::Debug,
-                Config::default(),
+                simplelog::Config::default(),
                 TerminalMode::Mixed,
                 ColorChoice::Auto,
             ),
             WriteLogger::new(
                 LevelFilter::Debug,
-                Config::default(),
+                simplelog::Config::default(),
                 File::create("./yane.log").unwrap(),
             ),
         ])
@@ -335,11 +332,11 @@ fn main() {
             Some(s) => info!("Savedata will be saved at {:?}", s),
             None => debug!("No savedata"),
         }
-        // Load settings
-        let mut settings = read_config_file(&args.config_file, AppSettings::default());
+        // Load config
+        let mut config = read_config_file(&args.config_file, Config::default());
         // Load key map
         let key_map = read_config_file(&args.keymap_file, KeyMap::default());
-        settings.key_map = key_map;
+        config.key_map = key_map;
         // Create debug window if debug argument was passed
         let mut debug_window = if args.debug {
             Some(DebugWindow::new(&nes, &video, &sdl, game_name.clone()))
@@ -350,18 +347,18 @@ fn main() {
         let mut window = Window::new(&video, &sdl, game_name.clone());
         // Set argument settings
         if args.paused {
-            settings.paused = true;
-            match nes.advance_frame(&settings.emu_settings) {
+            config.paused = true;
+            match nes.advance_frame(&config.emu_settings) {
                 Err(e) => error!("Error when advancing NES first frame: {}", e),
                 Ok(_) => {}
             }
         }
         if args.muted {
-            settings.volume = 0.0;
+            config.volume = 0.0;
         }
         // Setup savestate and savedata repositories
-        settings.savestate_dir = try_create_dir(&settings.savestate_dir);
-        debug!("Savestates will be saved in {:?}", settings.savestate_dir);
+        config.savestate_dir = try_create_dir(&config.savestate_dir);
+        debug!("Savestates will be saved in {:?}", config.savestate_dir);
 
         let mut last_debug_window_render = Instant::now();
         // Various constants for keeping emulator time in check with real time
@@ -403,7 +400,7 @@ fn main() {
                 last_debug_window_render += DEBUG_WINDOW_REFRESH_RATE;
                 match debug_window.as_mut() {
                     Some(d) => {
-                        if d.render(&mut nes, &event_pump, &mut settings) {
+                        if d.render(&mut nes, &event_pump, &mut config) {
                             nes.reset();
                         }
                     }
@@ -411,16 +408,16 @@ fn main() {
                 }
             }
             // Update window
-            window.update(&mut nes, &keys, &mut settings);
+            window.update(&mut nes, &keys, &mut config);
             // Render window
-            window.render(&nes, &settings);
+            window.render(&nes, &config);
             // Update CPU
-            if settings.paused {
+            if config.paused {
                 delta = Instant::now();
             } else {
                 // Advance 1 frame
                 window.make_gl_current();
-                let cycles_to_wait = match nes.advance_frame(&settings.emu_settings) {
+                let cycles_to_wait = match nes.advance_frame(&config.emu_settings) {
                     Ok(c) => c,
                     Err(e) => {
                         error!("Error encountered while advancing emulator: {:X?}", e);
@@ -450,7 +447,7 @@ fn main() {
                 let emu_elapsed = Duration::from_nanos(
                     cycles_to_wait as u64 * 1_000_000_000 / CPU_CLOCK_SPEED as u64,
                 )
-                .div_f64(settings.speed as f64);
+                .div_f64(config.speed as f64);
                 // Calculate how much time has actually passed
                 let actual_elapsed = Instant::now().duration_since(delta);
                 // Wait for the difference
@@ -473,7 +470,7 @@ fn main() {
         let data = window.audio.all_samples.into_boxed_slice();
         let samples = Samples::new(data);
         write(
-            &Path::new(format!("./{}.wav", settings.record_audio_filename).as_str()),
+            &Path::new(format!("./{}.wav", config.record_audio_filename).as_str()),
             &samples,
             1_789_000,
             1,

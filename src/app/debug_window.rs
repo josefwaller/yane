@@ -2,10 +2,10 @@ use clipboard::{ClipboardContext, ClipboardProvider};
 use log::*;
 
 use crate::{
+    app::Config,
     check_error,
     core::{Cartridge, Nes, Ppu, DEBUG_PALETTE},
     utils::*,
-    AppSettings,
 };
 use glow::{HasContext, NativeTexture};
 use imgui::{FontId, TextureId, TreeNodeFlags};
@@ -149,12 +149,7 @@ impl DebugWindow {
             .collect()
     }
     // Returns true if the NES should reset
-    pub fn render(
-        &mut self,
-        nes: &Nes,
-        event_pump: &EventPump,
-        settings: &mut AppSettings,
-    ) -> bool {
+    pub fn render(&mut self, nes: &Nes, event_pump: &EventPump, config: &mut Config) -> bool {
         let chr_tex_num: i32 = 1;
         unsafe {
             self.window.gl_make_current(&self.gl_context).unwrap();
@@ -168,7 +163,7 @@ impl DebugWindow {
                 data,
                 self.num_columns,
                 self.num_rows,
-                if settings.emu_settings.use_debug_palette {
+                if config.emu_settings.use_debug_palette {
                     &DEBUG_PALETTE
                 } else {
                     &nes.ppu.palette_ram
@@ -260,7 +255,7 @@ impl DebugWindow {
                     nt_tiles.as_slice(),
                     64,
                     60,
-                    if settings.emu_settings.use_debug_palette {
+                    if config.emu_settings.use_debug_palette {
                         &DEBUG_PALETTE
                     } else {
                         &nes.ppu.palette_ram
@@ -303,11 +298,11 @@ impl DebugWindow {
             )
             .build(|| {
                 to_return = ui.button("Reset");
-                ui.checkbox("Debug OAM", &mut settings.oam_debug);
-                if ui.checkbox("Paused", &mut settings.paused) {
+                ui.checkbox("Debug OAM", &mut config.oam_debug);
+                if ui.checkbox("Paused", &mut config.paused) {
                     info!(
                         "Manual pause {}",
-                        if settings.paused {
+                        if config.paused {
                             "checked"
                         } else {
                             "unchecked"
@@ -316,35 +311,35 @@ impl DebugWindow {
                 }
                 ui.checkbox(
                     "Scanline sprite limit",
-                    &mut settings.emu_settings.scanline_sprite_limit,
+                    &mut config.emu_settings.scanline_sprite_limit,
                 );
                 ui.checkbox(
                     "Always draw sprites on top of background",
-                    &mut settings.emu_settings.always_sprites_on_top,
+                    &mut config.emu_settings.always_sprites_on_top,
                 );
-                ui.slider("Volume", 0.0, 10.0, &mut settings.volume);
-                ui.slider("Speed", 0.1, 3.0, &mut settings.speed);
+                ui.slider("Volume", 0.0, 10.0, &mut config.volume);
+                ui.slider("Speed", 0.1, 3.0, &mut config.speed);
                 ui.same_line();
                 if ui.button("Reset to 1") {
-                    settings.speed = 1.0;
+                    config.speed = 1.0;
                 }
-                ui.checkbox("Verbose Logging", &mut settings.verbose_logging);
+                ui.checkbox("Verbose Logging", &mut config.verbose_logging);
                 ui.checkbox(
                     "Restrict controller input",
-                    &mut settings.restrict_controller_directions,
+                    &mut config.restrict_controller_directions,
                 );
                 if ui.button("Quick save (savestate)") {
-                    super::utils::save_new_savestate(nes, settings, &self.game_name);
+                    super::utils::save_new_savestate(nes, config, &self.game_name);
                 }
                 if let Some(c) = ui.begin_combo(
                     "Screen Size",
-                    format!("{}x{}px", settings.screen_size.0, settings.screen_size.1),
+                    format!("{}x{}px", config.screen_size.0, config.screen_size.1),
                 ) {
                     [(256, 240), (256, 224), (240, 212), (224, 192)]
                         .iter()
                         .for_each(|res| {
                             if ui.selectable(format!("{}x{}px", res.0, res.1)) {
-                                settings.screen_size = *res;
+                                config.screen_size = *res;
                             }
                         });
                     c.end();
@@ -356,10 +351,7 @@ impl DebugWindow {
                     });
                 }
                 if ui.collapsing_header("Graphics Debug", TreeNodeFlags::empty()) {
-                    ui.checkbox(
-                        "Debug palette",
-                        &mut settings.emu_settings.use_debug_palette,
-                    );
+                    ui.checkbox("Debug palette", &mut config.emu_settings.use_debug_palette);
                     if ui.collapsing_header("CHR ROM/RAM", TreeNodeFlags::empty()) {
                         if let Some(c) =
                             ui.begin_combo("Palette", format!("Palette {}", self.palette_index))
@@ -410,10 +402,10 @@ impl DebugWindow {
                 if ui.collapsing_header("Audio", TreeNodeFlags::empty()) {
                     ui.input_text(
                         "Recording file name (.wav)",
-                        &mut settings.record_audio_filename,
+                        &mut config.record_audio_filename,
                     )
                     .build();
-                    ui.checkbox("Record?", &mut settings.record_audio);
+                    ui.checkbox("Record?", &mut config.record_audio);
                     ui.text(format!("Pulse 0 : {:?}", nes.apu.pulse_registers[0]));
                     ui.text(format!("Pulse 1 : {:?}", nes.apu.pulse_registers[1]));
                     ui.text(format!("Triangle: {:?}", nes.apu.triangle_register));
