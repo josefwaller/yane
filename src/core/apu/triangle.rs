@@ -4,6 +4,8 @@ use super::length_counter::LengthCounter;
 use std::fmt::Debug;
 
 #[derive(Clone, Copy, Default, Serialize, Deserialize)]
+/// The triangle flag.
+/// Outputs a triangle wave to the APU's mixer
 pub struct TriangleRegister {
     pub length_counter: LengthCounter,
     pub linear_counter: usize,

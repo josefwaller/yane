@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use crate::app::KeyMap;
 
-/// Settings used when running Yane as an application.
+/// Configuration used when running Yane as an application.
 /// Contains all the settings for running Yane as an emulator, as well as
 /// other fields such as quicksave locations, volume, speed, etc.
 #[derive(Clone, Serialize, Deserialize)]

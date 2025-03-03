@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Default, Debug, Serialize, Deserialize)]
+/// An envelope generator unit.
+/// Controls the volume of the APU's pulse units.
+/// See [the NESDEV wiki[(https://www.nesdev.org/wiki/APU_Envelope)
 pub struct Envelope {
     /// Constant volume flag
     pub constant: bool,
@@ -12,6 +15,7 @@ pub struct Envelope {
     pub decay: usize,
 }
 impl Envelope {
+    /// Clock the envelope unit
     pub fn clock(&mut self, restart: bool) {
         // Clock volume divider
         if self.divider == 0 {
@@ -29,6 +33,7 @@ impl Envelope {
             self.divider -= 1;
         }
     }
+    /// Get the current output of the unit
     pub fn value(&self) -> u32 {
         if self.constant {
             self.volume as u32

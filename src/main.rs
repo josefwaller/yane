@@ -339,7 +339,7 @@ fn main() {
         config.key_map = key_map;
         // Create debug window if debug argument was passed
         let mut debug_window = if args.debug {
-            Some(DebugWindow::new(&nes, &video, &sdl, game_name.clone()))
+            Some(DebugWindow::new(&nes, &video, game_name.clone()))
         } else {
             None
         };

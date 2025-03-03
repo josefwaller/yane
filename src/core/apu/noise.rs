@@ -4,15 +4,19 @@ use super::{envelope::Envelope, length_counter::LengthCounter};
 use std::fmt::Debug;
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
+/// The APU's Noise register
+/// Creates psuedo random noise wave output.
 pub struct NoiseRegister {
     pub length_counter: LengthCounter,
     pub enabled: bool,
+    /// The current value of the timer, controls the wave's frequency
     pub timer: u32,
+    /// The reload value for the timer
     pub timer_reload: u32,
     pub envelope: Envelope,
-    // false = 0, true = 1
+    /// The mode (`false` = 0, `true` = 1)
     pub mode: bool,
-    // This is actually 15 bits wide
+    /// The shift register
     pub shift: u16,
 }
 impl Debug for NoiseRegister {

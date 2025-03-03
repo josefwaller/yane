@@ -62,6 +62,8 @@ impl Serialize for Key {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+/// Controls for an NES controller.
+/// Maps SDL key codes to buttons on the controller.
 pub struct Controller {
     pub a: Key,
     pub b: Key,
@@ -73,6 +75,8 @@ pub struct Controller {
     pub select: Key,
 }
 #[derive(Serialize, Deserialize, Clone)]
+/// Controls for running the emulator.
+/// Maps SDL key codes to actions in the emulator (press a button pause, etc).
 pub struct KeyMap {
     pub controllers: [Controller; 2],
     pub pause: Key,

@@ -3,6 +3,7 @@
 //! A Nintendo Entertainment System emulator.
 //! Uses OpenGL and SDL to create a multiplatform window.
 //! Allows for customizing controls, screen size, volume, speed, and others (see [Config]).
+//! All of the actual NES emulation is done by importing from [core]
 mod screen;
 pub use screen::Screen;
 mod audio;

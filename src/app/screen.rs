@@ -55,6 +55,7 @@ impl Screen {
             }
         }
     }
+    /// Render the screen
     pub fn render(&mut self, nes: &Nes, window_size: (u32, u32), config: &Config) {
         unsafe {
             self.gl.disable(glow::STENCIL_TEST);

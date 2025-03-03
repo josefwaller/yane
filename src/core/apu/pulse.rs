@@ -4,6 +4,8 @@ use super::{envelope::Envelope, length_counter::LengthCounter};
 use std::fmt::Debug;
 
 #[derive(Clone, Copy, Default, Serialize, Deserialize)]
+/// The APU's pulse registers.
+/// Outputs a pulse (rectangle) wave.
 pub struct PulseRegister {
     /// The index of the duty to use
     pub duty: u32,

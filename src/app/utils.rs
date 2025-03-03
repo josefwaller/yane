@@ -1,6 +1,9 @@
 use crate::{app::Config, core::Nes};
 use log::*;
 
+/// Save a new savestate.
+///
+/// Serialize the NES, and then save it to a file containing `game_name` and the Unix timestamp at the save time.
 pub fn save_new_savestate(nes: &Nes, config: &mut Config, game_name: &Option<String>) {
     match nes.to_savestate() {
         Err(e) => error!("Unable to create quicksave: {}", e),

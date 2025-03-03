@@ -6,11 +6,16 @@ use sdl2::{
     Sdl,
 };
 
+/// Controls all the audio functionality of the app.
+/// Mostly just responsible for downsampling the NES audio's output and
+/// adding it to the SDL queue.
 pub struct Audio {
     queue: AudioQueue<f32>,
     resampler: SincFixedIn<f32>,
     data_queue: Vec<f32>,
     last_speed: f32,
+    /// Vector of all samples ever taken.
+    /// Used for saving the sound if recording
     pub all_samples: Vec<f32>,
 }
 
@@ -55,6 +60,7 @@ impl Audio {
             all_samples: Vec::new(),
         }
     }
+    /// Add the NES's audio to hte SDL audio queue
     pub fn update_audio(&mut self, nes: &mut Nes, config: &Config) {
         // Clear queue if it's too big
         // Should only happen on startup when SDL is booting up

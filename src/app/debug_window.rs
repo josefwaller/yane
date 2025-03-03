@@ -13,7 +13,8 @@ use imgui_glow_renderer::AutoRenderer;
 use imgui_sdl2_support::SdlPlatform;
 use sdl2::{event::Event, EventPump, Sdl, VideoSubsystem};
 
-// Renders all the CHR ROM (and CHR RAM TBD) in the cartridge for debug purposes
+/// The debug window that spawns when the debug argument is passed.
+/// Allows the user to change various settings of the emulator.
 pub struct DebugWindow {
     window: sdl2::video::Window,
     gl_context: sdl2::video::GLContext,
@@ -42,12 +43,8 @@ pub struct DebugWindow {
 }
 
 impl DebugWindow {
-    pub fn new(
-        nes: &Nes,
-        video: &VideoSubsystem,
-        sdl: &Sdl,
-        game_name: Option<String>,
-    ) -> DebugWindow {
+    /// Spawn a new [DebugWindow]
+    pub fn new(nes: &Nes, video: &VideoSubsystem, game_name: Option<String>) -> DebugWindow {
         // Figure out how many rows/columns
         let num_tiles =
             (nes.cartridge.memory.chr_rom.len() + nes.cartridge.memory.chr_ram.len()) / 0x10;
@@ -104,6 +101,7 @@ impl DebugWindow {
             }
         }
     }
+    /// Process an event
     pub fn handle_event(&mut self, event: &Event) {
         self.platform.handle_event(&mut self.imgui, event);
     }
@@ -148,7 +146,8 @@ impl DebugWindow {
             .flatten()
             .collect()
     }
-    // Returns true if the NES should reset
+    /// Render the debug window, and update the [Config] if any of the imgui buttons are pressed.
+    /// Returns `true` if the reset button was clicked, and false otherwise.
     pub fn render(&mut self, nes: &Nes, event_pump: &EventPump, config: &mut Config) -> bool {
         let chr_tex_num: i32 = 1;
         unsafe {

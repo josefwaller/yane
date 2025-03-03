@@ -10,7 +10,7 @@ use sdl2::{keyboard::Keycode, video::GLContext, Sdl, VideoSubsystem};
 
 use super::{key_map::Key, utils::save_new_savestate};
 
-/// A wrapper around `Screen` that provides an SDL2 GL context, and handles input through SDL2.
+/// A wrapper around [Screen] that provides an SDL2 GL context, and handles input through SDL2.
 pub struct Window {
     window: sdl2::video::Window,
     gl_context: GLContext,
