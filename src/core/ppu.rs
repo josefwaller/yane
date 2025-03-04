@@ -19,8 +19,8 @@ const RENDER_SCANLINES: u32 = 240;
 const RENDER_DOTS: u32 = 256;
 const DOTS_PER_OPEN_BUS_DECAY: u32 = 1_789_000 / 3;
 
-fn zeros() -> [[usize; 256]; 240] {
-    [[0; 256]; 240]
+fn zeros() -> Box<[[usize; 256]; 240]> {
+    Box::new([[0; 256]; 240])
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -71,7 +71,7 @@ pub struct Ppu {
     /// using an NES palette, such as [HV_TO_RGB][crate::core::HV_TO_RGB].
     /// A new entry is added every dot.
     #[serde(skip, default = "zeros")]
-    pub output: [[usize; 256]; 240],
+    pub output: Box<[[usize; 256]; 240]>,
     // Open bus output
     open_bus: u8,
     // Cycles since open bus was written
@@ -112,7 +112,7 @@ impl Ppu {
             v: 0,
             x: 0,
             scanline_sprites: [None; 256],
-            output: [[0; 256]; 240],
+            output: Box::new([[0; 256]; 240]),
             open_bus: 0,
             open_bus_dots: 0,
             status_dots: 0,
