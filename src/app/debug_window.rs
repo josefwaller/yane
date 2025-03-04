@@ -1,4 +1,4 @@
-use clipboard::{ClipboardContext, ClipboardProvider};
+use copypasta::{ClipboardContext, ClipboardProvider};
 use log::*;
 
 use crate::{
@@ -402,12 +402,13 @@ impl DebugWindow {
                     }
                     if ui.collapsing_header("Nametables", TreeNodeFlags::empty()) {
                         if ui.button("Copy snapshot to keyboard") {
-                            let mut ctx: ClipboardContext = ClipboardProvider::new().unwrap();
-                            if ctx
-                                .set_contents(format!("{:?}", nes.ppu.nametable_ram))
-                                .is_err()
-                            {
-                                error!("Unable to set contents of clipboard");
+                            if let Ok(mut ctx) = ClipboardContext::new() {
+                                if ctx
+                                    .set_contents(format!("{:?}", nes.ppu.nametable_ram))
+                                    .is_err()
+                                {
+                                    error!("Unable to set contents of clipboard");
+                                }
                             }
                         }
                         let f = ui.push_font(self.small_font);
