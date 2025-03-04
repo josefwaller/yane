@@ -6,6 +6,7 @@ readme = "README.MD"
 repository = "https://github.com/josefwaller/yane"
 authors = ["Josef Waller josef@josefwaller.com"]
 description = "An N.E.S. emulator and emulation library."
+documentation = "https://docs.rs/yane"
 license = "MIT"
 
 [dependencies]
