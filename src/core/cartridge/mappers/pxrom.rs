@@ -68,15 +68,14 @@ impl Mapper for PxRom {
                 error!("Invalid latches value {:X?}", self.latches);
                 self.chr_banks[0][0]
             }
+        // ppu_addr >= 0x1000
+        } else if self.latches[1] == 0xFD {
+            self.chr_banks[1][0]
+        } else if self.latches[1] == 0xFE {
+            self.chr_banks[1][1]
         } else {
-            if self.latches[1] == 0xFD {
-                self.chr_banks[1][0]
-            } else if self.latches[1] == 0xFE {
-                self.chr_banks[1][1]
-            } else {
-                error!("Invalid latches value {:X?}", self.latches);
-                self.chr_banks[1][0]
-            }
+            error!("Invalid latches value {:X?}", self.latches);
+            self.chr_banks[1][0]
         };
         mem.chr_rom[bank_addr(0x1000, bank_num, ppu_addr)]
     }

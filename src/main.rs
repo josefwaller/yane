@@ -7,6 +7,7 @@ use sdl2::{
 };
 use serde::de::DeserializeOwned;
 use simplelog::{ColorChoice, CombinedLogger, LevelFilter, TermLogger, TerminalMode, WriteLogger};
+use std::os::unix::fs::PermissionsExt;
 use std::thread::sleep;
 use std::{fs::File, io::Write, path::PathBuf};
 use std::{
@@ -24,7 +25,7 @@ const KEYMAP_FILENAME: &str = "key_map.yaml";
 
 // Used for argument default values
 fn get_file_in_config_dir(path: &str) -> PathBuf {
-    let mut buf = get_config_dir_path().unwrap_or(PathBuf::new());
+    let mut buf = get_config_dir_path().unwrap_or_default();
     buf.push(path);
     buf
 }
@@ -107,7 +108,7 @@ fn add_config_file(file_name: &str, contents: &str) -> Result<(), Box<dyn std::e
     let mut f = std::fs::File::create(&buf)?;
     debug!("Created file {}", file_name);
     let mut p = f.metadata()?.permissions();
-    p.set_readonly(false);
+    p.set_mode(0o644);
     f.set_permissions(p)?;
     // Write contents
     debug!("Writing contents to {:?}", file_name);
@@ -150,7 +151,8 @@ where
     T: DeserializeOwned + Clone,
 {
     debug!("Reading config file {:?}", path);
-    let val = match std::fs::read_to_string(path) {
+
+    match std::fs::read_to_string(path) {
         Err(e) => {
             debug!(
                 "Unable to read file {:?}: {}, using fallback value",
@@ -171,8 +173,7 @@ where
                 fallback
             }
         },
-    };
-    val
+    }
 }
 fn get_filename(path: &str) -> Result<String, String> {
     Ok(PathBuf::from(path)
@@ -187,7 +188,7 @@ fn game_name_from_savestate(savestate_path: &str) -> Result<String, String> {
     let game_name_regex = Regex::new(
         "savestate_(.+)__[0-9]{4}_[0-9]{2}_[0-9]{2}__[0-9]{2}_[0-9]{2}_[0-9]{2}.yane.bin",
     )
-    .or_else(|e| Err(e.to_string()))?;
+    .map_err(|e| e.to_string())?;
     Ok(game_name_regex
         .captures(savestate_path)
         .ok_or("Does not match Regex")?
@@ -198,7 +199,7 @@ fn game_name_from_savestate(savestate_path: &str) -> Result<String, String> {
 }
 fn savedata_path_and_data(savedata_path: &str) -> (Option<String>, Option<Vec<u8>>) {
     // If the file exists
-    if std::fs::exists(savedata_path).is_ok_and(|v| v == true) {
+    if std::fs::exists(savedata_path).is_ok_and(|v| v) {
         match std::fs::read(savedata_path) {
             // Happy path, savedata arg is present and the file can be read
             Ok(data) => (Some(savedata_path.to_string()), Some(data)),
@@ -312,7 +313,7 @@ fn main() {
                         Ok(nes) => nes,
                     },
                 };
-                let game_name = match game_name_from_savestate(&savestate_file) {
+                let game_name = match game_name_from_savestate(savestate_file) {
                     Ok(s) => {
                         debug!("Parsed game name as {}", &s);
                         Some(s)
@@ -348,9 +349,8 @@ fn main() {
         // Set argument settings
         if args.paused {
             config.paused = true;
-            match nes.advance_frame(&config.emu_settings) {
-                Err(e) => error!("Error when advancing NES first frame: {}", e),
-                Ok(_) => {}
+            if let Err(e) = nes.advance_frame(&config.emu_settings) {
+                error!("Error when advancing NES first frame: {}", e)
             }
         }
         if args.muted {
@@ -374,14 +374,16 @@ fn main() {
             let mut should_exit = false;
             for event in event_pump.poll_iter() {
                 match event {
-                    Event::Window { win_event, .. } => match win_event {
-                        WindowEvent::Close => should_exit = true,
-                        _ => {}
-                    },
-                    _ => match debug_window.as_mut() {
-                        Some(d) => d.handle_event(&event),
-                        None => {}
-                    },
+                    Event::Window { win_event, .. } => {
+                        if win_event == WindowEvent::Close {
+                            should_exit = true
+                        }
+                    }
+                    _ => {
+                        if let Some(d) = debug_window.as_mut() {
+                            d.handle_event(&event)
+                        }
+                    }
                 }
             }
             if should_exit {
@@ -398,9 +400,8 @@ fn main() {
             if Instant::now().duration_since(last_debug_window_render) >= DEBUG_WINDOW_REFRESH_RATE
             {
                 last_debug_window_render += DEBUG_WINDOW_REFRESH_RATE;
-                match debug_window.as_mut() {
-                    Some(d) => d.render(&mut nes, &event_pump, &mut config),
-                    None => {}
+                if let Some(d) = debug_window.as_mut() {
+                    d.render(&mut nes, &event_pump, &mut config)
                 }
             }
             // Update window
@@ -466,7 +467,7 @@ fn main() {
         let data = window.audio.all_samples.into_boxed_slice();
         let samples = Samples::new(data);
         write(
-            &Path::new(format!("./{}.wav", config.record_audio_filename).as_str()),
+            Path::new(format!("./{}.wav", config.record_audio_filename).as_str()),
             &samples,
             1_789_000,
             1,

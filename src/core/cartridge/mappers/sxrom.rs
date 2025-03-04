@@ -44,7 +44,7 @@ impl Mapper for SxRom {
             let mode = (self.control & 0x0C) >> 2;
             let addr = match mode {
                 0 | 1 => {
-                    let bank_num = (self.prg_bank & 0x0E) as usize >> 1;
+                    let bank_num = (self.prg_bank & 0x0E) >> 1;
                     // Switch 32 KiB mode
                     bank_addr(0x8000, bank_num, cpu_addr)
                 }
@@ -79,12 +79,10 @@ impl Mapper for SxRom {
         let mode = (self.control & 0x10) >> 4;
         let addr = if mode == 0 {
             bank_addr(0x2000, (self.chr_bank_0 & 0x1E) >> 1, ppu_addr)
+        } else if ppu_addr < 0x1000 {
+            bank_addr(0x1000, self.chr_bank_0, ppu_addr)
         } else {
-            if ppu_addr < 0x1000 {
-                bank_addr(0x1000, self.chr_bank_0, ppu_addr)
-            } else {
-                bank_addr(0x1000, self.chr_bank_1, ppu_addr)
-            }
+            bank_addr(0x1000, self.chr_bank_1, ppu_addr)
         };
         mem.read_chr(addr)
     }
@@ -127,7 +125,7 @@ impl Mapper for SxRom {
             } else {
                 // Reset shift and set control
                 self.shift = 0x10;
-                self.control = self.control | 0x0C;
+                self.control |= 0x0C;
             }
         }
     }
@@ -136,12 +134,10 @@ impl Mapper for SxRom {
         let mode = (self.control & 0x10) >> 4;
         let addr = if mode == 0 {
             bank_addr(0x2000, (self.chr_bank_0 & 0x1E) >> 1, ppu_addr)
+        } else if ppu_addr < 0x1000 {
+            bank_addr(0x1000, self.chr_bank_0, ppu_addr)
         } else {
-            if ppu_addr < 0x1000 {
-                bank_addr(0x1000, self.chr_bank_0, ppu_addr)
-            } else {
-                bank_addr(0x1000, self.chr_bank_1, ppu_addr)
-            }
+            bank_addr(0x1000, self.chr_bank_1, ppu_addr)
         };
         mem.write_chr(addr, value);
     }

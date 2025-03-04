@@ -74,6 +74,12 @@ pub struct Nes {
     pub previous_states: VecDeque<NesState>,
 }
 
+impl Default for Nes {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Nes {
     /// Initialized the NES with a cartridge that is completely 0s.
     ///
@@ -84,7 +90,7 @@ impl Nes {
         // Todo: Move this to cartridge
         let c = [
             // 1 0x4000 bank of PRG ROM
-            &vec!['N' as u8, 'E' as u8, 'S' as u8, 0x1A, 0x01][..],
+            &vec![b'N', b'E', b'S', 0x1A, 0x01][..],
             &vec![0; 32 * 0x4000 + 16 * 0x2000][..],
         ]
         .concat();
@@ -162,7 +168,7 @@ impl Nes {
             _ => true,
         };
         self.controller_bits[num] += 1;
-        return if pressed { 1 } else { 0 };
+        if pressed { 1 } else { 0 }
     }
 
     /// Read a byte of memory given an address in CPU space.
@@ -179,7 +185,7 @@ impl Nes {
     /// let reset_low = nes.read_byte(0xFFFE);
     /// ```
     pub fn read_byte(&mut self, addr: usize) -> u8 {
-        return match addr {
+        match addr {
             0..0x2000 => self.mem[addr % 0x0800],
             0x2000..0x4000 => self.ppu.read_byte(addr, &mut self.cartridge),
             0x4016 => self.read_controller_bit(0),
@@ -187,7 +193,7 @@ impl Nes {
             0x4000..0x4020 => self.apu.read_byte(addr),
             0x4020..0x10000 => self.cartridge.read_cpu(addr),
             _ => panic!("Invalid read address provided: {:#X}", addr),
-        };
+        }
     }
     /// Write a byte using CPU memory
     ///
@@ -245,7 +251,7 @@ impl Nes {
             self.read_byte((pc as u16).wrapping_add(1) as usize),
             self.read_byte((pc as u16).wrapping_add(2) as usize),
         ]);
-        self.previous_states.push_back(NesState::new(&self, &inst));
+        self.previous_states.push_back(NesState::new(self, &inst));
         if self.previous_states.len() > NUMBER_STORED_STATES {
             self.previous_states.pop_front();
         }
@@ -253,7 +259,7 @@ impl Nes {
         match self.decode_and_execute(&inst) {
             Ok((bytes, cycles)) => {
                 self.cpu.p_c = self.cpu.p_c.wrapping_add(bytes);
-                return Ok(cycles as u32);
+                Ok(cycles as u32)
             }
             Err(s) => {
                 error!("Encountered an error \"{}\" while processing {:X?}, printing last 200 states\n{:#X?}",
@@ -261,7 +267,7 @@ impl Nes {
                     inst,
                     self.previous_states
                 );
-                return Err(s);
+                Err(s)
             }
         }
     }
@@ -713,7 +719,7 @@ impl Nes {
             _ if unofficial::IGN_ZP.contains(opcode) => Ok((2, 3)),
             _ if unofficial::IGN_ZP_X.contains(opcode) => Ok((2, 4)),
             unofficial::IGN_ABS => {
-                self.read_abs(&operands);
+                self.read_abs(operands);
                 Ok((3, 4))
             }
             _ if unofficial::IGN_ABS_X.contains(opcode) => {
@@ -723,7 +729,7 @@ impl Nes {
                 Ok((3, 4))
             }
             _ => {
-                return Err(format!(
+                Err(format!(
                     "Unknown opcode '{:#04X}' at location '{:#04X}'",
                     opcode, self.cpu.p_c
                 ))
@@ -745,24 +751,22 @@ impl Nes {
             }
         }
         // Check for cartridge or dmc interrupt interrupt
-        if !self.cpu.s_r.i {
-            if self.cartridge.mapper.irq() {
-                self.interrupt_to_addr(CARTRIDGE_IRQ_ADDR);
-                c += 7;
-            }
+        if !self.cpu.s_r.i && self.cartridge.mapper.irq() {
+            self.interrupt_to_addr(CARTRIDGE_IRQ_ADDR);
+            c += 7;
         }
         self.apu.advance_cpu_cycles(c, &mut self.cartridge);
         self.cartridge.advance_cpu_cycles(c);
         if self
             .ppu
-            .advance_dots(3 * c as u32, &mut self.cartridge, &settings)
+            .advance_dots(3 * c, &mut self.cartridge, settings)
             && self.ppu.get_nmi_enabled()
         {
             self.on_nmi();
             c += 7;
             self.apu.advance_cpu_cycles(7, &mut self.cartridge);
             self.cartridge.advance_cpu_cycles(7);
-            self.ppu.advance_dots(21, &mut self.cartridge, &settings);
+            self.ppu.advance_dots(21, &mut self.cartridge, settings);
         }
         Ok(c)
     }
@@ -903,7 +907,7 @@ impl Nes {
     }
     // Check whether an absolute address with offset (i.e. $1234, X) would cross a page
     fn addr_offset_is_page_cross(addr: &[u8], offset: u8) -> bool {
-        return addr[0] as u16 + offset as u16 > 0xFF;
+        addr[0] as u16 + offset as u16 > 0xFF
     }
     // Read using absolute addressing with an offset
     fn read_abs_offset(&mut self, addr: &[u8], offset: u8) -> u8 {
@@ -970,7 +974,7 @@ impl Nes {
             self.read_byte(first_addr as usize),
             self.read_byte(first_addr.wrapping_add(1) as usize),
         ];
-        return self.read_abs(&second_addr);
+        self.read_abs(&second_addr)
     }
     /// Write a single byte using indexed indirect addressing.
     /// ```
@@ -1003,7 +1007,7 @@ impl Nes {
     /// ```
     pub fn read_indirect_indexed(&mut self, addr: &[u8]) -> u8 {
         let addr = self.indirect_indexed_addr(addr);
-        return self.read_byte(addr as usize);
+        self.read_byte(addr)
     }
     /// Write a single byte to memory using indirect indexed addressing.
     /// ```
@@ -1013,7 +1017,7 @@ impl Nes {
     /// ```
     pub fn write_indirect_indexed(&mut self, addr: &[u8], value: u8) {
         let addr = self.indirect_indexed_addr(addr);
-        self.write_byte(addr as usize, value)
+        self.write_byte(addr, value)
     }
     /// Reset the NES.
     ///

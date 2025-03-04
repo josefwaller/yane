@@ -1,14 +1,12 @@
 mod common;
-use log::*;
 use std::{
     cmp::min,
     fs::{read, File},
-    io::{BufRead, BufReader, Read},
-    string,
+    io::{BufRead, BufReader},
 };
 
 use assert_hex::assert_eq_hex;
-use yane::core::{Cartridge, Controller, Nes};
+use yane::core::{Cartridge, Nes};
 
 // Runs the NES test CPU file and checks the state of the NES after each execution
 #[test]

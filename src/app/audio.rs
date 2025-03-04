@@ -98,7 +98,7 @@ impl Audio {
             let input: Vec<f32> = self.data_queue.drain(0..input_size).collect();
             let (_nbr_in, nbr_out) = self
                 .resampler
-                .process_into_buffer(&vec![input], &mut out, None)
+                .process_into_buffer(&[input], &mut out, None)
                 .expect("Unable to resample audio");
             // Add to queue
             self.queue

@@ -15,7 +15,7 @@ pub fn save_new_savestate(nes: &Nes, config: &mut Config, game_name: &Option<Str
             };
             let time = chrono::Local::now().format("%Y_%m_%d__%H_%M_%S");
             let filename = format!("savestate_{}_{}.yane.bin", game, time);
-            path.push(filename.to_string());
+            path.push(&filename);
             match std::fs::write(&path, data) {
                 Ok(_) => {
                     debug!("Wrote savestate to {:?}", &path);

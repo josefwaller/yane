@@ -22,6 +22,12 @@ pub struct StatusRegister {
     pub n: bool,
 }
 
+impl Default for StatusRegister {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StatusRegister {
     /// Create a new StatusRegister, initialising all flags to [false].
     pub fn new() -> StatusRegister {

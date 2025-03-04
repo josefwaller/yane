@@ -61,8 +61,10 @@ impl DebugWindow {
         imgui
             .fonts()
             .add_font(&[imgui::FontSource::DefaultFontData { config: None }]);
-        let mut small_config = imgui::FontConfig::default();
-        small_config.size_pixels = 9.0;
+        let small_config = imgui::FontConfig {
+            size_pixels: 9.0,
+            ..imgui::FontConfig::default()
+        };
         let small_font = imgui
             .fonts()
             .add_font(&[imgui::FontSource::DefaultFontData {
@@ -72,7 +74,7 @@ impl DebugWindow {
         unsafe {
             let palette_data: &[u8] = include_bytes!("../2C02G_wiki.pal");
             let palette: [[u8; 3]; 64] =
-                core::array::from_fn(|i| core::array::from_fn(|j| palette_data[3 * i + j] as u8));
+                core::array::from_fn(|i| core::array::from_fn(|j| palette_data[3 * i + j]));
             check_error!(gl);
             let chr_tex = create_texture(&gl);
             let nametable_tex = create_texture(&gl);
@@ -138,11 +140,10 @@ impl DebugWindow {
             )
             .iter()
             .flatten()
-            .map(|(tile_index, pixel_index)| {
+            .flat_map(|(tile_index, pixel_index)| {
                 let index = 4 * palette_indices[*tile_index % palette_indices.len()] + *pixel_index;
                 self.palette[palette[index % palette.len()] as usize % self.palette.len()]
             })
-            .flatten()
             .collect()
     }
     /// Render the debug window, and update the [Config] and [Nes] if any of the imgui buttons are pressed.
@@ -203,11 +204,11 @@ impl DebugWindow {
                 ]
                 .iter()
                 // For every left-right nametable pair
-                .map(|n| {
+                .flat_map(|n| {
                     let attr_addr = n.map(|i| i + 0x3C0);
                     // For every row
                     (0..30)
-                        .map(move |y| {
+                        .flat_map(move |y| {
                             // For every column
                             (0..64).map(move |x| {
                                 // Get the tile here, which could be in one of two nametables
@@ -244,9 +245,7 @@ impl DebugWindow {
                             })
                         })
                         .flatten()
-                        .flatten()
                 })
-                .flatten()
                 .collect::<Vec<(u8, usize)>>();
                 let (nt_tiles, nt_palettes): (Vec<u8>, Vec<usize>) = nametables.into_iter().unzip();
                 let p: Vec<usize> = nt_palettes.into_iter().step_by(0x10).collect();
@@ -270,8 +269,8 @@ impl DebugWindow {
                     glow::TEXTURE_2D,
                     0,
                     glow::RGB as i32,
-                    8 * 64 as i32,
-                    8 * 60 as i32,
+                    8 * 64_i32,
+                    8 * 60_i32,
                     0,
                     glow::RGB,
                     glow::UNSIGNED_BYTE,
@@ -297,7 +296,6 @@ impl DebugWindow {
                 if ui.button("Reset") {
                     nes.reset();
                 }
-
                 ui.checkbox("Debug OAM", &mut config.oam_debug);
                 if ui.checkbox("Paused", &mut config.paused) {
                     info!(
@@ -311,23 +309,20 @@ impl DebugWindow {
                 }
                 ui.disabled(!config.paused, || {
                     if ui.button("Advance instruction") {
-                        match nes.advance_instruction(&config.emu_settings) {
-                            Err(e) => error!("Error while advancing instruction: {:?}", e),
-                            _ => {}
+                        if let Err(e) = nes.advance_instruction(&config.emu_settings) {
+                            error!("Error while advancing instruction: {:?}", e)
                         }
                     }
                     if ui.button("Advance end of vblank") {
                         while nes.ppu.in_vblank() {
-                            match nes.advance_instruction(&config.emu_settings) {
-                                Err(e) => error!("Error while advancing instruction: {:?}", e),
-                                _ => {}
+                            if let Err(e) = nes.advance_instruction(&config.emu_settings) {
+                                error!("Error while advancing instruction: {:?}", e)
                             }
                         }
                     }
                     if ui.button("Advance frame") {
-                        match nes.advance_frame(&config.emu_settings) {
-                            Err(e) => error!("Error while advancing frame: {:?}", e),
-                            _ => {}
+                        if let Err(e) = nes.advance_frame(&config.emu_settings) {
+                            error!("Error while advancing frame: {:?}", e)
                         }
                     }
                 });
@@ -403,7 +398,7 @@ impl DebugWindow {
                             self.chr_size * 8.0 * self.num_rows as f32,
                         ];
                         let image = imgui::Image::new(TextureId::new(chr_tex_num as usize), size);
-                        image.build(&ui);
+                        image.build(ui);
                     }
                     if ui.collapsing_header("Nametables", TreeNodeFlags::empty()) {
                         if ui.button("Copy snapshot to keyboard") {
@@ -418,7 +413,7 @@ impl DebugWindow {
                         let f = ui.push_font(self.small_font);
                         ui.text(DebugWindow::format_nametable_text(&nes.ppu, &nes.cartridge));
                         f.pop();
-                        imgui::Image::new(TextureId::new(2), [64.0 * 8.0, 60.0 * 8.0]).build(&ui);
+                        imgui::Image::new(TextureId::new(2), [64.0 * 8.0, 60.0 * 8.0]).build(ui);
                     }
                 }
                 if ui.collapsing_header("Audio", TreeNodeFlags::empty()) {

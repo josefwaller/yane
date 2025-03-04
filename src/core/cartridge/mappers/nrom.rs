@@ -18,7 +18,7 @@ impl Mapper for NRom {
         }
         if addr < 0x8000 {
             // Todo: Figure out if this is correct
-            if mem.prg_ram.len() == 0 {
+            if mem.prg_ram.is_empty() {
                 return 0;
             }
             return mem.prg_ram[(addr - 0x6000) % mem.prg_ram.len()];
@@ -27,7 +27,6 @@ impl Mapper for NRom {
     }
     fn write_cpu(&mut self, addr: usize, mem: &mut CartridgeMemory, value: u8) {
         if addr < 0x6000 {
-            return;
         } else if addr < 0x8000 {
             let len = mem.prg_ram.len();
             if len == 0 {
@@ -41,13 +40,13 @@ impl Mapper for NRom {
         }
     }
     fn read_ppu_debug(&self, ppu_addr: usize, mem: &CartridgeMemory) -> u8 {
-        if mem.chr_ram.len() == 0 {
+        if mem.chr_ram.is_empty() {
             return mem.chr_rom[ppu_addr % mem.chr_rom.len()];
         }
         mem.chr_ram[ppu_addr % mem.chr_ram.len()]
     }
     fn write_ppu(&mut self, ppu_addr: usize, mem: &mut CartridgeMemory, value: u8) {
-        if mem.chr_ram.len() > 0 {
+        if !mem.chr_ram.is_empty() {
             let len = mem.chr_ram.len();
             mem.chr_ram[ppu_addr % len] = value;
         } else {

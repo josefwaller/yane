@@ -84,6 +84,12 @@ pub struct Ppu {
     tile_buffer: VecDeque<(usize, usize)>,
 }
 
+impl Default for Ppu {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Ppu {
     /// Initialise a new PPU.
     ///
@@ -184,7 +190,7 @@ impl Ppu {
                     self.t = (self.t & 0xFF00) | value as u32;
                     self.v = self.t;
                     // Refresh controller ADDR pin values
-                    cartridge.mapper.set_addr_value(self.v as u32);
+                    cartridge.mapper.set_addr_value(self.v);
                 } else {
                     // First write (MSB)
                     self.t = (self.t & 0x00FF) | (value as u32 & 0x3F) << 8;
@@ -290,7 +296,7 @@ impl Ppu {
                         &self.palette_ram
                     };
                     (0..8).for_each(|j| {
-                        let pixel_index = (tile_low as usize & 0x01) + (tile_high as usize & 0x02);
+                        let pixel_index = (tile_low & 0x01) + (tile_high & 0x02);
                         let x = obj[3] as usize + if flip_hor { j } else { 7 - j };
                         if pixel_index != 0 && x < 256 {
                             self.scanline_sprites[x]
@@ -353,7 +359,7 @@ impl Ppu {
                     // Fetch sprites to render at dot 263
                     if self.dot.0 == 264 {
                         // Refresh scanline sprites
-                        self.refresh_scanline_sprites(self.dot.1, cartridge, &settings);
+                        self.refresh_scanline_sprites(self.dot.1, cartridge, settings);
                     }
                     // Check if we should fetch a tile
                     if self.dot.0 < 256 && self.dot.0 % 8 == 7 {
@@ -436,7 +442,7 @@ impl Ppu {
                         self.status |= 0x40;
                     }
                     if self.oam[4 * j + 2] & 0x20 == 0
-                        || output == None
+                        || output.is_none()
                         || settings.always_sprites_on_top
                     {
                         output = Some(p);
@@ -463,7 +469,7 @@ impl Ppu {
             (0x23C0 + (self.v & 0xC00) + ((self.v >> 4) & 0x38) + ((self.v >> 2) & 0x07)) as usize,
         );
         let palette_byte = self.nametable_ram[palette_byte_addr];
-        let palette_shift = ((self.v & 0x40) >> 4) + ((self.v & 0x02) >> 0);
+        let palette_shift = ((self.v & 0x40) >> 4) + (self.v & 0x02);
         let palette_index = ((palette_byte >> palette_shift) as usize) & 0x03;
         // Get high/low byte of tile
         let fine_y = ((self.v & 0x7000) >> 12) as usize;
@@ -639,7 +645,7 @@ impl Ppu {
     }
     /// Return [true] if the NMI is enabled
     pub fn get_nmi_enabled(&self) -> bool {
-        return self.ctrl & 0x80 != 0;
+        self.ctrl & 0x80 != 0
     }
     /// Return [true] if the sprite 0 hit bit is set
     pub fn sprite_zero_hit(&self) -> bool {
@@ -662,7 +668,7 @@ impl Ppu {
     }
     /// Get the address of the nametable at the top left of the current tilemap.
     pub fn top_left_nametable_addr(&self) -> usize {
-        return 0x2000 + self.base_nametable_num() * 0x400;
+        0x2000 + self.base_nametable_num() * 0x400
     }
     /// Get the address of the nametable at the top right of the current tilemap.
     pub fn top_right_nametable_addr(&self) -> usize {

@@ -57,41 +57,44 @@ impl Mapper for TxRom {
             warn!("Trying to read PRG RAM where there is none: {:X}", cpu_addr);
             0
         } else if cpu_addr < 0x8000 {
-            if mem.prg_ram.len() == 0 {
+            if mem.prg_ram.is_empty() {
                 warn!("Trying to read PRG RAM but there is none on this cartridge");
                 0
             } else {
                 mem.prg_ram[(cpu_addr - 0x6000) % mem.prg_ram.len()]
             }
-        } else if cpu_addr < 0xA000 {
-            if self.prg_mode == 0 {
-                // Switchable 8Kb bank
-                mem.prg_rom[bank_addr(0x2000, self.prg_banks[0] as usize, cpu_addr)]
-            } else {
-                // Fixed to second last bank
-                mem.prg_rom[bank_addr(
-                    0x2000,
-                    num_banks(0x2000, mem.prg_rom.as_slice()) - 2,
-                    cpu_addr,
-                )]
-            }
-        } else if cpu_addr < 0xC000 {
-            // Switchable 8Kb bank
-            mem.prg_rom[bank_addr(0x2000, self.prg_banks[1] as usize, cpu_addr)]
-        } else if cpu_addr < 0xE000 {
-            if self.prg_mode == 1 {
-                // Switchable 8Kb bank
-                mem.prg_rom[bank_addr(0x2000, self.prg_banks[0] as usize, cpu_addr)]
-            } else {
-                // Fixed to second last bank
-                mem.prg_rom[bank_addr(
-                    0x2000,
-                    num_banks(0x2000, mem.prg_rom.as_slice()) - 2,
-                    cpu_addr,
-                )]
-            }
         } else {
-            mem.prg_rom[bank_addr(0x2000, num_banks(0x2000, &mem.prg_rom) - 1, cpu_addr)]
+            let prg_addr = if cpu_addr < 0xA000 {
+                if self.prg_mode == 0 {
+                    // Switchable 8Kb bank
+                    bank_addr(0x2000, self.prg_banks[0] as usize, cpu_addr)
+                } else {
+                    // Fixed to second last bank
+                    bank_addr(
+                        0x2000,
+                        num_banks(0x2000, mem.prg_rom.as_slice()) - 2,
+                        cpu_addr,
+                    )
+                }
+            } else if cpu_addr < 0xC000 {
+                // Switchable 8Kb bank
+                bank_addr(0x2000, self.prg_banks[1] as usize, cpu_addr)
+            } else if cpu_addr < 0xE000 {
+                if self.prg_mode == 1 {
+                    // Switchable 8Kb bank
+                    bank_addr(0x2000, self.prg_banks[0] as usize, cpu_addr)
+                } else {
+                    // Fixed to second last bank
+                    bank_addr(
+                        0x2000,
+                        num_banks(0x2000, mem.prg_rom.as_slice()) - 2,
+                        cpu_addr,
+                    )
+                }
+            } else {
+                bank_addr(0x2000, num_banks(0x2000, &mem.prg_rom) - 1, cpu_addr)
+            };
+            mem.prg_rom[prg_addr % mem.prg_rom.len()]
         }
     }
     fn write_cpu(&mut self, cpu_addr: usize, mem: &mut CartridgeMemory, value: u8) {
@@ -133,15 +136,11 @@ impl Mapper for TxRom {
             } else {
                 self.irq_reload = true;
             }
+        } else if cpu_addr % 2 == 0 {
+            self.irq_enable = false;
+            self.generate_irq = false;
         } else {
-            if cpu_addr % 2 == 0 {
-                if self.irq_enable {}
-                self.irq_enable = false;
-                self.generate_irq = false;
-            } else {
-                if !self.irq_enable {}
-                self.irq_enable = true;
-            }
+            self.irq_enable = true;
         }
     }
     fn read_ppu(&mut self, ppu_addr: usize, mem: &CartridgeMemory) -> u8 {
@@ -156,12 +155,10 @@ impl Mapper for TxRom {
             } else {
                 (0x400, self.chr_banks[(ppu_addr - 0x1000) / 0x400 + 2])
             }
+        } else if ppu_addr < 0x1000 {
+            (0x400, self.chr_banks[ppu_addr / 0x400 + 2])
         } else {
-            if ppu_addr < 0x1000 {
-                (0x400, self.chr_banks[ppu_addr / 0x400 + 2])
-            } else {
-                (0x800, self.chr_banks[(ppu_addr - 0x1000) / 0x800] / 2)
-            }
+            (0x800, self.chr_banks[(ppu_addr - 0x1000) / 0x800] / 2)
         };
         mem.read_chr(bank_addr(bank_size, bank_num as usize, ppu_addr))
     }
@@ -177,10 +174,8 @@ impl Mapper for TxRom {
                 self.irq_counter -= 1;
             }
             // Check for interrupt
-            if self.irq_counter == 0 {
-                if self.irq_enable {
-                    self.generate_irq = true;
-                }
+            if self.irq_counter == 0 && self.irq_enable {
+                self.generate_irq = true;
             }
         }
         self.last_ppu_addr = ppu_addr & 0x1000;

@@ -23,6 +23,12 @@ pub struct Cpu {
     pub s_r: StatusRegister,
 }
 
+impl Default for Cpu {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Cpu {
     pub fn new() -> Cpu {
         Cpu {
@@ -78,21 +84,13 @@ impl Cpu {
             .a
             .wrapping_add(value)
             .wrapping_add(if self.s_r.c { 1 } else { 0 });
-        self.s_r.z = if self.a == 0 { true } else { false };
+        self.s_r.z = self.a == 0;
         // Way of checking for (unsigned) overflow
-        self.s_r.c = if self.a < i || (self.a == i && value > 0) {
-            true
-        } else {
-            false
-        };
+        self.s_r.c = self.a < i || (self.a == i && value > 0);
         // Way of checking for (signed) overflow
         // If I and value are the same sign (i.e. both positive/negative) but the result is a different sign, overflow has occured
-        self.s_r.v = if (i & 0x80) == (value & 0x80) && (i & 0x80) != (self.a & 0x80) {
-            true
-        } else {
-            false
-        };
-        self.s_r.n = if self.a & 0x80 != 0 { true } else { false };
+        self.s_r.v = (i & 0x80) == (value & 0x80) && (i & 0x80) != (self.a & 0x80);
+        self.s_r.n = self.a & 0x80 != 0;
     }
     /// Perform an AND (`&``) operation between A and some value.
     ///
@@ -125,7 +123,7 @@ impl Cpu {
         self.s_r.z = value & 0x7F == 0;
         self.s_r.c = value & 0x80 != 0;
         self.s_r.n = value & 0x40 != 0;
-        return value << 1;
+        value << 1
     }
     /// Perform a branch to `value` relatively if `param == true`.
     ///
@@ -184,7 +182,7 @@ impl Cpu {
         ];
         self.s_r.i = true;
         self.p_c = location;
-        return to_stack;
+        to_stack
     }
     /// "Compare" the two values given and set the status register accordingly
     ///
@@ -239,7 +237,7 @@ impl Cpu {
         self.s_r.z = v == 1;
         let r = v.wrapping_sub(1);
         self.s_r.n = (r & 0x80) != 0;
-        return r;
+        r
     }
     /// Perform an exclusive OR on A.
     ///
@@ -268,7 +266,7 @@ impl Cpu {
         let v = value.wrapping_add(1);
         self.s_r.z = v == 0;
         self.s_r.n = (v & 0x80) != 0;
-        return v;
+        v
     }
     /// Logically shift the value right and set the flags accordingly.
     ///
@@ -287,7 +285,7 @@ impl Cpu {
         let v = value >> 1;
         self.s_r.z = v == 0;
         self.s_r.n = (v & 0x80) != 0;
-        return v;
+        v
     }
     /// Perform a bitwise OR with A and `value`.
     ///

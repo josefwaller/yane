@@ -38,13 +38,13 @@ impl Mapper for UxRom {
     }
     fn read_ppu_debug(&self, ppu_addr: usize, mem: &CartridgeMemory) -> u8 {
         // No switching
-        if mem.chr_ram.len() == 0 {
+        if mem.chr_ram.is_empty() {
             return mem.chr_rom[ppu_addr % mem.chr_rom.len()];
         }
         mem.chr_ram[ppu_addr % mem.chr_ram.len()]
     }
     fn write_ppu(&mut self, ppu_addr: usize, mem: &mut CartridgeMemory, value: u8) {
-        if mem.chr_ram.len() == 0 {
+        if mem.chr_ram.is_empty() {
             warn!(
                 "Tring to write to CHR RAM when there is none (Address = {:X})",
                 ppu_addr

@@ -26,7 +26,7 @@ impl Window {
             utils::create_window(video, "Y.A.N.E.", window_width, window_height);
 
         let screen = Screen::new(gl);
-        let audio = Audio::new(&sdl);
+        let audio = Audio::new(sdl);
         Window {
             window,
             gl_context,
@@ -36,13 +36,13 @@ impl Window {
             game_name,
         }
     }
-    fn key_down(k: &Key, keys: &Vec<Keycode>) -> bool {
+    fn key_down(k: &Key, keys: &[Keycode]) -> bool {
         keys.contains(&k.code)
     }
-    fn key_pressed(&self, k: &Key, keys: &Vec<Keycode>) -> bool {
+    fn key_pressed(&self, k: &Key, keys: &[Keycode]) -> bool {
         Window::key_down(k, keys) && !Window::key_down(k, &self.last_keys)
     }
-    fn update_controller(&self, nes: &mut Nes, index: usize, keys: &Vec<Keycode>, config: &Config) {
+    fn update_controller(&self, nes: &mut Nes, index: usize, keys: &[Keycode], config: &Config) {
         let c = &config.key_map.controllers;
         // P1
         let controller = Controller {
@@ -57,10 +57,10 @@ impl Window {
         };
         nes.set_input(index, controller);
     }
-    pub fn update(&mut self, nes: &mut Nes, keys: &Vec<Keycode>, config: &mut Config) {
+    pub fn update(&mut self, nes: &mut Nes, keys: &[Keycode], config: &mut Config) {
         // Update inputs
-        self.update_controller(nes, 0, &keys, config);
-        self.update_controller(nes, 1, &keys, config);
+        self.update_controller(nes, 0, keys, config);
+        self.update_controller(nes, 1, keys, config);
         let km = &config.key_map;
         if self.key_pressed(&km.pause, keys) {
             config.paused = !config.paused;
@@ -72,7 +72,7 @@ impl Window {
         } else {
             0.0
         };
-        config.volume = (config.volume + diff).clamp(0.0, 3.0) as f32;
+        config.volume = (config.volume + diff).clamp(0.0, 3.0);
         // Update audio
         self.audio.update_audio(nes, config);
 
@@ -81,7 +81,7 @@ impl Window {
             save_new_savestate(nes, config, &self.game_name);
         } else if self.key_pressed(&km.quickload, keys) {
             match &config.quickload_file {
-                Some(f) => match std::fs::read(&f) {
+                Some(f) => match std::fs::read(f) {
                     Ok(data) => match postcard::from_bytes(&data) {
                         Ok(n) => {
                             debug!("Loaded quicksave at {:?}", f);
@@ -95,7 +95,7 @@ impl Window {
             }
         }
 
-        self.last_keys = keys.clone();
+        self.last_keys = keys.to_owned();
     }
     pub fn render(&mut self, nes: &Nes, config: &Config) {
         self.window.gl_make_current(&self.gl_context).unwrap();

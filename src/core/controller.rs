@@ -15,6 +15,12 @@ pub struct Controller {
     pub b: bool,
 }
 
+impl Default for Controller {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Controller {
     pub fn new() -> Controller {
         Controller {

@@ -65,8 +65,7 @@ impl Screen {
                 .output
                 .as_flattened()
                 .iter()
-                .map(|i| HV_TO_RGB[*i & 0x3F])
-                .flatten()
+                .flat_map(|i| HV_TO_RGB[*i & 0x3F])
                 .collect();
             self.gl.tex_image_2d(
                 glow::TEXTURE_2D,

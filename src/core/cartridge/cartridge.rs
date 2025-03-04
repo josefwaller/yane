@@ -42,7 +42,7 @@ impl CartridgeMemory {
     /// This is really a convience function, since most cartridges either are all CHR ROM or CHR RAM.
     /// So this could be interpreted as just "Read CHR from whatever format the cartridge using"
     pub fn read_chr(&self, addr: usize) -> u8 {
-        if self.chr_rom.len() == 0 {
+        if self.chr_rom.is_empty() {
             self.chr_ram[addr % self.chr_ram.len()]
         } else {
             self.chr_rom[addr % self.chr_rom.len()]
@@ -50,7 +50,7 @@ impl CartridgeMemory {
     }
     /// Write a byte to CHR RAM, if present.
     pub fn write_chr(&mut self, addr: usize, value: u8) {
-        if self.chr_ram.len() != 0 {
+        if !self.chr_ram.is_empty() {
             let i = addr % self.chr_ram.len();
             self.chr_ram[i] = value;
         }
@@ -77,9 +77,9 @@ impl Cartridge {
     /// * `savedata` The battery backed static RAM on the cartridge, used to initialise the PRG RAM if present.
     pub fn from_ines(bytes: &[u8], savedata: Option<Vec<u8>>) -> Cartridge {
         if cfg!(debug_assertions) {
-            assert_eq!(bytes[0], 'N' as u8);
-            assert_eq!(bytes[1], 'E' as u8);
-            assert_eq!(bytes[2], 'S' as u8);
+            assert_eq!(bytes[0], b'N');
+            assert_eq!(bytes[1], b'E');
+            assert_eq!(bytes[2], b'S');
             assert_eq!(bytes[3], 0x1A);
         }
         let prg_rom_size = 0x4000 * bytes[4] as usize;
@@ -194,10 +194,10 @@ impl Cartridge {
     ///
     /// Only used for debug purposes, the PPU should use [Cartridge::read_ppu] to allow the mapper to transform the address.
     pub fn get_pattern_table(&self) -> &[u8] {
-        if self.memory.chr_ram.len() == 0 {
+        if self.memory.chr_ram.is_empty() {
             return self.memory.chr_rom.as_slice();
         }
-        return &self.memory.chr_ram;
+        &self.memory.chr_ram
     }
     /// Transform a given nametable address to a valid address in the PPU's VRAM.
     ///
@@ -215,12 +215,8 @@ impl Cartridge {
             }
             NametableArrangement::Vertical => {
                 // 0x2000 = 0x2400, 0x2800 = 0x2C00
-                if addr < 0x2400 {
+                if addr < 0x2800 {
                     addr % 0x400
-                } else if addr < 0x2800 {
-                    addr % 0x400
-                } else if addr < 0x2C00 {
-                    (addr % 0x400) + 0x400
                 } else {
                     (addr % 0x400) + 0x400
                 }

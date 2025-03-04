@@ -88,8 +88,8 @@ pub unsafe fn create_program(
     frag_src: &'static str,
 ) -> NativeProgram {
     let program = gl.create_program().unwrap();
-    compile_and_link_shader(&gl, glow::VERTEX_SHADER, vertex_src, &program);
-    compile_and_link_shader(&gl, glow::FRAGMENT_SHADER, frag_src, &program);
+    compile_and_link_shader(gl, glow::VERTEX_SHADER, vertex_src, &program);
+    compile_and_link_shader(gl, glow::FRAGMENT_SHADER, frag_src, &program);
     gl.link_program(program);
     if !gl.get_program_link_status(program) {
         panic!(
@@ -105,8 +105,8 @@ pub unsafe fn create_f32_slice_vao(gl: &Context, verts: &[f32], element_size: i3
     gl.bind_buffer(glow::ARRAY_BUFFER, Some(buf));
     check_error!(gl);
     let verts_u8 =
-        core::slice::from_raw_parts(verts.as_ptr() as *const u8, verts.len() * size_of::<f32>());
-    gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, &verts_u8, glow::STATIC_DRAW);
+        core::slice::from_raw_parts(verts.as_ptr() as *const u8, std::mem::size_of_val(verts));
+    gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, verts_u8, glow::STATIC_DRAW);
     check_error!(gl);
     // Describe the format of the data
     let vao = gl.create_vertex_array().unwrap();
@@ -138,13 +138,13 @@ pub unsafe fn create_screen_texture(
     gl.use_program(Some(texture_program));
     check_error!(gl);
     compile_and_link_shader(
-        &gl,
+        gl,
         glow::VERTEX_SHADER,
         include_str!("./shaders/quad_shader.vert"),
         &texture_program,
     );
     compile_and_link_shader(
-        &gl,
+        gl,
         glow::FRAGMENT_SHADER,
         include_str!("./shaders/quad_shader.frag"),
         &texture_program,
@@ -160,13 +160,13 @@ pub unsafe fn create_screen_texture(
     .as_flattened();
     let quad_verts_u8 = core::slice::from_raw_parts(
         quad_verts.as_ptr() as *const u8,
-        quad_verts.len() * size_of::<f32>(),
+        std::mem::size_of_val(quad_verts),
     );
     let tex_buf = gl.create_buffer().unwrap();
     check_error!(gl);
     gl.bind_buffer(glow::ARRAY_BUFFER, Some(tex_buf));
     check_error!(gl);
-    gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, &quad_verts_u8, glow::STATIC_DRAW);
+    gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, quad_verts_u8, glow::STATIC_DRAW);
     check_error!(gl);
 
     let vao = gl.create_vertex_array().unwrap();
