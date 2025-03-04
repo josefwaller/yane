@@ -61,6 +61,35 @@ impl CartridgeMemory {
             self.chr_ram[i] = value;
         }
     }
+    /// Read a byte from PRG RAM
+    ///
+    /// Read from the PRG RAM on the cartridge, wrapping around the end if `addr` is too large
+    pub fn read_prg_ram(&self, addr: usize) -> u8 {
+        if self.prg_ram.is_empty() {
+            0
+        } else {
+            self.prg_ram[addr % self.prg_ram.len()]
+        }
+    }
+    /// Write a byte to PRG RAM
+    ///
+    /// Write to PRG RAM, wrapping around the end if `addr` is too large
+    pub fn write_prg_ram(&mut self, addr: usize, value: u8) {
+        if !self.prg_ram.is_empty() {
+            let i = addr % self.prg_ram.len();
+            self.prg_ram[i] = value;
+        }
+    }
+    /// Read a byte from PRG ROM
+    ///
+    /// Read from PRG ROM, wrapping around the end if `addr` is too large
+    pub fn read_prg_rom(&self, addr: usize) -> u8 {
+        if self.prg_rom.is_empty() {
+            0
+        } else {
+            self.prg_rom[addr % self.prg_rom.len()]
+        }
+    }
 }
 
 /// An NES cartridge.

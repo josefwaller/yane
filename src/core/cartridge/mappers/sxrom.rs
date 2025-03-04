@@ -39,7 +39,7 @@ impl Mapper for SxRom {
                 warn!("Reading to {:X}", cpu_addr);
                 return 0;
             }
-            mem.prg_ram[(cpu_addr - 0x6000) % mem.prg_ram.len()]
+            mem.read_prg_ram(cpu_addr - 0x6000)
         } else {
             let mode = (self.control & 0x0C) >> 2;
             let addr = match mode {
@@ -72,7 +72,7 @@ impl Mapper for SxRom {
                 }
                 _ => panic!("Should never happen"),
             };
-            mem.prg_rom[addr % mem.prg_rom.len()]
+            mem.read_prg_rom(addr)
         }
     }
     fn read_ppu_debug(&self, ppu_addr: usize, mem: &CartridgeMemory) -> u8 {
@@ -91,8 +91,7 @@ impl Mapper for SxRom {
             if cpu_addr < 0x6000 {
                 warn!("Writing to {:X}", cpu_addr);
             } else {
-                let max = mem.prg_ram.len();
-                mem.prg_ram[(cpu_addr - 0x6000) % max] = value;
+                mem.write_prg_ram(cpu_addr - 0x6000, value);
             }
         } else {
             // If value high bit is not set

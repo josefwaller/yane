@@ -57,12 +57,7 @@ impl Mapper for TxRom {
             warn!("Trying to read PRG RAM where there is none: {:X}", cpu_addr);
             0
         } else if cpu_addr < 0x8000 {
-            if mem.prg_ram.is_empty() {
-                warn!("Trying to read PRG RAM but there is none on this cartridge");
-                0
-            } else {
-                mem.prg_ram[(cpu_addr - 0x6000) % mem.prg_ram.len()]
-            }
+            mem.read_prg_ram(cpu_addr - 0x6000)
         } else {
             let prg_addr = if cpu_addr < 0xA000 {
                 if self.prg_mode == 0 {
@@ -94,12 +89,12 @@ impl Mapper for TxRom {
             } else {
                 bank_addr(0x2000, num_banks(0x2000, &mem.prg_rom) - 1, cpu_addr)
             };
-            mem.prg_rom[prg_addr % mem.prg_rom.len()]
+            mem.read_prg_rom(prg_addr)
         }
     }
     fn write_cpu(&mut self, cpu_addr: usize, mem: &mut CartridgeMemory, value: u8) {
-        if cpu_addr < 0x8000 {
-            mem.prg_ram[cpu_addr - 0x6000] = value;
+        if (0x6000..0x8000).contains(&cpu_addr) {
+            mem.write_prg_ram(cpu_addr - 0x6000, value);
         } else if cpu_addr < 0xA000 {
             if cpu_addr % 2 == 0 {
                 // Choose bank select

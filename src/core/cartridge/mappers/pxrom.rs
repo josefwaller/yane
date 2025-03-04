@@ -39,10 +39,10 @@ impl Mapper for PxRom {
             0
         } else if cpu_addr < 0x8000 {
             // PRG RAM
-            mem.prg_ram[cpu_addr % mem.prg_ram.len()]
+            mem.read_prg_ram(cpu_addr)
         } else if cpu_addr < 0xA000 {
             // Switchable bank
-            mem.prg_rom[bank_addr(0x2000, self.prg_bank, cpu_addr)]
+            mem.read_prg_rom(bank_addr(0x2000, self.prg_bank, cpu_addr))
         } else {
             let n = num_banks(0x2000, &mem.chr_rom);
             let bank_num = if cpu_addr < 0xC000 {
@@ -55,7 +55,7 @@ impl Mapper for PxRom {
                 // Last bank
                 n - 1
             };
-            mem.prg_rom[bank_addr(0x2000, bank_num, cpu_addr)]
+            mem.read_prg_rom(bank_addr(0x2000, bank_num, cpu_addr))
         }
     }
     fn read_ppu_debug(&self, ppu_addr: usize, mem: &CartridgeMemory) -> u8 {
@@ -77,7 +77,7 @@ impl Mapper for PxRom {
             error!("Invalid latches value {:X?}", self.latches);
             self.chr_banks[1][0]
         };
-        mem.chr_rom[bank_addr(0x1000, bank_num, ppu_addr)]
+        mem.read_chr(bank_addr(0x1000, bank_num, ppu_addr))
     }
     fn read_ppu(&mut self, ppu_addr: usize, mem: &CartridgeMemory) -> u8 {
         let v = self.read_ppu_debug(ppu_addr, mem);

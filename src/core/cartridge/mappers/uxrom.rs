@@ -28,7 +28,11 @@ impl Mapper for UxRom {
             0
         } else if cpu_addr >= 0xC000 {
             // Fixed to last bank
-            mem.prg_rom[bank_addr(BANK_SIZE, num_banks(BANK_SIZE, &mem.prg_rom) - 1, cpu_addr)]
+            mem.read_prg_rom(bank_addr(
+                BANK_SIZE,
+                num_banks(BANK_SIZE, &mem.prg_rom) - 1,
+                cpu_addr,
+            ))
         } else {
             mem.prg_rom[bank_addr(BANK_SIZE, self.bank, cpu_addr)]
         }

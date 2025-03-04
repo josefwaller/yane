@@ -16,12 +16,11 @@ impl Mapper for CnRom {
         3
     }
     fn read_cpu(&self, cpu_addr: usize, mem: &CartridgeMemory) -> u8 {
-        let max = mem.prg_rom.len();
         if cpu_addr < 0x8000 {
             warn!("Invalid read at address {:X}", cpu_addr);
             0
         } else {
-            mem.prg_rom[cpu_addr % max]
+            mem.read_prg_rom(cpu_addr)
         }
     }
     fn write_cpu(&mut self, cpu_addr: usize, _mem: &mut CartridgeMemory, value: u8) {
@@ -30,7 +29,7 @@ impl Mapper for CnRom {
         }
     }
     fn read_ppu_debug(&self, ppu_addr: usize, mem: &CartridgeMemory) -> u8 {
-        mem.chr_rom[bank_addr(0x2000, self.chr_bank_select, ppu_addr) % mem.chr_rom.len()]
+        mem.read_chr(bank_addr(0x2000, self.chr_bank_select, ppu_addr))
     }
     fn write_ppu(&mut self, _ppu_addr: usize, _mem: &mut CartridgeMemory, _value: u8) {
         // Does nothing
