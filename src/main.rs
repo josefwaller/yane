@@ -7,6 +7,7 @@ use sdl2::{
 };
 use serde::de::DeserializeOwned;
 use simplelog::{ColorChoice, CombinedLogger, LevelFilter, TermLogger, TerminalMode, WriteLogger};
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::thread::sleep;
 use std::{fs::File, io::Write, path::PathBuf};
@@ -108,7 +109,11 @@ fn add_config_file(file_name: &str, contents: &str) -> Result<(), Box<dyn std::e
     let mut f = std::fs::File::create(&buf)?;
     debug!("Created file {}", file_name);
     let mut p = f.metadata()?.permissions();
+    #[cfg(unix)]
     p.set_mode(0o644);
+    #[cfg(windows)]
+    #[allow(clippy::permissions_set_readonly_false)]
+    p.set_readonly(false);
     f.set_permissions(p)?;
     // Write contents
     debug!("Writing contents to {:?}", file_name);
