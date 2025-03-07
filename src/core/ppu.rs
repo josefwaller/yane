@@ -350,7 +350,7 @@ impl Ppu {
             self.set_output(settings);
             // Load tile data
             if self.is_background_rendering_enabled() || self.is_sprite_rendering_enabled() {
-                if self.dot == (0, PRERENDER_SCANLINE) {
+                if self.dot == (280, PRERENDER_SCANLINE) {
                     // Copy vertical component from T to V
                     self.v = (self.v & 0x041F) | (self.t & !0x041F);
                 }
@@ -374,7 +374,7 @@ impl Ppu {
                 if self.dot.0 == 256 && !self.can_access_vram() {
                     self.fine_y_inc();
                     // Copy horizontal nametable and coarse X
-                    self.v = (self.v & !0x41F) + (self.t & 0x41F);
+                    self.v = (self.v & !0x41F) | (self.t & 0x41F);
                 }
             }
             if self.dot == (1, 241) {
