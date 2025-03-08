@@ -392,12 +392,6 @@ fn main() {
             if should_exit {
                 break;
             }
-            // Update game input
-            let keys: Vec<Keycode> = event_pump
-                .keyboard_state()
-                .pressed_scancodes()
-                .filter_map(Keycode::from_scancode)
-                .collect();
 
             // Render debug window
             if Instant::now().duration_since(last_debug_window_render) >= DEBUG_WINDOW_REFRESH_RATE
@@ -408,7 +402,7 @@ fn main() {
                 }
             }
             // Update window
-            input.update(&mut nes, &keys, &mut config);
+            input.update(&mut nes, &event_pump, &mut config);
             // Update audio
             audio.update(&mut nes, &config);
             // Render window

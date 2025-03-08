@@ -5,7 +5,7 @@ use crate::{
 use log::*;
 
 use super::{key_map::Key, utils::save_new_savestate};
-use sdl2::keyboard::Keycode;
+use sdl2::{event::Event, keyboard::Keycode, EventPump};
 
 /// Handles updating the input in the emulator
 ///
@@ -43,17 +43,23 @@ impl Input {
         };
         nes.set_input(index, controller);
     }
-    pub fn update(&mut self, nes: &mut Nes, keys: &[Keycode], config: &mut Config) {
+    pub fn update(&mut self, nes: &mut Nes, event_pump: &EventPump, config: &mut Config) {
+        // Get keyboard state
+        let keys: Vec<Keycode> = event_pump
+            .keyboard_state()
+            .pressed_scancodes()
+            .filter_map(Keycode::from_scancode)
+            .collect();
         // Update inputs
-        self.update_controller(nes, 0, keys, config);
-        self.update_controller(nes, 1, keys, config);
+        self.update_controller(nes, 0, &keys, config);
+        self.update_controller(nes, 1, &keys, config);
         let km = &config.key_map;
-        if self.key_pressed(&km.pause, keys) {
+        if self.key_pressed(&km.pause, &keys) {
             config.paused = !config.paused;
         }
-        let diff = if self.key_pressed(&km.volume_up, keys) {
+        let diff = if self.key_pressed(&km.volume_up, &keys) {
             0.1
-        } else if self.key_pressed(&km.volume_down, keys) {
+        } else if self.key_pressed(&km.volume_down, &keys) {
             -0.1
         } else {
             0.0
@@ -61,9 +67,9 @@ impl Input {
         config.volume = (config.volume + diff).clamp(0.0, 3.0);
 
         // Check for quickload
-        if self.key_pressed(&km.quicksave, keys) {
+        if self.key_pressed(&km.quicksave, &keys) {
             // save_new_savestate(nes, config, &self.game_name);
-        } else if self.key_pressed(&km.quickload, keys) {
+        } else if self.key_pressed(&km.quickload, &keys) {
             match &config.quickload_file {
                 Some(f) => match std::fs::read(f) {
                     Ok(data) => match postcard::from_bytes(&data) {
@@ -79,6 +85,6 @@ impl Input {
             }
         }
 
-        self.last_keys = keys.to_owned();
+        self.last_keys = keys;
     }
 }
