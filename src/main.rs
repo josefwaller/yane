@@ -17,7 +17,7 @@ use std::{
 };
 use wavers::{write, Samples};
 use yane::{
-    app::{Config, DebugWindow, KeyMap, Window},
+    app::{Audio, Config, DebugWindow, Input, KeyMap, Window},
     core::{Cartridge, Nes, CPU_CLOCK_SPEED},
 };
 
@@ -238,14 +238,14 @@ fn main() {
             ),
         ])
         .expect("Unable to create logger");
-        let sdl = sdl2::init().expect("Unable to initialize SDL");
-        // Setup video
-        let video = sdl.video().expect("Unable to initialize SDL video");
-        let gl_attr = video.gl_attr();
-        gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
-        gl_attr.set_context_version(3, 3);
-        // Setup input
-        // The two windows need a shared event pump since SDL only allows one at a time
+        // Initialise SDL
+        let sdl = sdl2::init().expect("Unable to initialise SDL");
+        let mut sdl_video = sdl.video().expect("Unable to initialise VideoSubsystem");
+        let mut window = Window::from_sdl_video(&mut sdl_video);
+        let sdl_audio = sdl.audio().expect("Unable to initialise AudioSubsystem");
+        let mut audio = Audio::from_sdl_audio(&sdl_audio);
+        let mut input = Input::new();
+
         let mut event_pump = sdl
             .event_pump()
             .expect("Unable to initialize SDL event pump");
@@ -345,12 +345,10 @@ fn main() {
         config.key_map = key_map;
         // Create debug window if debug argument was passed
         let mut debug_window = if args.debug {
-            Some(DebugWindow::new(&nes, &video, game_name.clone()))
+            Some(DebugWindow::new(&nes, &sdl_video, game_name.clone()))
         } else {
             None
         };
-        // Create window
-        let mut window = Window::new(&video, &sdl, game_name.clone());
         // Set argument settings
         if args.paused {
             config.paused = true;
@@ -410,7 +408,9 @@ fn main() {
                 }
             }
             // Update window
-            window.update(&mut nes, &keys, &mut config);
+            input.update(&mut nes, &keys, &mut config);
+            // Update audio
+            audio.update(&mut nes, &config);
             // Render window
             window.render(&nes, &config);
             // Update CPU
@@ -469,7 +469,7 @@ fn main() {
             }
         }
         // Save audio recording
-        let data = window.audio.all_samples.into_boxed_slice();
+        let data = audio.all_samples.into_boxed_slice();
         let samples = Samples::new(data);
         write(
             Path::new(format!("./{}.wav", config.record_audio_filename).as_str()),

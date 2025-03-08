@@ -3,7 +3,7 @@ use log::*;
 use rubato::{Resampler, SincFixedIn, SincInterpolationParameters};
 use sdl2::{
     audio::{AudioQueue, AudioSpecDesired},
-    Sdl,
+    AudioSubsystem,
 };
 
 /// Controls all the audio functionality of the app.
@@ -20,15 +20,14 @@ pub struct Audio {
 }
 
 impl Audio {
-    pub fn new(sdl: &Sdl) -> Audio {
+    pub fn from_sdl_audio(sdl_audio: &AudioSubsystem) -> Audio {
         // Setup audio
-        let audio = sdl.audio().unwrap();
         let spec = AudioSpecDesired {
             freq: Some(44_800),
             channels: Some(1),
             samples: None,
         };
-        let queue = audio.open_queue(None, &spec).unwrap();
+        let queue = sdl_audio.open_queue(None, &spec).unwrap();
         queue.resume();
         info!(
             "Created queue, samples={}, freq={}",
@@ -60,8 +59,8 @@ impl Audio {
             all_samples: Vec::new(),
         }
     }
-    /// Add the NES's audio to hte SDL audio queue
-    pub fn update_audio(&mut self, nes: &mut Nes, config: &Config) {
+    /// Add the NES's audio to the SDL audio queue
+    pub fn update(&mut self, nes: &mut Nes, config: &Config) {
         // Clear queue if it's too big
         // Should only happen on startup when SDL is booting up
         if self.queue.size() > CPU_CLOCK_SPEED / 60 {

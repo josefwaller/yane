@@ -17,3 +17,5 @@ pub use key_map::KeyMap;
 mod config;
 pub mod utils;
 pub use config::Config;
+mod input;
+pub use input::Input;
