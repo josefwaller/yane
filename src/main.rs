@@ -340,12 +340,13 @@ fn main() {
         }
         // Load config
         let mut config = read_config_file(&args.config_file, Config::default());
+        config.game_name = game_name;
         // Load key map
         let key_map = read_config_file(&args.keymap_file, KeyMap::default());
         config.key_map = key_map;
         // Create debug window if debug argument was passed
         let mut debug_window = if args.debug {
-            Some(DebugWindow::new(&nes, &sdl_video, game_name.clone()))
+            Some(DebugWindow::new(&nes, &sdl_video))
         } else {
             None
         };

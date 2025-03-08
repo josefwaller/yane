@@ -43,6 +43,9 @@ pub struct Config {
     pub emu_settings: EmuSettings,
     /// Folder to save/load savestates from
     pub savestate_dir: PathBuf,
+    /// Game name, if we managed to parse it from the file
+    #[serde(skip)]
+    pub game_name: Option<String>,
 }
 
 impl Default for Config {
@@ -61,6 +64,7 @@ impl Default for Config {
             quickload_file: None,
             emu_settings: EmuSettings::default(),
             savestate_dir: PathBuf::from("./savestates"),
+            game_name: None,
         }
     }
 }

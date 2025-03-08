@@ -12,6 +12,8 @@ use imgui_glow_renderer::AutoRenderer;
 use imgui_sdl2_support::SdlPlatform;
 use sdl2::{event::Event, EventPump, VideoSubsystem};
 
+use super::utils::{quickload, quicksave};
+
 /// The debug window that spawns when the debug argument is passed.
 /// Allows the user to change various settings of the emulator.
 pub struct DebugWindow {
@@ -38,12 +40,11 @@ pub struct DebugWindow {
 
     chr_tex: NativeTexture,
     nametable_tex: NativeTexture,
-    game_name: Option<String>,
 }
 
 impl DebugWindow {
     /// Spawn a new [DebugWindow]
-    pub fn new(nes: &Nes, video: &VideoSubsystem, game_name: Option<String>) -> DebugWindow {
+    pub fn new(nes: &Nes, video: &VideoSubsystem) -> DebugWindow {
         // Figure out how many rows/columns
         let num_tiles =
             (nes.cartridge.memory.chr_rom.len() + nes.cartridge.memory.chr_ram.len()) / 0x10;
@@ -98,7 +99,6 @@ impl DebugWindow {
                 nametable_tex,
                 nametable_timer: 0,
                 small_font,
-                game_name,
             }
         }
     }
@@ -345,8 +345,15 @@ impl DebugWindow {
                     "Restrict controller input",
                     &mut config.restrict_controller_directions,
                 );
-                if ui.button("Quick save (savestate)") {
-                    super::utils::save_new_savestate(nes, config, &self.game_name);
+                if ui.button("Quick save") {
+                    quicksave(nes, config);
+                }
+                ui.same_line();
+                if ui.button("Quick load") {
+                    match quickload(config) {
+                        Some(n) => *nes = n,
+                        None => error!("Encountered an error while quickloading, aborting"),
+                    };
                 }
                 if let Some(c) = ui.begin_combo(
                     "Screen Size",

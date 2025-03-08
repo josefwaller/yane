@@ -4,7 +4,10 @@ use crate::{
 };
 use log::*;
 
-use super::{key_map::Key, utils::save_new_savestate};
+use super::{
+    key_map::Key,
+    utils::{quickload, quicksave},
+};
 use sdl2::{event::Event, keyboard::Keycode, EventPump};
 
 /// Handles updating the input in the emulator
@@ -68,20 +71,11 @@ impl Input {
 
         // Check for quickload
         if self.key_pressed(&km.quicksave, &keys) {
-            // save_new_savestate(nes, config, &self.game_name);
+            quicksave(nes, config);
         } else if self.key_pressed(&km.quickload, &keys) {
-            match &config.quickload_file {
-                Some(f) => match std::fs::read(f) {
-                    Ok(data) => match postcard::from_bytes(&data) {
-                        Ok(n) => {
-                            info!("Loaded quicksave at {:?}", f);
-                            *nes = n;
-                        }
-                        Err(e) => error!("Unable to deserialize save state {:?}: {}", &f, e),
-                    },
-                    Err(e) => error!("Unable to read save state {:?}: {}", &f, e),
-                },
-                None => info!("No save state to quickload from"),
+            match quickload(config) {
+                Some(n) => *nes = n,
+                None => error!("Encountered an error while quickloading, aborting"),
             }
         }
 
