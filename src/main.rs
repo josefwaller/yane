@@ -80,7 +80,7 @@ enum Command {
         #[command(flatten)]
         args: CommonArgs,
     },
-    /// Load and run a savestate (.bin) file. Savestate must have been created by Yane
+    /// Load and run a savestate (.yane.bin) file.
     Savestate {
         /// The binary savestate to load
         savestate_file: String,
