@@ -14,6 +14,8 @@ use sdl2::{event::Event, EventPump, VideoSubsystem};
 
 use super::utils::{quickload, quicksave};
 
+/// Debug window for the emulator
+///
 /// The debug window that spawns when the debug argument is passed.
 /// Allows the user to change various settings of the emulator.
 pub struct DebugWindow {

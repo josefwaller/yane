@@ -8,7 +8,7 @@ use super::{
     key_map::Key,
     utils::{quickload, quicksave},
 };
-use sdl2::{event::Event, keyboard::Keycode, EventPump};
+use sdl2::{keyboard::Keycode, EventPump};
 
 /// Handles updating the input in the emulator
 ///
@@ -80,5 +80,11 @@ impl Input {
         }
 
         self.last_keys = keys;
+    }
+}
+
+impl Default for Input {
+    fn default() -> Input {
+        Input::new()
     }
 }

@@ -1,10 +1,7 @@
 use clap::{Parser, Subcommand};
 use log::*;
 use regex::Regex;
-use sdl2::{
-    event::{Event, WindowEvent},
-    keyboard::Keycode,
-};
+use sdl2::event::{Event, WindowEvent};
 use serde::de::DeserializeOwned;
 use simplelog::{ColorChoice, CombinedLogger, LevelFilter, TermLogger, TerminalMode, WriteLogger};
 #[cfg(unix)]

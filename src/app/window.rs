@@ -21,7 +21,7 @@ impl Window {
         let window_width = 256 * 3;
         let window_height = 240 * 3;
         let (window, gl_context, gl) =
-            utils::create_window(&video, "Y.A.N.E.", window_width, window_height);
+            utils::create_window(video, "Y.A.N.E.", window_width, window_height);
 
         let screen = Screen::new(gl);
         Window {
