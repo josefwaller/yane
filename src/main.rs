@@ -295,7 +295,7 @@ fn main() {
                         savedata_path_and_data(&s)
                     }
                 };
-                let nes = Nes::from_cartridge(Cartridge::from_ines(data.as_slice(), savedata));
+                let nes = Nes::with_cartridge(Cartridge::from_ines(data.as_slice(), savedata));
                 (nes, savedata_path, game_name, args)
             }
             Some(Command::Savestate {
@@ -373,6 +373,7 @@ fn main() {
         loop {
             // Update IMGUI/Window input
             let mut should_exit = false;
+            // event_pump.poll_iter().any(|e| );
             for event in event_pump.poll_iter() {
                 match event {
                     Event::Window { win_event, .. } => {

@@ -85,7 +85,7 @@ impl Nes {
     ///
     /// Since the cartridge is where the actual program is stored, this is only useful for
     /// debugging purposes or manually simulating NES behaviour using [`Nes::decode_and_execute`].
-    /// Use [`Nes::from_cartridge`] for proper emulation.
+    /// Use [`Nes::with_cartridge`] for proper emulation.
     pub fn new() -> Nes {
         // Todo: Move this to cartridge
         let c = [
@@ -113,9 +113,9 @@ impl Nes {
     /// use yane::{Nes, Cartridge};
     /// let game = include_bytes!("my_game.nes");
     /// let cartridge = Cartridge::from_bytes(game)
-    /// let nes = Nes::from_cartridge(cartridge);
+    /// let nes = Nes::with_cartridge(cartridge);
     /// ```
-    pub fn from_cartridge(cartridge: Cartridge) -> Nes {
+    pub fn with_cartridge(cartridge: Cartridge) -> Nes {
         let mut nes = Nes {
             cpu: Cpu::new(),
             ppu: Ppu::new(),
@@ -168,7 +168,11 @@ impl Nes {
             _ => true,
         };
         self.controller_bits[num] += 1;
-        if pressed { 1 } else { 0 }
+        if pressed {
+            1
+        } else {
+            0
+        }
     }
 
     /// Read a byte of memory given an address in CPU space.
@@ -728,12 +732,10 @@ impl Nes {
                 }
                 Ok((3, 4))
             }
-            _ => {
-                Err(format!(
-                    "Unknown opcode '{:#04X}' at location '{:#04X}'",
-                    opcode, self.cpu.p_c
-                ))
-            }
+            _ => Err(format!(
+                "Unknown opcode '{:#04X}' at location '{:#04X}'",
+                opcode, self.cpu.p_c
+            )),
         }
     }
     /// Advance the NES by 1 instruction.
@@ -757,10 +759,7 @@ impl Nes {
         }
         self.apu.advance_cpu_cycles(c, &mut self.cartridge);
         self.cartridge.advance_cpu_cycles(c);
-        if self
-            .ppu
-            .advance_dots(3 * c, &mut self.cartridge, settings)
-            && self.ppu.get_nmi_enabled()
+        if self.ppu.advance_dots(3 * c, &mut self.cartridge, settings) && self.ppu.get_nmi_enabled()
         {
             self.on_nmi();
             c += 7;
