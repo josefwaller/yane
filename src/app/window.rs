@@ -1,17 +1,35 @@
 use crate::{
-    app::{Config, Screen},
-    core::Nes,
-    utils,
+    app::Config,
+    core::{Nes, HV_TO_RGB},
+    utils::{
+        self, check_error, create_f32_slice_vao, create_program, create_screen_texture, set_uniform,
+    },
 };
+use glow::{Context, HasContext, NativeProgram, NativeTexture, NativeVertexArray};
 use sdl2::{video::GLContext, VideoSubsystem};
 
-/// A wrapper around [Screen] that provides an SDL2 GL context, and handles input through SDL2.
+/// The window of the emulator app.
+///
+/// Responsible for the actual graphical output of the emualator.
+/// Acts as the bridge between an [Nes]'s RGB output array, and an SDL window.
+/// Takes the RGB output, pipes that data into on OpenGL texture, and renders that texture
+/// to the screen of the window.
+/// See [Window::render].
 pub struct Window {
     window: sdl2::video::Window,
     gl_context: GLContext,
-    screen: Screen,
+    // screen: Screen,
+    gl: Context,
+    // Stuff for rendering to screen
+    screen_texture: NativeTexture,
+    screen_program: NativeProgram,
+    screen_vao: NativeVertexArray,
+    // Program for rendering a primitve using wireframe
+    wireframe_program: NativeProgram,
+    wireframe_vao: NativeVertexArray,
 }
 impl Window {
+    /// Create a new [Window] from an SDL video subsystem
     pub fn from_sdl_video(video: &mut VideoSubsystem) -> Window {
         // Set up openGL
         let gl_attr = video.gl_attr();
@@ -23,22 +41,142 @@ impl Window {
         let (window, gl_context, gl) =
             utils::create_window(video, "Y.A.N.E.", window_width, window_height);
 
-        let screen = Screen::new(gl);
-        Window {
-            window,
-            gl_context,
-            screen,
+        // let screen = Screen::new(gl);
+        unsafe {
+            let (screen_vao, screen_program, screen_texture) =
+                create_screen_texture(&gl, (256, 240));
+            let wireframe_program = create_program(
+                &gl,
+                include_str!("../shaders/wireframe.vert"),
+                include_str!("../shaders/color.frag"),
+            );
+            let wireframe_vao = create_f32_slice_vao(
+                &gl,
+                [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]].as_flattened(),
+                2,
+            );
+            Window {
+                window,
+                gl_context,
+                // screen,
+                gl,
+                screen_program,
+                screen_texture,
+                screen_vao,
+                wireframe_program,
+                wireframe_vao,
+            }
         }
     }
+    /// Render the [Nes]'s video output to the window.
     pub fn render(&mut self, nes: &Nes, config: &Config) {
         self.window.gl_make_current(&self.gl_context).unwrap();
-        self.screen.render(nes, self.window.size(), config);
+        unsafe {
+            self.gl.disable(glow::STENCIL_TEST);
+            self.gl.disable(glow::DEPTH_TEST);
+
+            self.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+            self.gl.clear_color(0.0, 0.0, 0.0, 1.0);
+            self.gl.clear(glow::COLOR_BUFFER_BIT);
+            check_error!(self.gl);
+            self.gl.use_program(Some(self.screen_program));
+            const TEX_NUM: i32 = 1;
+            self.gl.active_texture(glow::TEXTURE0 + TEX_NUM as u32);
+            self.gl
+                .bind_texture(glow::TEXTURE_2D, Some(self.screen_texture));
+            let texture_data: Vec<u8> = nes
+                .ppu
+                .output
+                .as_flattened()
+                .iter()
+                .flat_map(|i| HV_TO_RGB[*i & 0x3F])
+                .collect();
+            self.gl.tex_image_2d(
+                glow::TEXTURE_2D,
+                0,
+                glow::RGB as i32,
+                256,
+                240,
+                0,
+                glow::RGB,
+                glow::UNSIGNED_BYTE,
+                Some(&texture_data),
+            );
+            set_uniform!(
+                self.gl,
+                self.screen_program,
+                "screenSize",
+                uniform_2_f32,
+                config.screen_size.0 as f32,
+                config.screen_size.1 as f32
+            );
+            check_error!(self.gl);
+            let loc = self
+                .gl
+                .get_uniform_location(self.screen_program, "renderedTexture");
+            self.gl.uniform_1_i32(loc.as_ref(), TEX_NUM);
+            check_error!(self.gl);
+            self.gl.viewport(
+                0,
+                0,
+                self.window.size().0 as i32,
+                self.window.size().1 as i32,
+            );
+            check_error!(self.gl);
+            self.gl.bind_vertex_array(Some(self.screen_vao));
+            check_error!(self.gl);
+            self.gl.draw_arrays(glow::TRIANGLES, 0, 6);
+            check_error!(self.gl);
+
+            // Render wireframe box around each OAM object
+            if config.oam_debug {
+                self.gl.use_program(Some(self.wireframe_program));
+                self.gl.bind_vertex_array(Some(self.wireframe_vao));
+                check_error!(self.gl);
+                set_uniform!(
+                    self.gl,
+                    self.wireframe_program,
+                    "screenSize",
+                    uniform_2_f32,
+                    config.screen_size.0 as f32,
+                    config.screen_size.1 as f32
+                );
+                check_error!(self.gl);
+                nes.ppu.oam.chunks(4).enumerate().for_each(|(i, obj)| {
+                    set_uniform!(
+                        self.gl,
+                        self.wireframe_program,
+                        "position",
+                        uniform_2_f32,
+                        obj[3] as f32,
+                        obj[0] as f32 + 1.0
+                    );
+                    let color = if i == 0 {
+                        [0.0, 1.0, 0.0]
+                    } else {
+                        [1.0, 0.0, 0.0]
+                    };
+                    set_uniform!(
+                        self.gl,
+                        self.wireframe_program,
+                        "inColor",
+                        uniform_3_f32,
+                        color[0],
+                        color[1],
+                        color[2]
+                    );
+                    set_uniform!(
+                        self.gl,
+                        self.wireframe_program,
+                        "sizes",
+                        uniform_2_f32,
+                        1.0,
+                        if nes.ppu.is_8x16_sprites() { 2.0 } else { 1.0 }
+                    );
+                    self.gl.draw_arrays(glow::LINE_LOOP, 0, 4);
+                });
+            }
+        }
         self.window.gl_swap_window();
-    }
-    pub fn screen(&mut self) -> &mut Screen {
-        &mut self.screen
-    }
-    pub fn make_gl_current(&mut self) {
-        self.window.gl_make_current(&self.gl_context).unwrap()
     }
 }

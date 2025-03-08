@@ -410,7 +410,6 @@ fn main() {
                 delta = Instant::now();
             } else {
                 // Advance 1 frame
-                window.make_gl_current();
                 let cycles_to_wait = match nes.advance_frame(&config.emu_settings) {
                     Ok(c) => c,
                     Err(e) => {

@@ -1,7 +1,7 @@
 use sdl2::keyboard::Keycode;
 use serde::{de::Visitor, Deserialize, Serialize};
 
-// This just exists so we can implement Serialize for it
+/// Simple wrapper around [sdl2::keyboard::Keycode] that implements [serde::Deserialize] and [serde::Serialize].
 #[derive(Clone)]
 pub struct Key {
     pub code: Keycode,
@@ -63,7 +63,8 @@ impl Serialize for Key {
 
 #[derive(Serialize, Deserialize, Clone)]
 /// Controls for an NES controller.
-/// Maps SDL key codes to buttons on the controller.
+///
+/// Map of SDL key codes to buttons on the controller.
 pub struct Controller {
     pub a: Key,
     pub b: Key,
@@ -76,7 +77,8 @@ pub struct Controller {
 }
 #[derive(Serialize, Deserialize, Clone)]
 /// Controls for running the emulator.
-/// Maps SDL key codes to actions in the emulator (press a button pause, etc).
+///
+/// Map of SDL key codes to actions in the emulator app (press a button, pause, volume up, etc).
 pub struct KeyMap {
     pub controllers: [Controller; 2],
     pub pause: Key,

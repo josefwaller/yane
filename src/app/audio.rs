@@ -6,6 +6,8 @@ use sdl2::{
     AudioSubsystem,
 };
 
+/// The audio component of the emulator.
+///
 /// Controls all the audio functionality of the app.
 /// Mostly just responsible for downsampling the NES audio's output and
 /// adding it to the SDL queue.
