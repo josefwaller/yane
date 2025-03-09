@@ -40,7 +40,12 @@ fn get_cli_styles() -> clap::builder::Styles {
 }
 
 #[derive(Parser)]
-#[command(name = "Yane", version = "0.9", about = "An N.E.S. emulator.")]
+#[command(
+    name = "Yane",
+    version = "0.9",
+    about = "An N.E.S. emulator.",
+    arg_required_else_help = true
+)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
@@ -328,7 +333,7 @@ pub fn run() {
                 (nes, None, game_name, args)
             }
             None => {
-                todo!()
+                unreachable!()
             }
         };
         match savedata_path.as_ref() {
