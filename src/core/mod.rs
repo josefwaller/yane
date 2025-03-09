@@ -20,7 +20,7 @@
 //!   left: false,
 //!   right: false,
 //!   down: false,
-//!   a: false,
+//!   a: true,
 //!   b: false,
 //!   start: false,
 //!   select: false

@@ -16,7 +16,8 @@ pub trait Mapper: Debug + Display {
     fn write_cpu(&mut self, cpu_addr: usize, mem: &mut CartridgeMemory, value: u8);
     /// Reach a byte given the address in PPU memory space
     ///
-    /// Used by the emulator and may change the cartridge's state, for debug reading use read_ppu_debug
+    /// Used by the emulator and may change the cartridge's state, for debug reading use [Mapper::read_ppu_debug].
+    /// Will default to [Mapper::read_ppu_debug].
     fn read_ppu(&mut self, ppu_addr: usize, mem: &CartridgeMemory) -> u8 {
         self.read_ppu_debug(ppu_addr, mem)
     }
