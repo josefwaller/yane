@@ -46,3 +46,8 @@ nes.reset();
 ```
 
 See the [documentation on the library portion](https://docs.rs/yane/latest/yane/core/index.html) or the [examples](https://github.com/josefwaller/yane/tree/main/examples) folder for more.
+
+## Feature Flags
+Yane includes one feature flag, `sdl`, which is enabled by default.
+It includes the SDL interface that comes with Yane (i.e. everything in [yane::app](https://docs.rs/yane/latest/yane/app/index.html)).
+If you want to use yane as a pure rust library, you can disable this flag.

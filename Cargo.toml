@@ -13,29 +13,50 @@ categories = ["emulators", "command-line-interface"]
 exclude = [".github"]
 
 [dependencies]
-anstyle = "1.0.10"
-assert_hex = "0.4.1"
-chrono = "0.4.39"
-clap = { version = "4.5.27", features = ["derive", "string"] }
-copypasta = "0.10.1"
-dirs = "6.0.0"
-glow = "0.14.1"
-imgui = "0.12.0"
-imgui-glow-renderer = "0.13.0"
-imgui-sdl2-support = "0.13.0"
+anstyle = { version = "1.0.10", optional = true }
+chrono = { version = "0.4.39", optional = true }
+clap = { version = "4.5.27", features = ["derive", "string"], optional = true }
+copypasta = { version = "0.10.1", optional = true }
+dirs = { version = "6.0.0", optional = true }
+glow = { version = "0.14.1", optional = true }
+imgui = { version = "0.12.0", optional = true }
+imgui-glow-renderer = { version = "0.13.0", optional = true }
+imgui-sdl2-support = { version = "0.13.0", optional = true }
 log = "0.4.22"
 postcard = { version = "1.1.1", features = ["alloc"] }
 rand = "0.8.5"
-regex = "1.11.1"
-rubato = "0.16.1"
-sdl2 = "0.37.0"
+regex = { version = "1.11.1", optional = true }
+rubato = { version = "0.16.1", optional = true }
+sdl2 = { version = "0.37.0", optional = true }
 serde = "1.0.217"
 serde-big-array = "0.5.1"
-serde_yaml = "0.9.34"
+serde_yaml = { version = "0.9.34", optional = true }
 simplelog = "0.12.2"
-test-case = "3.3.1"
 typetag = "0.2.19"
-wavers = "1.5.1"
+wavers = { version = "1.5.1", optional = true }
 
 [dev-dependencies]
 insta = "1.41.1"
+assert_hex = "0.4.1"
+test-case = "3.3.1"
+# Included for examples that use SDL, usually SDL is hidden behind the sdl flag
+sdl2 = "0.37.0"
+
+[features]
+default = ["sdl"]
+sdl = [
+    "dep:sdl2",
+    "dep:glow",
+    "dep:clap",
+    "dep:chrono",
+    "dep:anstyle",
+    "dep:copypasta",
+    "dep:dirs",
+    "dep:imgui",
+    "dep:imgui-glow-renderer",
+    "dep:imgui-sdl2-support",
+    "dep:regex",
+    "dep:rubato",
+    "dep:serde_yaml",
+    "dep:wavers",
+]
