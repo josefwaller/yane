@@ -6,13 +6,12 @@
 [![Rust](https://github.com/josefwaller/yane/actions/workflows/rust.yml/badge.svg)](https://github.com/josefwaller/yane/actions/workflows/rust.yml)
 [![Docs.rs](https://docs.rs/yane/badge.svg)](https://docs.rs/yane/)
 
-Can be used as either a standalone emulator or as a ready-out-of-the-box rust crate for emulating an N.E.S.
-See `examples` for more examples.
+Can be used as either a standalone CLI emulator or as a ready-out-of-the-box rust crate for emulating an N.E.S.
 
-## Usage as an app
+## Usage as an emulator
 Download the correct release for your operating system and add it to your `$PATH`.
 If cargo's install directory is already in your `$PATH`, you can simply run `cargo install yane`.
-```terminal
+```terminal, ignore
 > cargo install yane
 ...
 > yane -h
@@ -34,7 +33,7 @@ Options:
 
 ## Usage as a library
 
-```rust
+```rust, ignore
 // Load an iNes (.ines) file
 let ines = include_bytes!("./my_game.nes");
 // Create a new N.E.S. console with the game inserted
@@ -46,4 +45,4 @@ nes.advance_frame(&config);
 nes.reset();
 ```
 
-See the [documentation on the library portion](https://docs.rs/yane/latest/yane/core/index.html) or the `examples` folder for more.
+See the [documentation on the library portion](https://docs.rs/yane/latest/yane/core/index.html) or the [examples](https://github.com/josefwaller/yane/tree/main/examples) folder for more.
