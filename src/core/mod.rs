@@ -2,8 +2,12 @@
 //!
 //! A library for emulating the behaviour of the Nintendo Entertainment System.
 //! Contains the entire state of the machine, and updates it accordingly as the NES is advanced.
-//! Stores the visual output as a 2D array representing the screen, and the audio output
-//! as a [VecDeque][std::collections::VecDeque] of samples.
+//! The visual output can be accessed through the [Ppu::rgb_output] or [Ppu::rgb_output_buf],
+//! and the audio output can be accessed through [Apu::sample_queue] as a queue of samples.
+//! Input is updated though [Nes::set_controller_state].
+//!
+//! [Nes] and all of its fields can be serialized with the [serde] library,
+//! allowing for quick and easy savestate implementations in whichever format you'd like.
 //! ```
 //! use yane::core::{Nes, Controller, Settings, HV_TO_RGB};
 //! // The actual state of the NES
@@ -15,7 +19,7 @@
 //! // Advance the NES by 1 frame (continue advancing until a VBlank interval is triggered)
 //! nes.advance_frame(&settings);
 //! // Press the A button on player 1's controller
-//! nes.set_input(0, Controller {
+//! nes.set_controller_state(0, Controller {
 //!   up: false,
 //!   left: false,
 //!   right: false,
@@ -26,13 +30,14 @@
 //!   select: false
 //! });
 //! // Read the screen output
-//! let screen_output = nes.ppu.output;
-//! // Get the RGB value of the top-left pixel
-//! let rgb_output = HV_TO_RGB[screen_output[0][0]];
-//! println!("Top left pixel is R={} B={} G={}", rgb_output[0], rgb_output[1], rgb_output[2]);
+//! let rgb_output = nes.ppu.rgb_output();
+//! let top_left_pixel = rgb_output[0][0];
+//! println!("Top left pixel is R={} B={} G={}", top_left_pixel[0], top_left_pixel[1], top_left_pixel[2]);
 //! // Get the audio output as a vector of samples
 //! let audio_output = nes.apu.sample_queue();
 //! println!("Read {} audio samples", audio_output.len());
+//! // Reset the nes
+//! nes.reset();
 //! ```
 mod nes;
 pub use nes::{Nes, NesState};

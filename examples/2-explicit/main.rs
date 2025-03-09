@@ -129,7 +129,7 @@ fn main() {
             start: keys.contains(&Scancode::R),
             select: keys.contains(&Scancode::T),
         };
-        nes.set_input(0, controller_state);
+        nes.set_controller_state(0, controller_state);
 
         // Sync the NES with reality
         emu_duration +=

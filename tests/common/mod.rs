@@ -42,7 +42,7 @@ macro_rules! set_button {
     ($nes: ident, $player_number: literal, $key: ident, $value: literal) => {{
         let mut controller = $nes.controllers[$player_number];
         controller.$key = $value;
-        $nes.set_input($player_number, controller);
+        $nes.set_controller_state($player_number, controller);
         println!("{:?}", controller);
     }};
 }

@@ -44,7 +44,7 @@ impl Input {
             start: Input::key_down(&c[index].start, keys),
             select: Input::key_down(&c[index].select, keys),
         };
-        nes.set_input(index, controller);
+        nes.set_controller_state(index, controller);
     }
     pub fn update(&mut self, nes: &mut Nes, event_pump: &EventPump, config: &mut Config) {
         // Get keyboard state

@@ -233,12 +233,12 @@ impl Nes {
             _ => panic!("Invalid write address provided: {:#X}", addr),
         };
     }
-    /// Update the internal controller state in the NES.
+    /// Update a controller's state in the NES.
     ///
     /// The ROM will still have to poll for the controller state.
     /// * `num` The controller number of the controller being updated. Should be either `0` or `1`
     /// * `state` The [`Controller`] containing the controller's state
-    pub fn set_input(&mut self, num: usize, state: Controller) {
+    pub fn set_controller_state(&mut self, num: usize, state: Controller) {
         self.controllers[num] = state;
     }
     /// Execute the next instruction in the NES's code.
