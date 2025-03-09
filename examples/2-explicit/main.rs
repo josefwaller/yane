@@ -12,7 +12,7 @@ use std::{
     thread::sleep,
     time::{Duration, Instant},
 };
-use yane::core::{Cartridge, Controller, Nes, Settings, CPU_CLOCK_SPEED, HV_TO_RGB};
+use yane::core::{Cartridge, Controller, Nes, Settings, CPU_CLOCK_SPEED};
 
 fn main() {
     // Read first argument as the path to an iNes cartridge
@@ -73,13 +73,8 @@ fn main() {
 
         // Render the NES's video output
         //
-        // Get the NES's video output
-        // This output will be a single byte per pixel on a 256x240 display,
-        // with each byte representing a hue-value color
-        let video_output: &Box<[[usize; 256]; 240]> = &nes.ppu.output;
-        // Convert it to RGB colors
-        let rgb_output: [[[u8; 3]; 256]; 240] =
-            core::array::from_fn(|y| core::array::from_fn(|x| HV_TO_RGB[video_output[y][x]]));
+        // Get the NES's video output as an RGB value for every pixel on the 256x240 display
+        let rgb_output: [[[u8; 3]; 256]; 240] = nes.ppu.rgb_output();
         // Render it to the SDL canvas
         for y in 0..240 {
             for x in 0..256 {

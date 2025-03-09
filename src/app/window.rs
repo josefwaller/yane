@@ -1,6 +1,6 @@
 use crate::{
     app::Config,
-    core::{Nes, HV_TO_RGB},
+    core::Nes,
     utils::{
         self, check_error, create_f32_slice_vao, create_program, create_screen_texture, set_uniform,
     },
@@ -27,6 +27,8 @@ pub struct Window {
     // Program for rendering a primitve using wireframe
     wireframe_program: NativeProgram,
     wireframe_vao: NativeVertexArray,
+    // Screen data buffer
+    screen_buffer: [[[u8; 3]; 256]; 240],
 }
 impl Window {
     /// Create a new [Window] from an SDL video subsystem
@@ -65,6 +67,7 @@ impl Window {
                 screen_vao,
                 wireframe_program,
                 wireframe_vao,
+                screen_buffer: [[[0; 3]; 256]; 240],
             }
         }
     }
@@ -84,13 +87,11 @@ impl Window {
             self.gl.active_texture(glow::TEXTURE0 + TEX_NUM as u32);
             self.gl
                 .bind_texture(glow::TEXTURE_2D, Some(self.screen_texture));
-            let texture_data: Vec<u8> = nes
-                .ppu
-                .output
-                .as_flattened()
-                .iter()
-                .flat_map(|i| HV_TO_RGB[*i & 0x3F])
-                .collect();
+            // Copy output
+            nes.ppu.rgb_output_buf(&mut self.screen_buffer);
+            // Flatten to a single slice
+            let texture_data: &[u8] = self.screen_buffer.as_flattened().as_flattened();
+            // Pipe to texture
             self.gl.tex_image_2d(
                 glow::TEXTURE_2D,
                 0,
@@ -100,7 +101,7 @@ impl Window {
                 0,
                 glow::RGB,
                 glow::UNSIGNED_BYTE,
-                Some(&texture_data),
+                Some(texture_data),
             );
             set_uniform!(
                 self.gl,

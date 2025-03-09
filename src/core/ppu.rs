@@ -2,7 +2,7 @@ use std::{cmp::min, collections::VecDeque};
 
 use crate::core::Settings;
 
-use super::{Cartridge, DEBUG_PALETTE};
+use super::{Cartridge, DEBUG_PALETTE, HV_TO_RGB};
 use log::*;
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
@@ -65,13 +65,9 @@ pub struct Ppu {
     // None means no sprite on that pixel
     #[serde(with = "BigArray")]
     scanline_sprites: [Option<(usize, usize)>; 256],
-    /// The current output on the screen.
-    ///
-    /// Holds the output as a HV (Hue value) byte, which can be transformed into an RGB value
-    /// using an NES palette, such as [HV_TO_RGB][crate::core::HV_TO_RGB].
-    /// A new entry is added every dot.
+    // Screen buffer, storing 1 byte HV values per pixel
     #[serde(skip, default = "zeros")]
-    pub output: Box<[[usize; 256]; 240]>,
+    output: Box<[[usize; 256]; 240]>,
     // Open bus output
     open_bus: u8,
     // Cycles since open bus was written
@@ -390,6 +386,35 @@ impl Ppu {
             }
         });
         to_return
+    }
+    /// Get the output of the PPU as RGB triplets, in a new array
+    ///
+    /// Get the output of the PPU (i.e. the pixels on the screen) as RGB values.
+    /// This will allocate a new buffer every call - it is recomended to allocate a screen
+    /// buffer once and call [Ppu::rgb_output_buf] instead.
+    pub fn rgb_output(&self) -> [[[u8; 3]; 256]; 240] {
+        core::array::from_fn(|y| core::array::from_fn(|x| HV_TO_RGB[self.output[y][x]]))
+    }
+    /// Copy the current output of the PPU as RGB values into the given buffer
+    ///
+    /// Copy the PPU output into the buffer provided, as RGB values.
+    /// This will overwrite any data in `buf`.
+    /// If you want to create a new array instead, use [Ppu::rgb_output].
+    pub fn rgb_output_buf(&self, buf: &mut [[[u8; 3]; 256]; 240]) {
+        buf.iter_mut().enumerate().for_each(|(y, row)| {
+            row.iter_mut()
+                .enumerate()
+                .for_each(|(x, pixel)| *pixel = HV_TO_RGB[self.output[y][x]])
+        });
+    }
+    /// Get the current output of the PPU as hue-value bytes
+    ///
+    /// The NES's video output is a single value for each pixel, representing a
+    /// hue/value combination. This output can be paired with an
+    /// (NES palette file \(.PAL\))[https://www.nesdev.org/wiki/PPU_palettes#Palettes] to generate
+    /// an RGB value for each pixel. [Ppu::rgb_output] will do this automatically.
+    pub fn hv_output(&self) -> &[[usize; 256]; 240] {
+        &self.output
     }
     /// Compute the output at the current dot, and set it in [Ppu::output]
     fn set_output(&mut self, settings: &Settings) {
