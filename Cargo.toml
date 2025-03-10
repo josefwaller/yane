@@ -60,3 +60,6 @@ sdl = [
     "dep:serde_yaml",
     "dep:wavers",
 ]
+
+[profile.dev]
+opt-level = 1
