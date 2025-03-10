@@ -43,7 +43,6 @@ impl Window {
         let (window, gl_context, gl) =
             utils::create_window(video, title, window_width, window_height);
 
-        // let screen = Screen::new(gl);
         unsafe {
             let (screen_vao, screen_program, screen_texture) =
                 create_screen_texture(&gl, (256, 240));
@@ -179,5 +178,11 @@ impl Window {
             }
         }
         self.window.gl_swap_window();
+    }
+    /// Get a mutable reference to the SDL [Window][sdl2::video::Window]
+    ///
+    /// Allows configuration of the underlying SDL window such as changing title, icon, etc
+    pub fn sdl_window(&mut self) -> &mut sdl2::video::Window {
+        &mut self.window
     }
 }

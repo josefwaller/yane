@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 use log::*;
 use regex::Regex;
 use sdl2::event::{Event, WindowEvent};
+use sdl2::surface::Surface;
 use serde::de::DeserializeOwned;
 use simplelog::{ColorChoice, CombinedLogger, LevelFilter, TermLogger, TerminalMode, WriteLogger};
 #[cfg(unix)]
@@ -343,6 +344,9 @@ pub fn run() {
         config.key_map = key_map;
         // Initialise yane SDL componentes
         let mut window = Window::from_sdl_video(&mut sdl_video, "Y.A.N.E.");
+        window
+            .sdl_window()
+            .set_icon(Surface::load_bmp("./yane.bmp").unwrap());
         let mut input = Input::new();
         let mut audio = Audio::from_sdl_audio(&sdl_audio);
         // Create debug window if debug argument was passed
