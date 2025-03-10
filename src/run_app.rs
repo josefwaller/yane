@@ -243,15 +243,10 @@ pub fn run() {
         // Initialise SDL
         let sdl = sdl2::init().expect("Unable to initialise SDL");
         let mut sdl_video = sdl.video().expect("Unable to initialise VideoSubsystem");
-        let mut window = Window::from_sdl_video(&mut sdl_video);
         let sdl_audio = sdl.audio().expect("Unable to initialise AudioSubsystem");
-        let mut audio = Audio::from_sdl_audio(&sdl_audio);
-        let mut input = Input::new();
-
         let mut event_pump = sdl
             .event_pump()
             .expect("Unable to initialize SDL event pump");
-
         // Read file and init NES
         let cli = Cli::parse();
         let (mut nes, savedata_path, game_name, args) = match &cli.command {
@@ -346,6 +341,10 @@ pub fn run() {
         // Load key map
         let key_map = read_config_file(&args.keymap_file, KeyMap::default());
         config.key_map = key_map;
+        // Initialise yane SDL componentes
+        let mut window = Window::from_sdl_video(&mut sdl_video, "Y.A.N.E.");
+        let mut input = Input::new();
+        let mut audio = Audio::from_sdl_audio(&sdl_audio);
         // Create debug window if debug argument was passed
         let mut debug_window = if args.debug {
             Some(DebugWindow::new(&nes, &sdl_video))

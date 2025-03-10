@@ -32,7 +32,7 @@ pub struct Window {
 }
 impl Window {
     /// Create a new [Window] from an SDL video subsystem
-    pub fn from_sdl_video(video: &mut VideoSubsystem) -> Window {
+    pub fn from_sdl_video(video: &mut VideoSubsystem, title: &str) -> Window {
         // Set up openGL
         let gl_attr = video.gl_attr();
         gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
@@ -41,7 +41,7 @@ impl Window {
         let window_width = 256 * 3;
         let window_height = 240 * 3;
         let (window, gl_context, gl) =
-            utils::create_window(video, "Y.A.N.E.", window_width, window_height);
+            utils::create_window(video, title, window_width, window_height);
 
         // let screen = Screen::new(gl);
         unsafe {

@@ -40,7 +40,7 @@ fn main() {
         .event_pump()
         .expect("Unable to initialize SDL event pump");
     // Create window
-    let mut window = Window::from_sdl_video(&mut sdl_video);
+    let mut window = Window::from_sdl_video(&mut sdl_video, "Example 1 - minimal");
     // Create audio
     let mut audio = Audio::from_sdl_audio(&sdl_audio);
     // Create input

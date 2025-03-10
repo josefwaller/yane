@@ -26,8 +26,8 @@ impl<'de> Visitor<'de> for KeyVisitor {
             Some(scancode) => match sdl2::keyboard::Keycode::from_scancode(scancode) {
                 Some(code) => Ok(Key { code }),
                 None => Err(E::custom(format!(
-                    "Unable to get scancode from keycode {}",
-                    name
+                    "Unable to get keycode from scancode {:?}, original name {:?}",
+                    scancode as i32, name
                 ))),
             },
             None => Err(E::custom(format!(
