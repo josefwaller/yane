@@ -24,11 +24,12 @@ fn zeros() -> Box<[[usize; 256]; 240]> {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-/// The PPU (picture processing unit) of the NES.
+/// The picture processing unit of the NES.
 ///
 /// Responsible for computing the picture output of the console.
-/// Every dot, the [Ppu] will output a new pixel value, which is stored at the corresponding `(x, y)`
-/// coordinate in [Ppu::output].
+/// The PPU provides the video output as either the raw hue/value byte per pixel computed
+/// by the NES through [Ppu::hv_output], or an easier-to-use RGB value per pixel through
+/// [Ppu::rgb_output] or [Ppu::rgb_output_buf].
 pub struct Ppu {
     /// The Object Access Memory, or OAM
     #[serde(with = "BigArray")]
@@ -45,7 +46,7 @@ pub struct Ppu {
     pub data: u8,
     /// The OAMDMA register
     ///
-    /// This register is usually None, and is only set to Some(n) when written to.
+    /// This register is usually [None], and is only set to [Some] when written to.
     /// It is then reset when the DMA is executed.
     pub oam_dma: Option<u8>,
     /// VRAM
@@ -315,7 +316,7 @@ impl Ppu {
     }
     /// Advance the PPU a certain number of dots.
     ///
-    /// Write new output to [Ppu::output] if not in HBlank or VBlank.
+    /// Write a new pixel of output for every dot processed.
     /// Update the PPU's state accordingly, may set the VBlank flag.
     /// Return [true] if an NMI is triggered by a VBlank, and [false] otherwise.
     pub fn advance_dots(
@@ -411,7 +412,7 @@ impl Ppu {
     ///
     /// The NES's video output is a single value for each pixel, representing a
     /// hue/value combination. This output can be paired with an
-    /// (NES palette file \(.PAL\))[https://www.nesdev.org/wiki/PPU_palettes#Palettes] to generate
+    /// [NES palette file \(.PAL\)](https://www.nesdev.org/wiki/PPU_palettes#Palettes) to generate
     /// an RGB value for each pixel. [Ppu::rgb_output] will do this automatically.
     pub fn hv_output(&self) -> &[[usize; 256]; 240] {
         &self.output

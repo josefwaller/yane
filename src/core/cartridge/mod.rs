@@ -15,7 +15,7 @@ use std::{
 #[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 /// The various nametable arrangements a cartridge can have.
 ///
-/// Determines how the 2 screens of `VRAM` are mirrored to create the 4 screens of potential outputs.
+/// Determines how the 2 screens of `VRAM` are mirrored to create 4 screens of background tile data.
 /// Note that this is the nametable ARRANGEMENT - [NametableArrangement::Horizontal] means that the
 /// nametables are using VERTICAL mirroring.
 pub enum NametableArrangement {

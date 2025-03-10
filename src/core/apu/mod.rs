@@ -387,7 +387,7 @@ impl Apu {
     /// Get the current output of the mixer unit of the APU.
     /// Should always be a value between 0 and 1.
     /// Each CPU cycles, the APU will call this function and store the result in its output queue,
-    /// which can be accessed via `Apu::sample_queue`
+    /// which can be accessed via [Apu::sample_queue]
     pub fn mixer_output(&self) -> f32 {
         // Add up the pulse registers
         let pulse: u32 = self.pulse_registers.iter().map(|p| p.value()).sum();
@@ -417,8 +417,9 @@ impl Apu {
         }
     }
     /// Get and clear the sample queue of the APU.
-    /// Returns a vector containing every sample the APU has generated since that last call to `Apu::sample_queue`,
-    /// and then clears the internal queue.
+    ///
+    /// Returns a vector containing every sample the APU has generated since that last call to [Apu::sample_queue],
+    /// and clears the internal queue.
     /// Use this function to access the NES's sound output.
     pub fn sample_queue(&mut self) -> Vec<f32> {
         let mut v = Vec::new();
