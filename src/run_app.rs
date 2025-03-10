@@ -343,7 +343,7 @@ pub fn run() {
         let key_map = read_config_file(&args.keymap_file, KeyMap::default());
         config.key_map = key_map;
         // Initialise yane SDL componentes
-        let mut window = Window::from_sdl_video(&mut sdl_video, "Y.A.N.E.");
+        let mut window = Window::from_sdl_video(&mut sdl_video);
         window
             .sdl_window()
             .set_icon(Surface::load_bmp("./yane.bmp").unwrap());
