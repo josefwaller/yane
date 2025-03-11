@@ -192,13 +192,13 @@ fn get_filename(path: &str) -> Result<String, String> {
         .ok_or("Cannot convert to str")?
         .to_string())
 }
-fn game_name_from_savestate(savestate_path: &str) -> Result<String, String> {
+fn game_name_from_savestate(savestate_file: &str) -> Result<String, String> {
     let game_name_regex = Regex::new(
-        "savestate_(.+)__[0-9]{4}_[0-9]{2}_[0-9]{2}__[0-9]{2}_[0-9]{2}_[0-9]{2}.yane.bin",
+        "savestate_(.+)_[0-9]{4}_[0-9]{2}_[0-9]{2}__[0-9]{2}_[0-9]{2}_[0-9]{2}\\.yane\\.bin",
     )
     .map_err(|e| e.to_string())?;
     Ok(game_name_regex
-        .captures(savestate_path)
+        .captures(savestate_file)
         .ok_or("Does not match Regex")?
         .get(1)
         .ok_or("No matches")?
@@ -316,13 +316,18 @@ pub fn run() {
                         Ok(nes) => nes,
                     },
                 };
-                let game_name = match game_name_from_savestate(savestate_file) {
+                let file_name = Path::new(savestate_file)
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_str()
+                    .unwrap_or_default();
+                let game_name = match game_name_from_savestate(file_name) {
                     Ok(s) => {
                         debug!("Parsed game name as {}", &s);
                         Some(s)
                     }
                     Err(e) => {
-                        error!("Unable to parse game name out of {}: {}", savestate_file, e);
+                        error!("Unable to parse game name out of {}: {}", file_name, e);
                         None
                     }
                 };
