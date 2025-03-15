@@ -2,8 +2,8 @@ use std::error::Error;
 
 use crate::utils;
 use glow::{
-    Context, HasContext, NativeBuffer, NativeFramebuffer, NativeProgram, NativeRenderbuffer,
-    NativeShader, NativeTexture, NativeVertexArray,
+    Context, HasContext, NativeBuffer, NativeFramebuffer, NativeProgram, NativeShader,
+    NativeTexture, NativeVertexArray,
 };
 
 macro_rules! check_error {

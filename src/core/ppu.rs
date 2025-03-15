@@ -419,7 +419,14 @@ impl Ppu {
     }
     /// Transform an HV value into an RGB value
     fn get_rgb(&self, hv_byte: usize) -> [u8; 3] {
-        let v = HV_TO_RGB[hv_byte];
+        // Check for greyscale
+        let i = if self.is_greyscale_mode_on() {
+            hv_byte & 0x30
+        } else {
+            hv_byte
+        };
+        // Get RGB
+        let v = HV_TO_RGB[i];
         // Check for red/green/blue emphasis
         if !(self.is_red_tint_on() || self.is_green_tint_on() || self.is_blue_tint_on()) {
             v
