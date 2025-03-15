@@ -79,6 +79,9 @@ pub struct Controller {
 /// Controls for running the emulator.
 ///
 /// Map of SDL key codes to actions in the emulator app (press a button, pause, volume up, etc).
+/// Implements default with the following key bindings:
+#[doc = include_str!("./default_keys.md")]
+
 pub struct KeyMap {
     pub controllers: [Controller; 2],
     pub pause: Key,
