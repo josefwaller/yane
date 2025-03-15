@@ -1,6 +1,6 @@
 [package]
 name = "yane"
-version = "0.2.2"
+version = "1.0.0"
 edition = "2021"
 readme = "README.MD"
 repository = "https://github.com/josefwaller/yane"
