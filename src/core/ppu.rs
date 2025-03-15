@@ -394,7 +394,7 @@ impl Ppu {
     /// This will allocate a new buffer every call - it is recomended to allocate a screen
     /// buffer once and call [Ppu::rgb_output_buf] instead.
     pub fn rgb_output(&self) -> [[[u8; 3]; 256]; 240] {
-        core::array::from_fn(|y| core::array::from_fn(|x| HV_TO_RGB[self.output[y][x]]))
+        core::array::from_fn(|y| core::array::from_fn(|x| self.get_rgb(self.output[y][x])))
     }
     /// Copy the current output of the PPU as RGB values into the given buffer
     ///
@@ -405,7 +405,7 @@ impl Ppu {
         buf.iter_mut().enumerate().for_each(|(y, row)| {
             row.iter_mut()
                 .enumerate()
-                .for_each(|(x, pixel)| *pixel = HV_TO_RGB[self.output[y][x]])
+                .for_each(|(x, pixel)| *pixel = self.get_rgb(self.output[y][x]))
         });
     }
     /// Get the current output of the PPU as hue-value bytes
@@ -416,6 +416,24 @@ impl Ppu {
     /// an RGB value for each pixel. [Ppu::rgb_output] will do this automatically.
     pub fn hv_output(&self) -> &[[usize; 256]; 240] {
         &self.output
+    }
+    /// Transform an HV value into an RGB value
+    fn get_rgb(&self, hv_byte: usize) -> [u8; 3] {
+        let v = HV_TO_RGB[hv_byte];
+        // Check for red/green/blue emphasis
+        if !(self.is_red_tint_on() || self.is_green_tint_on() || self.is_blue_tint_on()) {
+            v
+        } else {
+            const M: f32 = 0.5;
+            let should_dim = [
+                self.is_green_tint_on() || self.is_blue_tint_on(),
+                self.is_red_tint_on() || self.is_blue_tint_on(),
+                self.is_red_tint_on() || self.is_green_tint_on(),
+            ];
+            core::array::from_fn(|i| {
+                (v[i] as f32 * if should_dim[i] { M } else { 1.0 }).floor() as u8
+            })
+        }
     }
     /// Compute the output at the current dot, and set it in [Ppu::output]
     fn set_output(&mut self, settings: &Settings) {
