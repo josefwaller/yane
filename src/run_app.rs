@@ -5,6 +5,8 @@ use sdl2::event::{Event, WindowEvent};
 use sdl2::surface::Surface;
 use serde::de::DeserializeOwned;
 use simplelog::{ColorChoice, CombinedLogger, LevelFilter, TermLogger, TerminalMode, WriteLogger};
+use std::fs::{metadata, set_permissions, Permissions};
+use std::io::ErrorKind;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::thread::sleep;
@@ -68,12 +70,22 @@ struct CommonArgs {
     /// The .YAML file defining the key mappings for the NES
     #[arg(long, default_value = get_file_in_config_dir(KEYMAP_FILENAME).into_os_string(), value_name = "FILE")]
     keymap_file: PathBuf,
+    /// Tail the logs in terminal as well as the logging file
+    #[arg(long)]
+    tail: bool,
+    /// Directory to save logs to
+    #[arg(long, default_value = get_file_in_config_dir("logs").into_os_string(), value_name = "DIRECTORY")]
+    log_dir: PathBuf,
 }
 #[derive(Subcommand)]
 #[command(styles=get_cli_styles())]
 enum Command {
     /// Initialize the configuration files at $HOME/.yane/
-    Setup,
+    Setup {
+        /// Delete the config directory if it exists and create a new one
+        #[arg(short, long)]
+        force: bool,
+    },
     /// Load and run an iNES (.nes) file
     Ines {
         /// The iNes file to run
@@ -105,6 +117,15 @@ fn get_config_dir_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
     }
 }
 
+// Set permissions to allow editting
+fn set_perms(p: &mut Permissions) {
+    #[cfg(unix)]
+    p.set_mode(0o755);
+    #[cfg(windows)]
+    #[allow(clippy::permissions_set_readonly_false)]
+    p.set_readonly(false);
+}
+
 fn add_config_file(file_name: &str, contents: &str) -> Result<(), Box<dyn std::error::Error>> {
     let mut buf = get_config_dir_path()?;
     buf.push(file_name);
@@ -112,11 +133,7 @@ fn add_config_file(file_name: &str, contents: &str) -> Result<(), Box<dyn std::e
     let mut f = std::fs::File::create(&buf)?;
     debug!("Created file {}", file_name);
     let mut p = f.metadata()?.permissions();
-    #[cfg(unix)]
-    p.set_mode(0o644);
-    #[cfg(windows)]
-    #[allow(clippy::permissions_set_readonly_false)]
-    p.set_readonly(false);
+    set_perms(&mut p);
     f.set_permissions(p)?;
     // Write contents
     debug!("Writing contents to {:?}", file_name);
@@ -125,15 +142,38 @@ fn add_config_file(file_name: &str, contents: &str) -> Result<(), Box<dyn std::e
     Ok(())
 }
 
-fn setup_config_directory() -> Result<(), Box<dyn std::error::Error>> {
+fn setup_config_directory(force: bool) -> Result<(), Box<dyn std::error::Error>> {
     let config_dir = get_config_dir_path()?;
+    if force {
+        // Try to delete beforehand
+        if let Ok(true) = std::fs::exists(&config_dir) {
+            std::fs::remove_dir_all(&config_dir)?;
+        }
+    }
     debug!("Creating directory at {:?}", &config_dir);
-    let _ = std::fs::create_dir(&config_dir);
+    match std::fs::create_dir(&config_dir) {
+        Err(e) => {
+            if e.kind() == ErrorKind::AlreadyExists {
+                return Err(Box::from(
+                    "Directory already exists, use --force to force deletion and recreation",
+                ));
+            } else {
+                return Err(Box::new(e));
+            }
+        }
+        _ => {}
+    }
     debug!("Created directory at {:?}", &config_dir);
     let contents = serde_yaml::to_string(&KeyMap::default())?;
     add_config_file(KEYMAP_FILENAME, &contents)?;
     let contents = serde_yaml::to_string(&Config::default())?;
     add_config_file(SETTINGS_FILENAME, &contents)?;
+    // Create logging directory
+    let log_dir = config_dir.join("logs");
+    std::fs::create_dir(&log_dir)?;
+    let mut perms = metadata(&log_dir)?.permissions();
+    set_perms(&mut perms);
+    set_permissions(&log_dir, perms)?;
     Ok(())
 }
 // Try to create a directory, falling back on the current directory (".") if it fails
@@ -224,23 +264,38 @@ fn savedata_path_and_data(savedata_path: &str) -> (Option<String>, Option<Vec<u8
         (Some(savedata_path.to_string()), None)
     }
 }
+
+fn initialise_logger(tail: bool, path: &PathBuf) {
+    let path = path.join(
+        chrono::Local::now()
+            .format("%Y_%m_%d__%H_%M_%S.log")
+            .to_string(),
+    );
+    let f = File::create(&path).unwrap_or_else(|e| {
+        println!(
+            "Unable to create a file at {:?}: {}, defaulting to ./yane.log",
+            path, e
+        );
+        File::create("./yane.log").expect("Unable to create logging file")
+    });
+    // Initialize logger
+    CombinedLogger::init(vec![
+        TermLogger::new(
+            if tail {
+                LevelFilter::Debug
+            } else {
+                LevelFilter::Error
+            },
+            simplelog::Config::default(),
+            TerminalMode::Mixed,
+            ColorChoice::Auto,
+        ),
+        WriteLogger::new(LevelFilter::Debug, simplelog::Config::default(), f),
+    ])
+    .expect("Unable to create logger");
+}
 pub fn run() {
     {
-        // Initialize logger
-        CombinedLogger::init(vec![
-            TermLogger::new(
-                LevelFilter::Debug,
-                simplelog::Config::default(),
-                TerminalMode::Mixed,
-                ColorChoice::Auto,
-            ),
-            WriteLogger::new(
-                LevelFilter::Debug,
-                simplelog::Config::default(),
-                File::create("./yane.log").unwrap(),
-            ),
-        ])
-        .expect("Unable to create logger");
         // Initialise SDL
         let sdl = sdl2::init().expect("Unable to initialise SDL");
         let mut sdl_video = sdl.video().expect("Unable to initialise VideoSubsystem");
@@ -251,13 +306,13 @@ pub fn run() {
         // Read file and init NES
         let cli = Cli::parse();
         let (mut nes, savedata_path, game_name, args) = match &cli.command {
-            Some(Command::Setup) => match setup_config_directory() {
+            Some(Command::Setup { force }) => match setup_config_directory(*force) {
                 Ok(()) => {
-                    info!("Successfully created configuration files");
+                    println!("Successfully created configuration files");
                     std::process::exit(0)
                 }
                 Err(e) => {
-                    error!("Unable to create configuration files: {}", e);
+                    println!("Unable to create configuration files: {}", e);
                     std::process::exit(1)
                 }
             },
@@ -266,6 +321,7 @@ pub fn run() {
                 savedata_file,
                 args,
             }) => {
+                initialise_logger(args.tail, &args.log_dir);
                 // Read cartridge data
                 let data: Vec<u8> = match std::fs::read(nes_file.clone()) {
                     Ok(data) => data,
@@ -303,6 +359,8 @@ pub fn run() {
                 savestate_file,
                 args,
             }) => {
+                initialise_logger(args.tail, &args.log_dir);
+                // Read NES
                 let nes = match std::fs::read(savestate_file) {
                     Err(e) => {
                         error!("Unable to read {}: {}", savestate_file, e);
