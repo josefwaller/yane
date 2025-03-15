@@ -38,10 +38,7 @@ fn main() {
     let sdl = sdl2::init().unwrap();
     // Setup video
     let video = sdl.video().unwrap();
-    let window = video
-        .window("Example 2 - explicit", 256, 240)
-        .build()
-        .unwrap();
+    let window = video.window("Example 2 - SDL", 256, 240).build().unwrap();
     let mut canvas = window.into_canvas().build().unwrap();
     // Setup audio
     let audio = sdl.audio().unwrap();

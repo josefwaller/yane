@@ -41,6 +41,7 @@ assert_hex = "0.4.1"
 test-case = "3.3.1"
 # Included for examples that use SDL, usually SDL is hidden behind the sdl flag
 sdl2 = "0.37.0"
+image = "0.25.5"
 
 [features]
 default = ["sdl"]

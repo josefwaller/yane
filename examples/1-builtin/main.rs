@@ -44,7 +44,7 @@ fn main() {
     // Get the underlying SDL window to change the title
     window
         .sdl_window()
-        .set_title("Example 1 - minimal")
+        .set_title("Example 1 - Built In")
         .unwrap();
     // Create audio
     let mut audio = Audio::from_sdl_audio(&sdl_audio);
