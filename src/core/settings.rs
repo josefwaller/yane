@@ -18,7 +18,7 @@ impl Default for Settings {
     fn default() -> Self {
         Settings {
             use_debug_palette: false,
-            scanline_sprite_limit: false,
+            scanline_sprite_limit: true,
             always_sprites_on_top: false,
         }
     }
