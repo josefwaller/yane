@@ -407,9 +407,9 @@ pub fn run() {
         config.key_map = key_map;
         // Initialise yane SDL componentes
         let mut window = Window::from_sdl_video(&mut sdl_video);
-        window
-            .sdl_window()
-            .set_icon(Surface::load_bmp("./yane.bmp").unwrap());
+        window.sdl_window().set_icon(
+            Surface::load_bmp(Path::new(env!("CARGO_MANIFEST_DIR")).join("yane.bmp")).unwrap(),
+        );
         let mut input = Input::new();
         let mut audio = Audio::from_sdl_audio(&sdl_audio);
         // Create debug window if debug argument was passed
