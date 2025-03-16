@@ -1,6 +1,6 @@
 [package]
 name = "yane"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 readme = "README.MD"
 repository = "https://github.com/josefwaller/yane"
@@ -10,7 +10,7 @@ documentation = "https://docs.rs/yane"
 license = "MIT"
 keywords = ["nes", "nintendo", "emulator"]
 categories = ["emulators", "command-line-interface"]
-exclude = [".github"]
+exclude = [".github", "!yane.bmp"]
 
 [dependencies]
 anstyle = { version = "1.0.10", optional = true }
