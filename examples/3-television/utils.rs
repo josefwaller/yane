@@ -1,5 +1,4 @@
 use std::{
-    cmp::Ordering,
     fs::read,
     io::{BufRead, Cursor},
     path::Path,
@@ -51,40 +50,15 @@ pub fn read_obj(path: &Path) -> Vec<[f32; 8]> {
             "g" => {}
             "mtllib" => {}
             "usemtl" => {}
-            _ => println!("Unknown {}", line),
+            _ => {}
         }
     }
-    macro_rules! get {
-        ($data: ident, $func: ident) => {
-            core::array::from_fn(|i| {
-                $data
-                    .iter()
-                    .$func(|a, b| {
-                        if a[i] > b[i] {
-                            Ordering::Greater
-                        } else {
-                            Ordering::Less
-                        }
-                    })
-                    .unwrap()[i]
-            })
-        };
-    }
-    let max_vert: [f32; 3] = get!(vertices, max_by);
-    let min_vert: [f32; 3] = get!(vertices, min_by);
-    let max_tex: [f32; 2] = get!(texture_coords, max_by);
-    let min_tex: [f32; 2] = get!(texture_coords, min_by);
-    println!(
-        "Max vertice: {:?}, min vertice: {:?}, max texture coord: {:?}, min texture coord: {:?}",
-        max_vert, min_vert, max_tex, min_tex
-    );
     let divisor = 500.0;
     // Build an array of [X, Y, Z, U, V] for each vertice
     let mut data = Vec::<[f32; 8]>::with_capacity(faces.len());
     // Calculate offets to center mesh around (0, 0)
     let offsets: [f32; 3] = [-97.96449, 530.126, -37.828995];
     // core::array::from_fn(|i| (max_vert[i] + min_vert[i]) / 2.0);
-    println!("Offsets: {:?}", offsets);
     faces.into_iter().for_each(|face| {
         face.into_iter().for_each(|f| {
             let v = vertices[f[0] - 1];

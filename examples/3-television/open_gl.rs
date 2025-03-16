@@ -93,7 +93,6 @@ pub unsafe fn create_program(gl: &Context, vertex_src: &str, frag_src: &str) -> 
     program
 }
 pub unsafe fn create_texture(gl: &Context, size: (usize, usize), data: &[u8]) -> NativeTexture {
-    println!("Creating a texture {:?}", size);
     let tex = gl.create_texture().unwrap();
     gl.bind_texture(glow::TEXTURE_2D, Some(tex));
     gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::REPEAT as i32);

@@ -18,11 +18,17 @@ mod utils;
 
 fn main() {
     // Read iNes file
-    let ines_contents: Vec<u8> = File::open(std::env::args().collect::<Vec<String>>()[1].clone())
-        .expect("Unable to open file")
-        .bytes()
-        .map(|b| b.unwrap())
-        .collect();
+    let ines_contents: Vec<u8> = File::open(
+        std::env::args()
+            .collect::<Vec<String>>()
+            .get(1)
+            .expect("Please provide an iNes file to run")
+            .clone(),
+    )
+    .expect("Unable to open file")
+    .bytes()
+    .map(|b| b.unwrap())
+    .collect();
     // Initialise SDL
     let sdl = sdl2::init().unwrap();
     let mut event_pump = sdl.event_pump().unwrap();
