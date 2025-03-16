@@ -9,12 +9,41 @@
 Can be used as either a standalone CLI emulator or as a ready-out-of-the-box rust crate for emulating an N.E.S.
 
 ## Usage as an emulator
-Make sure your cargo install directory (default `~/.cargo/bin`) is in your `$PATH`, then simply run `cargo install yane`.
-Once installed, run `yane ines path/to/my/rom.nes`.
+
+### Install via `cargo`
 ```terminal, ignore
 > cargo install yane
 ...
+> yane [COMMAND] [OPTIONS]
+...
+```
+Make sure your cargo install directory (default `~/.cargo/bin`) is in your `$PATH`.
 
+**WINDOWS USERS**: Make sure the appropriate `SDL2.lib` and `SDL2.dll` are present in your `$PATH`.
+See [the official releases](https://github.com/libsdl-org/SDL/releases).
+
+### Download prebuilt binaries
+Download the appropriate release from [the releases page](https://github.com/josefwaller/yane/releases),
+then extract the entire folder contents to somewhere in your `$PATH`.
+
+### Build from scratch
+**WINDOWS USERS**: Make sure the appropriate `SDL2.lib` and `SDL2.dll` are present in your `$PATH`.
+See [the official releases](https://github.com/libsdl-org/SDL/releases).
+
+```terminal, ignore
+> git clone https://github.com/josefwaller/yane.git
+...
+> cd yane
+> cargo build -r
+...
+> ./target/release/yane [COMMAND] [ARGS]
+```
+
+## Run the emulator
+Once installed, run `yane ines path/to/my/rom.nes`.
+Yane uses a simple command line interface, use `yane -h` and `yane [COMMAND] -h` to see the available options.
+
+```terminal, ignore
 > yane -h
 An N.E.S. emulator.
 
@@ -62,14 +91,24 @@ so you can run the emulator without running `yane setup` if you want.
 
 ## Usage as a library
 
-```rust, ignore
-// Load an iNes (.ines) file
-let ines = include_bytes!("./my_game.nes");
-// Create a new N.E.S. console with the game inserted
-let mut nes = Nes::with_cartridge(Cartridge::from_bytes(ines, None));
-let config = Config::default();
+All of Yane's functionality is available as a standalone, pure rust crate.
+
+```rust
+use yane::core::{Nes, Settings, Cartridge, Controller};
+// Create a new N.E.S. console with an empty cartridge inserted
+// You could use Cartridge::from_bytes(include_bytes!("path/to/my/game.nes", None)) to load from an iNes file instead.
+let mut nes = Nes::new();
+// Use the default settings for the emulator
+let settings = Settings::default();
 // Advance the N.E.S. by 1 frame (i.e. until the VBlank interval)
-nes.advance_frame(&config);
+nes.advance_frame(&settings);
+// Advance the N.E.S. by one single instruction
+nes.advance_instruction(&settings);
+// Press the A button on player 1's controller
+nes.set_controller_state(0, Controller {
+  a: true,
+  ..Controller::default()
+});
 // Reset the N.E.S.
 nes.reset();
 ```
@@ -82,5 +121,6 @@ It includes the SDL interface that comes with Yane (i.e. everything in [yane::ap
 If you want to use yane as a pure rust library, you can omit this flag.
 
 # Credits
-All test roms are from [the nes-test-rom](https://github.com/christopherpow/nes-test-roms) repository.
+All test roms are from [the nes-test-rom](https://github.com/christopherpow/nes-test-roms) repository,
+without which this project would probably not be possible.
 Some examples use models or NES games not made by me, there are `credits.txt` files where appropriate.
