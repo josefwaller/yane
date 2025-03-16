@@ -9,7 +9,7 @@ description = "An N.E.S. emulator and emulation library."
 documentation = "https://docs.rs/yane"
 license = "MIT"
 keywords = ["nes", "nintendo", "emulator"]
-categories = ["emulators", "command-line-interface"]
+categories = ["emulators"]
 exclude = [".github", "!yane.bmp"]
 
 [dependencies]
