@@ -24,11 +24,6 @@ See [the official releases](https://github.com/libsdl-org/SDL/releases).
 
 Make sure your cargo install directory (default `~/.cargo/bin`) is in your `$PATH`.
 
-### Download prebuilt binaries
-
-Download the appropriate release from [the releases page](https://github.com/josefwaller/yane/releases),
-then extract the entire folder contents to somewhere in your `$PATH`.
-
 ### Build from scratch
 
 **WINDOWS USERS**: Add the appropriate `SDL2.lib` and `SDL2.dll` to the root of the crate (i.e. `/yane/`).
