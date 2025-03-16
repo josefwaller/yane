@@ -56,7 +56,12 @@ impl DebugWindow {
         let window_width = 600;
         let window_height = 1200;
 
-        let (window, gl_context, gl) = create_window(video, "CHR ROM", window_width, window_height);
+        let (window, gl_context, gl) = create_window(
+            video,
+            "Y.A.N.E. - Debug Settings",
+            window_width,
+            window_height,
+        );
 
         let mut imgui = imgui::Context::create();
         imgui.set_ini_filename(None);
