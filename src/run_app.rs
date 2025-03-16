@@ -44,9 +44,9 @@ fn get_cli_styles() -> clap::builder::Styles {
 
 #[derive(Parser)]
 #[command(
-    name = "Yane",
-    version = "0.9",
-    about = "An N.E.S. emulator.",
+    name = env!("CARGO_PKG_NAME"),
+    version = env!("CARGO_PKG_VERSION"),
+    about = env!("CARGO_PKG_DESCRIPTION"),
     arg_required_else_help = true
 )]
 struct Cli {
