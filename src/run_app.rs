@@ -9,7 +9,8 @@ use std::fs::{metadata, set_permissions, Permissions};
 use std::io::ErrorKind;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
-use std::thread::sleep;
+use std::sync::Mutex;
+use std::thread::{self, sleep};
 use std::{fs::File, io::Write, path::PathBuf};
 use std::{
     path::Path,
@@ -443,13 +444,14 @@ pub fn run() {
         config.savestate_dir = try_create_dir(&config.savestate_dir);
         debug!("Savestates will be saved in {:?}", config.savestate_dir);
 
-        let mut last_debug_window_render = Instant::now();
+        let mut last_window_render = Instant::now();
         // Various constants for keeping emulator time in check with real time
-        const DEBUG_WINDOW_REFRESH_RATE: Duration = Duration::from_millis(1000 / 60);
+        const WINDOW_REFRESH_RATE: Duration = Duration::from_millis(1000 / 60);
         // Used for logging information every 100 frames
         let mut last_hundred_frames = Instant::now();
         let mut frame_cycles = 0;
-        let mut frame_count = 0;
+        let mut emu_frame_count = 0;
+        let mut actual_frame_count = 0;
         let mut frame_wait_time = Duration::ZERO;
         let mut delta = Instant::now();
         loop {
@@ -475,19 +477,37 @@ pub fn run() {
             }
 
             // Render debug window
-            if Instant::now().duration_since(last_debug_window_render) >= DEBUG_WINDOW_REFRESH_RATE
-            {
-                last_debug_window_render += DEBUG_WINDOW_REFRESH_RATE;
+            if Instant::now().duration_since(last_window_render) >= WINDOW_REFRESH_RATE {
+                last_window_render += WINDOW_REFRESH_RATE;
+                // Render debug window
                 if let Some(d) = debug_window.as_mut() {
                     d.render(&mut nes, &event_pump, &mut config)
+                }
+                // Render window
+                window.render(&nes, &config);
+                actual_frame_count += 1;
+                if actual_frame_count == 600 {
+                    actual_frame_count = 0;
+                    let now = Instant::now();
+                    debug!(
+                        "Over last 600 frames: Avg actual FPS: {}, emulator frames: {}, duration: {:?}, total cycles: {}, avg wait time {:#?}",
+                        600.0
+                            / (now.duration_since(last_hundred_frames).as_millis() as f32 / 1000.0),
+                            emu_frame_count,
+                        now.duration_since(last_hundred_frames),
+                        frame_cycles,
+                        frame_wait_time.div_f64(600.0)
+                    );
+
+                    frame_cycles = 0;
+                    frame_wait_time = Duration::ZERO;
+                    last_hundred_frames = now;
                 }
             }
             // Update window
             input.update(&mut nes, &event_pump, &mut config);
             // Update audio
             audio.update(&mut nes, &config);
-            // Render window
-            window.render(&nes, &config);
             // Update CPU
             if config.paused {
                 delta = Instant::now();
@@ -502,23 +522,8 @@ pub fn run() {
                 };
                 frame_cycles += cycles_to_wait;
                 // Debug log FPS info
-                frame_count += 1;
-                if frame_count == 600 {
-                    frame_count = 0;
-                    let now = Instant::now();
-                    debug!(
-                        "Over last 600 frames: Avg FPS: {}, duration: {:?}, total cycles: {}, avg wait time {:#?}",
-                        600.0
-                            / (now.duration_since(last_hundred_frames).as_millis() as f32 / 1000.0),
-                        now.duration_since(last_hundred_frames),
-                        frame_cycles,
-                        frame_wait_time.div_f64(600.0)
-                    );
+                emu_frame_count += 1;
 
-                    frame_cycles = 0;
-                    frame_wait_time = Duration::ZERO;
-                    last_hundred_frames = now;
-                }
                 // Calculate how much time has passed in the emulation
                 let emu_elapsed = Duration::from_nanos(
                     cycles_to_wait as u64 * 1_000_000_000 / CPU_CLOCK_SPEED as u64,
