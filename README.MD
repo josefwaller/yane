@@ -10,6 +10,9 @@ Can be used as either a standalone CLI emulator or as a ready-out-of-the-box rus
 
 ## Usage as an emulator
 
+**WINDOWS USERS**: Make sure the appropriate `SDL2.dll` is in your `$PATH`.
+See [the official releases](https://github.com/libsdl-org/SDL/releases).
+
 ### Install via `cargo`
 
 ```terminal, ignore
@@ -20,9 +23,6 @@ Can be used as either a standalone CLI emulator or as a ready-out-of-the-box rus
 ```
 
 Make sure your cargo install directory (default `~/.cargo/bin`) is in your `$PATH`.
-
-**WINDOWS USERS**: Make sure the appropriate `SDL2.dll` are is in your `$PATH`.
-See [the official releases](https://github.com/libsdl-org/SDL/releases).
 
 ### Download prebuilt binaries
 
