@@ -1,9 +1,5 @@
 use sdl2::event::{Event, WindowEvent};
 use std::{
-    env,
-    fs::File,
-    io::Read,
-    process::exit,
     thread::sleep,
     time::{Duration, Instant},
 };
@@ -39,9 +35,6 @@ fn main() {
     // Just use default settings
     // Could be configured to use different key bindings, change the speed or volume, etc.
     let mut config = Config::default();
-    // The amount of time the emulator has been running, in emulator time
-    // Used to keep the emulator in sync with the real world
-    let mut emu_duration = Duration::ZERO;
     // The time the emulation started
     let start_time = Instant::now();
     let mut total_cycles = 0;
@@ -66,7 +59,7 @@ fn main() {
             break;
         }
         // Wait for the appropriate amount of time
-        emu_duration =
+        let emu_duration =
             Duration::from_nanos(1_000_000_000 * total_cycles as u64 / CPU_CLOCK_SPEED as u64);
         let real_duration = Instant::now().duration_since(start_time);
         if emu_duration > real_duration {
