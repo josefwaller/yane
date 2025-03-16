@@ -533,14 +533,16 @@ pub fn run() {
         }
         // Save audio recording
         let data = audio.all_samples.into_boxed_slice();
-        let samples = Samples::new(data);
-        write(
-            Path::new(format!("./{}.wav", config.record_audio_filename).as_str()),
-            &samples,
-            1_789_000,
-            1,
-        )
-        .unwrap();
+        if !data.is_empty() {
+            let samples = Samples::new(data);
+            write(
+                Path::new(format!("./{}.wav", config.record_audio_filename).as_str()),
+                &samples,
+                1_789_000,
+                1,
+            )
+            .unwrap();
+        }
         // Save game if we want to
         if nes.cartridge.has_battery_backed_ram() {
             match savedata_path {
