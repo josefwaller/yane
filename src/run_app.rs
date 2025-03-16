@@ -265,6 +265,16 @@ fn savedata_path_and_data(savedata_path: &str) -> (Option<String>, Option<Vec<u8
     }
 }
 
+fn get_window_icon() -> Option<Surface<'static>> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("yane.bmp");
+    let final_path = if std::fs::exists(&path).is_ok_and(|v| v) {
+        path
+    } else {
+        PathBuf::from("./yane.bmp")
+    };
+    Surface::load_bmp(final_path).ok()
+}
+
 fn initialise_logger(tail: bool, path: &PathBuf) {
     let path = path.join(
         chrono::Local::now()
@@ -407,9 +417,10 @@ pub fn run() {
         config.key_map = key_map;
         // Initialise yane SDL componentes
         let mut window = Window::from_sdl_video(&mut sdl_video);
-        window.sdl_window().set_icon(
-            Surface::load_bmp(Path::new(env!("CARGO_MANIFEST_DIR")).join("yane.bmp")).unwrap(),
-        );
+        match get_window_icon() {
+            Some(s) => window.sdl_window().set_icon(s),
+            None => error!("Unable to load window icon"),
+        }
         let mut input = Input::new();
         let mut audio = Audio::from_sdl_audio(&sdl_audio);
         // Create debug window if debug argument was passed
