@@ -11,23 +11,27 @@ Can be used as either a standalone CLI emulator or as a ready-out-of-the-box rus
 ## Usage as an emulator
 
 ### Install via `cargo`
+
 ```terminal, ignore
 > cargo install yane
 ...
 > yane [COMMAND] [OPTIONS]
 ...
 ```
+
 Make sure your cargo install directory (default `~/.cargo/bin`) is in your `$PATH`.
 
-**WINDOWS USERS**: Make sure the appropriate `SDL2.lib` and `SDL2.dll` are present in your `$PATH`.
+**WINDOWS USERS**: Make sure the appropriate `SDL2.dll` are is in your `$PATH`.
 See [the official releases](https://github.com/libsdl-org/SDL/releases).
 
 ### Download prebuilt binaries
+
 Download the appropriate release from [the releases page](https://github.com/josefwaller/yane/releases),
 then extract the entire folder contents to somewhere in your `$PATH`.
 
 ### Build from scratch
-**WINDOWS USERS**: Make sure the appropriate `SDL2.lib` and `SDL2.dll` are present in your `$PATH`.
+
+**WINDOWS USERS**: Add the appropriate `SDL2.lib` and `SDL2.dll` to the root of the crate (i.e. `/yane/`).
 See [the official releases](https://github.com/libsdl-org/SDL/releases).
 
 ```terminal, ignore
@@ -40,6 +44,7 @@ See [the official releases](https://github.com/libsdl-org/SDL/releases).
 ```
 
 ## Run the emulator
+
 Once installed, run `yane ines path/to/my/rom.nes`.
 Yane uses a simple command line interface, use `yane -h` and `yane [COMMAND] -h` to see the available options.
 
@@ -81,13 +86,13 @@ Successfully created configuration files
 
 > yane ines path/to/my/rom.nes --muted --debug --keymap-file=my/custom/keymap.yaml
 ```
+
 See [KeyMap](https://docs.rs/yane/latest/yane/app/struct.KeyMap.html) for the default key bindings.
 
 Running `yane setup` will create a bunch of configuration files at `$HOME/.yane`.
 These can then be edited to change the keymappings, settings, logging directory, etc.
 Yane will check for these files before running every time and fall back on the defaults if they don't exist,
 so you can run the emulator without running `yane setup` if you want.
-
 
 ## Usage as a library
 
@@ -116,11 +121,13 @@ nes.reset();
 See the [documentation on the library portion](https://docs.rs/yane/latest/yane/core/index.html) or the [examples](https://github.com/josefwaller/yane/tree/main/examples) for more.
 
 ## Feature Flags
+
 Yane includes one feature flag, `sdl`, which is enabled by default.
 It includes the SDL interface that comes with Yane (i.e. everything in [yane::app](https://docs.rs/yane/latest/yane/app/index.html)).
 If you want to use yane as a pure rust library, you can omit this flag.
 
 # Credits
+
 All test roms are from [the nes-test-rom](https://github.com/christopherpow/nes-test-roms) repository,
 without which this project would probably not be possible.
 Some examples use models or NES games not made by me, there are `credits.txt` files where appropriate.
