@@ -307,14 +307,7 @@ fn initialise_logger(tail: bool, path: &PathBuf) {
 }
 pub fn run() {
     {
-        // Initialise SDL
-        let sdl = sdl2::init().expect("Unable to initialise SDL");
-        let mut sdl_video = sdl.video().expect("Unable to initialise VideoSubsystem");
-        let sdl_audio = sdl.audio().expect("Unable to initialise AudioSubsystem");
-        let mut event_pump = sdl
-            .event_pump()
-            .expect("Unable to initialize SDL event pump");
-        // Read file and init NES
+        // Parse command
         let cli = Cli::parse();
         let (mut nes, savedata_path, game_name, args) = match &cli.command {
             Some(Command::Setup { force }) => match setup_config_directory(*force) {
@@ -410,6 +403,13 @@ pub fn run() {
             Some(s) => info!("Savedata will be saved at {:?}", s),
             None => debug!("No savedata"),
         }
+        // Initialise SDL
+        let sdl = sdl2::init().expect("Unable to initialise SDL");
+        let mut sdl_video = sdl.video().expect("Unable to initialise VideoSubsystem");
+        let sdl_audio = sdl.audio().expect("Unable to initialise AudioSubsystem");
+        let mut event_pump = sdl
+            .event_pump()
+            .expect("Unable to initialize SDL event pump");
         // Load config
         let mut config = read_config_file(&args.config_file, Config::default());
         config.game_name = game_name;
