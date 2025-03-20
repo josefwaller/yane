@@ -33,6 +33,7 @@ serde-big-array = "0.5.1"
 serde_yaml = { version = "0.9.34", optional = true }
 simplelog = "0.12.2"
 typetag = "0.2.19"
+wasm-bindgen = { version = "0.2.100", optional = true }
 wavers = { version = "1.5.1", optional = true }
 
 [dev-dependencies]
@@ -61,6 +62,7 @@ sdl = [
     "dep:serde_yaml",
     "dep:wavers",
 ]
+wasm-bindgen = ["dep:wasm-bindgen"]
 
 [profile.dev]
 opt-level = 1

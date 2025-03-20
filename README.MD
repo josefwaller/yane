@@ -117,9 +117,11 @@ See the [documentation on the library portion](https://docs.rs/yane/latest/yane/
 
 ## Feature Flags
 
-Yane includes one feature flag, `sdl`, which is enabled by default.
-It includes the SDL interface that comes with Yane (i.e. everything in [yane::app](https://docs.rs/yane/latest/yane/app/index.html)).
+Yane includes two feature flags
+* `sdl`, which is enabled by default, includes the SDL interface that comes with Yane (i.e. everything in [yane::app](https://docs.rs/yane/latest/yane/app/index.html)).
 If you want to use yane as a pure rust library, you can omit this flag.
+* `wasm-bindgen` makes [Controller](https://docs.rs/yane/latest/yane/core/struct.Controller.html) exportable to javascript via `wasm_bindgen` so that it can be passed between javascript and wasm easily.
+See [the wasm-bindgen docs](https://crates.io/crates/wasm-bindgen).
 
 # Credits
 
