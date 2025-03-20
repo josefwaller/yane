@@ -9,8 +9,7 @@ use std::fs::{metadata, set_permissions, Permissions};
 use std::io::ErrorKind;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
-use std::sync::Mutex;
-use std::thread::{self, sleep};
+use std::thread::sleep;
 use std::{fs::File, io::Write, path::PathBuf};
 use std::{
     path::Path,
