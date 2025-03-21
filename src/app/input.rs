@@ -34,7 +34,7 @@ impl Input {
     fn update_controller(&self, nes: &mut Nes, index: usize, keys: &[Keycode], config: &Config) {
         let c = &config.key_map.controllers;
         // P1
-        let controller = Controller {
+        let mut controller = Controller {
             up: Input::key_down(&c[index].up, keys),
             left: Input::key_down(&c[index].left, keys),
             right: Input::key_down(&c[index].right, keys),
@@ -44,6 +44,14 @@ impl Input {
             start: Input::key_down(&c[index].start, keys),
             select: Input::key_down(&c[index].select, keys),
         };
+        if config.restrict_controller_directions {
+            if controller.up {
+                controller.down = false;
+            }
+            if controller.left {
+                controller.right = false;
+            }
+        }
         nes.set_controller_state(index, controller);
     }
     pub fn update(&mut self, nes: &mut Nes, event_pump: &EventPump, config: &mut Config) {
