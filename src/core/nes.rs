@@ -155,6 +155,20 @@ impl Nes {
         postcard::to_allocvec(self)
     }
 
+    /// Get the savedata of the game in the NES, if there is any
+    ///
+    /// Really just an alias for [`self.cartridge.memory.prg_ram`][crate::core::CartridgeMemory#structfield.prg_ram]
+    /// if the cartridge has battery backed ram,
+    /// since "savedata" on the NES is just the cartridge RAM.
+    /// Provided here as a convenience method.
+    pub fn savedata(&self) -> Option<&[u8]> {
+        if self.cartridge.has_battery_backed_ram() {
+            Some(&self.cartridge.memory.prg_ram)
+        } else {
+            None
+        }
+    }
+
     fn read_controller_bit(&mut self, num: usize) -> u8 {
         let pressed = match self.controller_bits[num] {
             0 => self.cached_controllers[num].a,

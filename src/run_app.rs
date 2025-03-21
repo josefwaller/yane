@@ -559,15 +559,15 @@ pub fn run() {
             .unwrap();
         }
         // Save game if we want to
-        if nes.cartridge.has_battery_backed_ram() {
-            match savedata_path {
+        match nes.savedata() {
+            Some(data) => match savedata_path {
                 Some(p) => {
                     info!("Writing savedata to to {:#?}", &p);
-                    std::fs::write(&p, nes.cartridge.memory.prg_ram)
-                        .expect("Unable to save savefile");
+                    std::fs::write(&p, data).expect("Unable to save savefile");
                 }
                 None => error!("Cartridge has savedata but no savedata path is present"),
-            }
+            },
+            None => {}
         }
     }
 }
