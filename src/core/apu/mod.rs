@@ -122,7 +122,6 @@ impl Apu {
                 d.repeat = (value & 0x40) != 0;
                 d.rate = DMC_RATES[(value & 0x0F) as usize];
                 d.time_reload = d.rate;
-                d.silent = false;
             }
             0x4011 => d.output = (value & 0x7F) as u32,
             0x4012 => {
@@ -332,6 +331,7 @@ impl Apu {
                         }
                         0 => {
                             // DMC has no bytes, do nothing
+                            d.silent = true;
                         }
                         _ => {
                             // Load next sample

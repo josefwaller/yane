@@ -51,7 +51,7 @@ impl Debug for DmcRegister {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "bytes_remaining={:X} silent={} timer={:3X} repeat={} sample_addr={:X} sample_len={:X} IRQ={}",
+            "bytes_remaining={:X} silent={} timer={:3X} repeat={} sample_addr={:X} sample_len={:X} IRQ={}, output={}",
             self.bytes_remaining,
             self.silent,
             self.time_reload,
@@ -59,6 +59,7 @@ impl Debug for DmcRegister {
             self.sample_addr,
             self.sample_len,
             self.irq_enabled,
+            self.output
         )
     }
 }
