@@ -4,6 +4,7 @@
 /// Some fields can also change the behaviour of some games (by interfering with the
 /// sprite 0 hit or sprite overflow flags).
 #[derive(Copy, Clone)]
+#[cfg_attr(feature = "wasm-bindgen", wasm_bindgen::prelude::wasm_bindgen)]
 pub struct Settings {
     /// Debugging palette override, assigns each palette a unique colour to quickly show which tiles are using which palettes.
     pub use_debug_palette: bool,
