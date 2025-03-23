@@ -369,7 +369,7 @@ pub fn run() {
                         error!("Unable to read {}: {}", savestate_file, e);
                         std::process::exit(1);
                     }
-                    Ok(data) => match Nes::from_savestate(data) {
+                    Ok(data) => match Nes::from_savestate(&data) {
                         Err(e) => {
                             error!("Unable to deserialize NES: {}", e);
                             std::process::exit(1);

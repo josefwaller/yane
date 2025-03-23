@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, fmt::Debug, ops::Deref};
+use std::{collections::VecDeque, fmt::Debug};
 
 use log::*;
 use serde::{Deserialize, Serialize};
@@ -141,8 +141,8 @@ impl Nes {
     /// let savestate = include_bytes!("./savestate.yane.bin");
     /// let nes = Nes::from_savestate(savestate);
     /// ```
-    pub fn from_savestate(savestate: Vec<u8>) -> Result<Nes, postcard::Error> {
-        postcard::from_bytes(savestate.deref())
+    pub fn from_savestate(savestate: &[u8]) -> Result<Nes, postcard::Error> {
+        postcard::from_bytes(savestate)
     }
     /// Get a serialized copy of this NES as binary data.
     ///
