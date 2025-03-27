@@ -426,7 +426,7 @@ impl Ppu {
             hv_byte
         };
         // Get RGB
-        let v = HV_TO_RGB[i];
+        let v = HV_TO_RGB[i & 0x3F];
         // Check for red/green/blue emphasis
         if !(self.is_red_tint_on() || self.is_green_tint_on() || self.is_blue_tint_on()) {
             v

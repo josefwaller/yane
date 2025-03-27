@@ -3,12 +3,12 @@ use super::{
     CartridgeMemory, NametableArrangement,
 };
 use std::fmt::{Debug, Display};
-#[typetag::serde(tag = "mapper")]
 /// Interface for the various cartridge mappers.
 ///
 /// Reading and writing bytes will go through these functions,
 /// which may transform the address depending on the mapper's state.
 /// It may also change the internal state of the mapper, in order to clock a divider and trigger an interrupt, for example.
+#[typetag::serde(tag = "mapper")]
 pub trait Mapper: Debug + Display {
     /// Read a byte given an address in CPU memory space
     fn read_cpu(&self, cpu_addr: usize, mem: &CartridgeMemory) -> u8;
