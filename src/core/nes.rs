@@ -450,8 +450,8 @@ impl Nes {
                 self.push_to_stack_u16(self.cpu.p_c.wrapping_add(2));
                 self.push_to_stack(self.cpu.s_r.to_byte());
                 self.cpu.s_r.i = true;
-                self.cpu.p_c = (((self.read_byte(0xFFFE) as u16) << 8)
-                    + self.read_byte(0xFFFF) as u16)
+                self.cpu.p_c = (((self.read_byte(0xFFFF) as u16) << 8)
+                    + self.read_byte(0xFFFE) as u16)
                     .wrapping_sub(1);
                 Ok((1, 7))
             }
