@@ -110,6 +110,8 @@ impl Cartridge {
     ///
     /// * `bytes` The contents of the iNes file.
     /// * `savedata` The battery backed static RAM on the cartridge, used to initialise the PRG RAM if present.
+    ///
+    /// Returns a [Result] with either the [Cartridge] if successful or a [String] detailing the error if not.
     pub fn from_ines(
         bytes: &[u8],
         savedata: Option<Vec<u8>>,
