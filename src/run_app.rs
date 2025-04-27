@@ -355,7 +355,10 @@ pub fn run() {
                         savedata_path_and_data(&s)
                     }
                 };
-                let nes = Nes::with_cartridge(Cartridge::from_ines(data.as_slice(), savedata));
+                let nes = Nes::with_cartridge(
+                    Cartridge::from_ines(data.as_slice(), savedata)
+                        .expect("Unable to initialise emulator: "),
+                );
                 (nes, savedata_path, game_name, args)
             }
             Some(Command::Savestate {

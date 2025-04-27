@@ -38,7 +38,7 @@ fn main() {
     gl_attr.set_context_version(3, 3);
     gl_attr.set_context_flags().forward_compatible().set();
     // Set up NES
-    let mut nes = Nes::with_cartridge(Cartridge::from_ines(&ines_contents, None));
+    let mut nes = Nes::with_cartridge(Cartridge::from_ines(&ines_contents, None).unwrap());
     let mut input = Input::new();
     let mut audio = Audio::from_sdl_audio(&sdl.audio().unwrap());
     // Spawn OpenGL window

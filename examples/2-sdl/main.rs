@@ -32,7 +32,7 @@ fn main() {
         buf
     };
     // Create the NES
-    let mut nes = Nes::with_cartridge(Cartridge::from_ines(&ines_bytes, None));
+    let mut nes = Nes::with_cartridge(Cartridge::from_ines(&ines_bytes, None).unwrap());
     let settings = Settings::default();
     // Initialize SDL2
     let sdl = sdl2::init().unwrap();

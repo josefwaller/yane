@@ -110,7 +110,10 @@ impl Cartridge {
     ///
     /// * `bytes` The contents of the iNes file.
     /// * `savedata` The battery backed static RAM on the cartridge, used to initialise the PRG RAM if present.
-    pub fn from_ines(bytes: &[u8], savedata: Option<Vec<u8>>) -> Cartridge {
+    pub fn from_ines(
+        bytes: &[u8],
+        savedata: Option<Vec<u8>>,
+    ) -> Result<Cartridge, std::string::String> {
         if cfg!(debug_assertions) {
             assert_eq!(bytes[0], b'N');
             assert_eq!(bytes[1], b'E');
@@ -181,7 +184,10 @@ impl Cartridge {
             "Cartridge is using {} mapper (0x{:X})",
             mapper_id, mapper_id
         );
-        let mapper = get_mapper(mapper_id as usize);
+        let mapper = match get_mapper(mapper_id as usize) {
+            Some(s) => s,
+            None => return Err(format!("Unsupported mapper number: {}", mapper_id)),
+        };
         let mut start = 16 + if has_trainer { 512 } else { 0 };
         let mut end = start + prg_rom_size;
         let prg_rom = bytes[start..end].to_vec();
@@ -197,7 +203,7 @@ impl Cartridge {
             }
             None => vec![0; prg_ram_size],
         };
-        Cartridge {
+        Ok(Cartridge {
             memory: CartridgeMemory {
                 prg_rom,
                 chr_rom,
@@ -207,7 +213,7 @@ impl Cartridge {
             },
             mapper,
             has_battery_ram,
-        }
+        })
     }
     /// Read a byte from the cartridge's memory given an address in CPU memory space
     pub fn read_cpu(&self, addr: usize) -> u8 {

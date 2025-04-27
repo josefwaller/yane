@@ -46,16 +46,16 @@ pub trait Mapper: Debug + Display {
     fn mapper_num(&self) -> u32;
 }
 /// Get an implementation of `Mapper` given a certain mapper number
-pub fn get_mapper(mapper_id: usize) -> Box<dyn Mapper> {
-    match mapper_id {
+pub fn get_mapper(mapper_id: usize) -> Option<Box<dyn Mapper>> {
+    Some(match mapper_id {
         0 => Box::new(NRom::default()),
         1 => Box::new(SxRom::default()),
         2 => Box::new(UxRom::default()),
         3 => Box::new(CnRom::default()),
         4 => Box::new(TxRom::default()),
         9 => Box::new(PxRom::default()),
-        _ => panic!("Unsupported mapper: {}", mapper_id),
-    }
+        _ => return None,
+    })
 }
 /// Get the address given a certain bank of a certain size, and the original address
 pub fn bank_addr(bank_size: usize, bank_num: usize, offset: usize) -> usize {

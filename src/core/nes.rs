@@ -99,7 +99,7 @@ impl Nes {
             ppu: Ppu::new(),
             apu: Apu::new(),
             mem: [0x00; 0x800],
-            cartridge: Cartridge::from_ines(c.as_slice(), None),
+            cartridge: Cartridge::from_ines(c.as_slice(), None).unwrap(),
             controllers: [Controller::new(); 2],
             cached_controllers: [Controller::new(); 2],
             controller_bits: [0; 2],

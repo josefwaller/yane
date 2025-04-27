@@ -13,7 +13,7 @@ fn main() {
     // Change this path to use your own NES game
     let ines_bytes = include_bytes!("./thwaite.nes");
     // Create NES
-    let mut nes = Nes::with_cartridge(Cartridge::from_ines(ines_bytes, None));
+    let mut nes = Nes::with_cartridge(Cartridge::from_ines(ines_bytes, None).unwrap());
     // Initialize SDL
     let sdl = sdl2::init().expect("Unable to initialize SDL");
     let mut sdl_video = sdl.video().expect("Unable to initailize SDL video");
