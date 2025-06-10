@@ -6,6 +6,7 @@ use super::{Cartridge, DEBUG_PALETTE, HV_TO_RGB};
 use log::*;
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
+use typetag::serde;
 
 /// Number of dots per scanline
 const DOTS_PER_SCANLINE: u32 = 341;
@@ -55,8 +56,12 @@ pub struct Ppu {
     pub nametable_ram: [u8; 0x800],
     // W register, false = 0
     w: bool,
-    // (x, y) coordinate of dot (pixel) being processed
+    /// (x, y) coordinate of dot (pixel) being processed
     pub dot: (u32, u32),
+    /// (x, y) coordinate that the mask should be updated at
+    /// Since writing the mask is delayed 3 dots, we need to store when it should be updated
+    #[serde(skip)]
+    mask_dot: Option<(u8, (u32, u32))>,
     // t register
     t: u32,
     // v register
@@ -105,6 +110,7 @@ impl Ppu {
             nametable_ram: [0; 0x800],
             w: true,
             dot: (0, 0),
+            mask_dot: None,
             t: 0,
             v: 0,
             x: 0,
@@ -159,7 +165,19 @@ impl Ppu {
                 self.t = (self.t & !0x0C00) | (((value & 0x03) as u32) << 10);
             }
             // PPUMASK
-            1 => self.mask = value,
+            1 => {
+                // Hack time
+                // Since Y.A.N.E. is not cycle accurate, we guess that the current instruction takes an average of
+                // 5 cycles, so 5 * 3 = 15, plus 4/5 bots delay is 20 dots
+                // Seems to work for battletoads and that's basically the only game that needs this
+                self.mask_dot = Some((
+                    value,
+                    (
+                        (self.dot.0 + 20) % DOTS_PER_SCANLINE,
+                        (self.dot.1 + (self.dot.0 + 20) / DOTS_PER_SCANLINE) % SCANLINES_PER_FRAME,
+                    ),
+                ));
+            }
             // PPUSTATUS
             2 => self.w = false,
             // OAMADDR
@@ -343,13 +361,24 @@ impl Ppu {
             } else {
                 (self.dot.0 + 1, self.dot.1)
             };
+            match self.mask_dot {
+                Some((value, dot)) => {
+                    if self.dot == dot {
+                        self.mask = value;
+                        self.mask_dot = None;
+                    }
+                }
+                None => {}
+            }
             // Set output if we are in the visible picture
             self.set_output(settings);
             // Load tile data
             if self.is_background_rendering_enabled() || self.is_sprite_rendering_enabled() {
-                if self.dot == (280, PRERENDER_SCANLINE) {
-                    // Copy vertical component from T to V
-                    self.v = (self.v & 0x041F) | (self.t & !0x041F);
+                if self.dot.1 == PRERENDER_SCANLINE {
+                    if self.dot.0 > 279 && self.dot.0 < 305 {
+                        // Copy vertical component from T to V
+                        self.v = (self.v & 0x041F) | (self.t & !0x041F);
+                    }
                 }
                 // IF we are in the visible picture
                 if self.dot.1 < RENDER_SCANLINES || self.dot.1 == PRERENDER_SCANLINE {
