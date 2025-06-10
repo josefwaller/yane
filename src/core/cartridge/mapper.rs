@@ -1,3 +1,5 @@
+use crate::core::mappers::AxRom;
+
 use super::{
     mappers::{CnRom, NRom, PxRom, SxRom, TxRom, UxRom},
     CartridgeMemory, NametableArrangement,
@@ -44,6 +46,10 @@ pub trait Mapper: Debug + Display {
     }
     /// Get the iNes mapper number of this mapper
     fn mapper_num(&self) -> u32;
+    /// Use a custom methodto transform VRAM memory address
+    fn transform_nametable_addr(&self, _addr: usize) -> usize {
+        0
+    }
 }
 /// Get an implementation of `Mapper` given a certain mapper number
 pub fn get_mapper(mapper_id: usize) -> Option<Box<dyn Mapper>> {
@@ -53,6 +59,7 @@ pub fn get_mapper(mapper_id: usize) -> Option<Box<dyn Mapper>> {
         2 => Box::new(UxRom::default()),
         3 => Box::new(CnRom::default()),
         4 => Box::new(TxRom::default()),
+        7 => Box::new(AxRom::default()),
         9 => Box::new(PxRom::default()),
         _ => return None,
     })

@@ -22,6 +22,7 @@ pub enum NametableArrangement {
     OneScreen,
     Horizontal,
     Vertical,
+    Custom,
 }
 
 /// Contains all memory in the cartridge that isn't mapper-specific.
@@ -264,6 +265,7 @@ impl Cartridge {
                     (addr % 0x400) + 0x400
                 }
             }
+            NametableArrangement::Custom => self.mapper.transform_nametable_addr(addr),
         }
     }
     /// [true] if the cartridge has battery backed RAM (i.e. save data), [false] otherwise

@@ -12,3 +12,5 @@ mod txrom;
 pub use txrom::TxRom;
 mod pxrom;
 pub use pxrom::PxRom;
+mod axrom;
+pub use axrom::AxRom;
