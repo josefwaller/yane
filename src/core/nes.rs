@@ -136,7 +136,9 @@ impl Nes {
     }
     /// Create a new NES from a savestate.
     ///
-    /// This is the opposite of [`Nes::to_savestate`]
+    /// This is the opposite of [`Nes::to_savestate`].
+    /// It is recommended to avoid creating savestates halfway through frames.
+    /// Rather you should wait until VBlank.
     /// ```rust,ignore
     /// let savestate = include_bytes!("./savestate.yane.bin");
     /// let nes = Nes::from_savestate(savestate);
